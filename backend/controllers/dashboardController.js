@@ -2,6 +2,7 @@ const Destination = require("../models/Destination");
 const TourPackage = require("../models/TourPackage");
 const Inquiry = require("../models/Inquiry");
 const Booking = require("../models/Booking");
+const Vehicle = require("../models/Vehicle");
 
 // @desc    Get dashboard statistics
 // @route   GET /api/dashboard/stats
@@ -15,6 +16,10 @@ const getDashboardStats = async (req, res) => {
 
         const totalPackages = await TourPackage.countDocuments();
         const activePackages = await TourPackage.countDocuments({
+            status: "Active",
+        });
+        const totalVehicles = await Vehicle.countDocuments();
+        const activeVehicles = await Vehicle.countDocuments({
             status: "Active",
         });
 
@@ -137,6 +142,11 @@ const getDashboardStats = async (req, res) => {
                 total: totalPackages,
                 active: activePackages,
             },
+            vehicles: {
+                total: totalVehicles,
+                active: activeVehicles,
+            },
+
 
             inquiries: {
                 total: totalInquiries,

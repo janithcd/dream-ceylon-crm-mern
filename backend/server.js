@@ -10,6 +10,7 @@ const packageRoutes = require("./routes/packageRoutes");
 const inquiryRoutes = require("./routes/inquiryRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
+const vehicleRoutes = require("./routes/vehicleRoutes");
 
 
 dotenv.config();
@@ -35,6 +36,7 @@ app.use("/api/packages", packageRoutes);
 app.use("/api/inquiries", inquiryRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/vehicles", vehicleRoutes);
 
 // Server port
 const PORT = process.env.PORT || 5000;
