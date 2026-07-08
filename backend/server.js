@@ -7,8 +7,9 @@ const connectDB = require("./config/db");
 const authRoutes = require("./routes/authRoutes");
 const destinationRoutes = require("./routes/destinationRoutes");
 const packageRoutes = require("./routes/packageRoutes");
+const inquiryRoutes = require("./routes/inquiryRoutes");
 
-// Load environment variables
+
 dotenv.config();
 
 // Connect to MongoDB
@@ -29,6 +30,7 @@ app.get("/", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/destinations", destinationRoutes);
 app.use("/api/packages", packageRoutes);
+app.use("/api/inquiries", inquiryRoutes);
 
 // Server port
 const PORT = process.env.PORT || 5000;
