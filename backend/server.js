@@ -6,6 +6,7 @@ const connectDB = require("./config/db");
 // Route imports
 const authRoutes = require("./routes/authRoutes");
 const destinationRoutes = require("./routes/destinationRoutes");
+const packageRoutes = require("./routes/packageRoutes");
 
 // Load environment variables
 dotenv.config();
@@ -27,6 +28,7 @@ app.get("/", (req, res) => {
 // API routes
 app.use("/api/auth", authRoutes);
 app.use("/api/destinations", destinationRoutes);
+app.use("/api/packages", packageRoutes);
 
 // Server port
 const PORT = process.env.PORT || 5000;
