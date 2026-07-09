@@ -364,12 +364,6 @@ const ClientTools = () => {
                                     </a>
                                 </div>
                             </div>
-
-                            <div className="alert alert-info mt-4 mb-0">
-                                This free version opens Google Translate with your message.
-                                Later, we can connect DeepL or Google Cloud Translation API for
-                                direct in-app translation.
-                            </div>
                         </div>
                     </div>
                 </div>
