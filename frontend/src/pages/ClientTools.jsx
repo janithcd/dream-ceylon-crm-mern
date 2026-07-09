@@ -5,7 +5,9 @@ import {
     FaGlobeAsia,
     FaLanguage,
     FaExternalLinkAlt,
+    FaWhatsapp,
 } from "react-icons/fa";
+import AIReplyGenerator from "../components/AIReplyGenerator";
 
 const countries = [
     {
@@ -145,6 +147,7 @@ const ClientTools = () => {
     const [now, setNow] = useState(new Date());
     const [replyText, setReplyText] = useState(replyTemplates[0].text);
     const [targetLanguage, setTargetLanguage] = useState("de");
+    const [clientWhatsappNumber, setClientWhatsappNumber] = useState("");
     const [copied, setCopied] = useState(false);
 
     useEffect(() => {
@@ -160,6 +163,17 @@ const ClientTools = () => {
 
         return `https://translate.google.com/?sl=auto&tl=${targetLanguage}&text=${encodedText}&op=translate`;
     }, [replyText, targetLanguage]);
+
+    const whatsappUrl = useMemo(() => {
+        const cleanedNumber = clientWhatsappNumber.replace(/\D/g, "");
+        const encodedText = encodeURIComponent(replyText);
+
+        if (!cleanedNumber) {
+            return "";
+        }
+
+        return `https://wa.me/${cleanedNumber}?text=${encodedText}`;
+    }, [clientWhatsappNumber, replyText]);
 
     const getTime = (timeZone) => {
         return new Intl.DateTimeFormat("en-US", {
@@ -241,10 +255,18 @@ const ClientTools = () => {
                 <div>
                     <h2 className="fw-bold mb-1">Client Tools</h2>
                     <p className="text-muted mb-0">
-                        Check client time zones and prepare quick translated replies.
+                        Check client time zones, generate AI replies, translate messages, and
+                        open WhatsApp replies quickly.
                     </p>
                 </div>
             </div>
+
+            <AIReplyGenerator
+                onUseReply={(text) => {
+                    setReplyText(text);
+                    setCopied(false);
+                }}
+            />
 
             <div className="card border-0 shadow-sm rounded-4 mb-4">
                 <div className="card-body">
@@ -327,9 +349,7 @@ const ClientTools = () => {
 
                             <div className="row g-3 mt-2">
                                 <div className="col-12 col-md-5">
-                                    <label className="form-label fw-semibold">
-                                        Translate To
-                                    </label>
+                                    <label className="form-label fw-semibold">Translate To</label>
                                     <select
                                         className="form-select"
                                         value={targetLanguage}
@@ -343,7 +363,7 @@ const ClientTools = () => {
                                     </select>
                                 </div>
 
-                                <div className="col-12 col-md-7 d-flex align-items-end gap-2">
+                                <div className="col-12 col-md-7 d-flex align-items-end gap-2 flex-wrap">
                                     <button
                                         type="button"
                                         className="btn btn-outline-secondary"
@@ -364,6 +384,52 @@ const ClientTools = () => {
                                     </a>
                                 </div>
                             </div>
+
+                            <div className="card border-0 bg-light rounded-4 mt-4">
+                                <div className="card-body">
+                                    <div className="d-flex align-items-center gap-2 mb-3">
+                                        <FaWhatsapp className="text-success" />
+                                        <h6 className="fw-bold mb-0">WhatsApp Reply Helper</h6>
+                                    </div>
+
+                                    <div className="row g-3">
+                                        <div className="col-12 col-md-6">
+                                            <label className="form-label fw-semibold">
+                                                Client WhatsApp Number
+                                            </label>
+                                            <input
+                                                type="text"
+                                                className="form-control"
+                                                value={clientWhatsappNumber}
+                                                onChange={(e) =>
+                                                    setClientWhatsappNumber(e.target.value)
+                                                }
+                                                placeholder="+14155550123"
+                                            />
+                                            <small className="text-muted">
+                                                Use country code. Example: +1 USA, +44 UK, +49 Germany,
+                                                +94 Sri Lanka.
+                                            </small>
+                                        </div>
+
+                                        <div className="col-12 col-md-6 d-flex align-items-end">
+                                            <a
+                                                href={whatsappUrl || "#"}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className={`btn btn-success w-100 ${
+                                                    !whatsappUrl ? "disabled" : ""
+                                                }`}
+                                            >
+                                                <FaWhatsapp className="me-2" />
+                                                Open WhatsApp with Reply
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+
                         </div>
                     </div>
                 </div>
