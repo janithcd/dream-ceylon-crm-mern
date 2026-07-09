@@ -1,11 +1,12 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
-    FaChartLine,
-    FaMapMarkedAlt,
-    FaRoute,
-    FaEnvelopeOpenText,
     FaCalendarCheck,
     FaCar,
+    FaChartLine,
+    FaEnvelopeOpenText,
+    FaGlobeAsia,
+    FaMapMarkedAlt,
+    FaRoute,
     FaSignOutAlt,
 } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
@@ -53,6 +54,9 @@ const AdminLayout = () => {
 
                     <NavLink to="/vehicles">
                         <FaCar /> Vehicles
+                    </NavLink>
+                    <NavLink to="/client-tools">
+                        <FaGlobeAsia /> Client Tools
                     </NavLink>
                 </nav>
             </aside>

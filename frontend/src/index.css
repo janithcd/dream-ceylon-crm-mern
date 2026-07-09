@@ -143,7 +143,19 @@ body {
   justify-content: center;
   font-size: 1.4rem;
 }
+.world-time-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  padding: 1.25rem;
+  height: 100%;
+  transition: all 0.2s ease;
+}
 
+.world-time-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
 @media (max-width: 768px) {
   .admin-layout {
     display: block;

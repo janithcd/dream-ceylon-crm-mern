@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./routes/ProtectedRoute";
 import AdminLayout from "./layouts/AdminLayout";
-
+import ClientTools from "./pages/ClientTools";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Destinations from "./pages/Destinations";
@@ -32,6 +32,7 @@ const App = () => {
                         <Route path="inquiries" element={<Inquiries />} />
                         <Route path="bookings" element={<Bookings />} />
                         <Route path="vehicles" element={<Vehicles />} />
+                        <Route path="client-tools" element={<ClientTools />} />
                     </Route>
 
                     <Route path="*" element={<Navigate to="/" replace />} />
