@@ -13,6 +13,7 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 const vehicleRoutes = require("./routes/vehicleRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const pdfRoutes = require("./routes/pdfRoutes");
+const publicRoutes = require("./routes/publicRoutes");
 
 
 dotenv.config();
@@ -41,6 +42,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/vehicles", vehicleRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/pdf", pdfRoutes);
+app.use("/api/public", publicRoutes);
 
 // Server port
 const PORT = process.env.PORT || 5000;
