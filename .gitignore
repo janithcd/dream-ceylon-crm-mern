@@ -1,5 +1,20 @@
-node_modules
+# Environment files
 .env
+.env.local
+.env.*.local
+
+# Dependencies and build files
+node_modules
 dist
 .DS_Store
 .idea
+
+# API request / Postman / IntelliJ HTTP request files
+*.request.yaml
+*.request.yml
+*.http
+*.rest
+
+# Logs
+*.log
+npm-debug.log*
