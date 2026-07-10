@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { FaCopy, FaMapMarkedAlt, FaMagic } from "react-icons/fa";
+import { FaCopy, FaFilePdf, FaMapMarkedAlt, FaMagic } from "react-icons/fa";
 import api from "../api/axios";
 
 const initialFormState = {
@@ -21,6 +21,7 @@ const AIItineraryGenerator = ({ onUseItinerary }) => {
     const [formData, setFormData] = useState(initialFormState);
     const [generatedItinerary, setGeneratedItinerary] = useState("");
     const [loading, setLoading] = useState(false);
+    const [pdfLoading, setPdfLoading] = useState(false);
     const [copied, setCopied] = useState(false);
     const [error, setError] = useState("");
 
@@ -59,6 +60,14 @@ const AIItineraryGenerator = ({ onUseItinerary }) => {
         }));
     };
 
+    const getPayload = () => {
+        return {
+            ...formData,
+            travelers: formData.travelers ? Number(formData.travelers) : "",
+            durationDays: formData.durationDays ? Number(formData.durationDays) : "",
+        };
+    };
+
     const handleGenerate = async (e) => {
         e.preventDefault();
 
@@ -67,13 +76,7 @@ const AIItineraryGenerator = ({ onUseItinerary }) => {
             setError("");
             setCopied(false);
 
-            const payload = {
-                ...formData,
-                travelers: formData.travelers ? Number(formData.travelers) : "",
-                durationDays: Number(formData.durationDays),
-            };
-
-            const response = await api.post("/ai/itinerary", payload);
+            const response = await api.post("/ai/itinerary", getPayload());
 
             setGeneratedItinerary(response.data.itinerary || "");
         } catch (err) {
@@ -82,6 +85,66 @@ const AIItineraryGenerator = ({ onUseItinerary }) => {
             );
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleGeneratePdf = async () => {
+        if (!generatedItinerary) {
+            setError("Please generate an itinerary before creating the PDF");
+            return;
+        }
+
+        try {
+            setPdfLoading(true);
+            setError("");
+
+            const payload = {
+                ...getPayload(),
+                generatedItinerary,
+            };
+
+            const response = await api.post("/pdf/itinerary", payload, {
+                responseType: "blob",
+            });
+
+            const blob = new Blob([response.data], {
+                type: "application/pdf",
+            });
+
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+
+            const clientName = formData.clientName || "client";
+            const cleanName = clientName
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "");
+
+            link.href = url;
+            link.download = `dream-ceylon-itinerary-${cleanName || "client"}.pdf`;
+
+            document.body.appendChild(link);
+            link.click();
+
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            let message = "Failed to generate PDF. Please check backend console.";
+
+            if (err.response?.data instanceof Blob) {
+                const errorText = await err.response.data.text();
+
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    message = errorJson.error || errorJson.message || message;
+                } catch (parseError) {
+                    message = errorText || message;
+                }
+            }
+
+            setError(message);
+        } finally {
+            setPdfLoading(false);
         }
     };
 
@@ -113,8 +176,8 @@ const AIItineraryGenerator = ({ onUseItinerary }) => {
                 </div>
 
                 <p className="text-muted">
-                    Generate a day-by-day Sri Lanka itinerary based on client interests,
-                    travel style, budget, and preferred destinations.
+                    Generate a day-by-day Sri Lanka itinerary and export it as a
+                    professional client-ready PDF.
                 </p>
 
                 {error && <div className="alert alert-danger">{error}</div>}
@@ -325,6 +388,22 @@ const AIItineraryGenerator = ({ onUseItinerary }) => {
                             >
                                 Use in Translator / WhatsApp Tool
                             </button>
+
+                            <button
+                                type="button"
+                                className="btn btn-danger"
+                                onClick={handleGeneratePdf}
+                                disabled={pdfLoading}
+                            >
+                                <FaFilePdf className="me-2" />
+                                {pdfLoading ? "Generating PDF..." : "Download Client PDF"}
+                            </button>
+                        </div>
+
+                        <div className="alert alert-success mt-3 mb-0">
+                            The PDF will include your logo, company details, vehicle image,
+                            itinerary content, watermark, contact details, and clickable
+                            website/social media links.
                         </div>
                     </div>
                 )}

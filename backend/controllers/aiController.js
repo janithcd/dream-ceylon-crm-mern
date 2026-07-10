@@ -145,12 +145,16 @@ Rules:
 - Make the itinerary realistic for driving distances in Sri Lanka.
 - Do not include too many destinations in one day.
 - Include culture, wildlife, hill country, beaches, food, train ride, or activities only if relevant to the client's interests.
-- Mention that hotels, entrance fees, and activities can be customized separately.
-- Use clear day-by-day formatting.
-- Include a short intro and a short note at the end.
+- Mention that hotels, entrance fees, and activities can be customized separately only where naturally needed.
+- Use clear day headings exactly like this format: "Day 1: Arrival - Sigiriya".
+- Use bullet points under each day.
+- Do not include markdown separators like ---.
+- Do not include a separate Important Notes section.
+- Do not end with sentences like "If you would like, I can also...".
+- Write the itinerary as a finished client proposal, not as a ChatGPT draft.
 - Do not add exact hotel names unless asked.
 - Do not overpromise wildlife sightings.
-- Keep it professional and useful for sending to a client.
+- Keep it professional and useful for sending to a real client.
 `;
 
         const response = await client.responses.create({
