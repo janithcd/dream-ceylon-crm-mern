@@ -1,4 +1,4 @@
-# Dream Ceylon CRM — MERN Travel Management System
+# MERN Travel Management System
 
 A full-stack MERN CRM system built for **Dream Ceylon Journeys**, a Sri Lankan Destination Management Company (DMC).  
 This CRM helps manage destinations, tour packages, customer inquiries, bookings, vehicle pricing, AI client replies, AI itinerary generation, professional itinerary PDFs, quotation PDFs, and public website data APIs.
