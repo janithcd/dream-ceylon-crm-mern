@@ -14,6 +14,7 @@ const vehicleRoutes = require("./routes/vehicleRoutes");
 const aiRoutes = require("./routes/aiRoutes");
 const pdfRoutes = require("./routes/pdfRoutes");
 const publicRoutes = require("./routes/publicRoutes");
+const quotationRoutes = require("./routes/quotationRoutes");
 
 
 dotenv.config();
@@ -42,6 +43,7 @@ app.use("/api/vehicles", vehicleRoutes);
 app.use("/api/ai", aiRoutes);
 app.use("/api/pdf", pdfRoutes);
 app.use("/api/public", publicRoutes);
+app.use("/api/quotations", quotationRoutes);
 
 
 const PORT = process.env.PORT || 5000;

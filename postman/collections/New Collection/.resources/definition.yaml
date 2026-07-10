@@ -1,2 +1,5 @@
 $kind: collection
 name: New Collection
+variables:
+  - key: json_web_token_118q
+    secret: true
