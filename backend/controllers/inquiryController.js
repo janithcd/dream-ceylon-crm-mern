@@ -136,9 +136,7 @@ const getInquiryById = async (req, res) => {
     }
 };
 
-// @desc    Update inquiry
-// @route   PUT /api/inquiries/:id
-// @access  Private
+
 const updateInquiry = async (req, res) => {
     try {
         const inquiry = await Inquiry.findById(req.params.id);

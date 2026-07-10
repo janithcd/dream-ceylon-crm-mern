@@ -1,8 +1,6 @@
 const TourPackage = require("../models/TourPackage");
 
-// @desc    Create tour package
-// @route   POST /api/packages
-// @access  Private
+
 const createPackage = async (req, res) => {
     try {
         const {
@@ -65,9 +63,7 @@ const createPackage = async (req, res) => {
     }
 };
 
-// @desc    Get all tour packages with search, filter, and pagination
-// @route   GET /api/packages
-// @access  Private
+
 const getPackages = async (req, res) => {
     try {
         const {
@@ -125,9 +121,7 @@ const getPackages = async (req, res) => {
     }
 };
 
-// @desc    Get single tour package
-// @route   GET /api/packages/:id
-// @access  Private
+
 const getPackageById = async (req, res) => {
     try {
         const tourPackage = await TourPackage.findById(req.params.id).populate(
@@ -150,9 +144,7 @@ const getPackageById = async (req, res) => {
     }
 };
 
-// @desc    Update tour package
-// @route   PUT /api/packages/:id
-// @access  Private
+
 const updatePackage = async (req, res) => {
     try {
         const tourPackage = await TourPackage.findById(req.params.id);
@@ -181,9 +173,7 @@ const updatePackage = async (req, res) => {
     }
 };
 
-// @desc    Delete tour package
-// @route   DELETE /api/packages/:id
-// @access  Private
+
 const deletePackage = async (req, res) => {
     try {
         const tourPackage = await TourPackage.findById(req.params.id);

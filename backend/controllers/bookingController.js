@@ -1,9 +1,7 @@
 const Booking = require("../models/Booking");
 const Inquiry = require("../models/Inquiry");
 
-// @desc    Create booking
-// @route   POST /api/bookings
-// @access  Private
+
 const createBooking = async (req, res) => {
     try {
         const {
@@ -57,7 +55,7 @@ const createBooking = async (req, res) => {
             adminNotes,
         });
 
-        // If booking is created from an inquiry, mark inquiry as Converted
+
         if (inquiry) {
             await Inquiry.findByIdAndUpdate(inquiry, {
                 status: "Converted",
@@ -77,9 +75,7 @@ const createBooking = async (req, res) => {
     }
 };
 
-// @desc    Get all bookings with search, filter, and pagination
-// @route   GET /api/bookings
-// @access  Private
+
 const getBookings = async (req, res) => {
     try {
         const {
@@ -141,9 +137,7 @@ const getBookings = async (req, res) => {
     }
 };
 
-// @desc    Get single booking
-// @route   GET /api/bookings/:id
-// @access  Private
+
 const getBookingById = async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id)
@@ -165,9 +159,7 @@ const getBookingById = async (req, res) => {
     }
 };
 
-// @desc    Update booking
-// @route   PUT /api/bookings/:id
-// @access  Private
+
 const updateBooking = async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id);

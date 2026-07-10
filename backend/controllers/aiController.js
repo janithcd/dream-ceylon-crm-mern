@@ -14,9 +14,7 @@ const getOpenAIClient = async () => {
     return openaiClient;
 };
 
-// @desc    Generate AI client reply
-// @route   POST /api/ai/client-reply
-// @access  Private
+
 const generateClientReply = async (req, res) => {
     try {
         if (!process.env.OPENAI_API_KEY) {
@@ -89,9 +87,7 @@ Rules:
     }
 };
 
-// @desc    Generate AI itinerary
-// @route   POST /api/ai/itinerary
-// @access  Private
+
 const generateItinerary = async (req, res) => {
     try {
         if (!process.env.OPENAI_API_KEY) {

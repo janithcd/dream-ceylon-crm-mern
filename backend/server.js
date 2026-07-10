@@ -18,21 +18,20 @@ const publicRoutes = require("./routes/publicRoutes");
 
 dotenv.config();
 
-// Connect to MongoDB
+
 connectDB();
 
 const app = express();
 
-// Middleware
+
 app.use(cors());
 app.use(express.json());
 
-// Test route
 app.get("/", (req, res) => {
   res.send("Dream Ceylon CRM API is running...");
 });
 
-// API routes
+
 app.use("/api/auth", authRoutes);
 app.use("/api/destinations", destinationRoutes);
 app.use("/api/packages", packageRoutes);
@@ -44,7 +43,7 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/pdf", pdfRoutes);
 app.use("/api/public", publicRoutes);
 
-// Server port
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {

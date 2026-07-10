@@ -1,16 +1,14 @@
 const jwt = require("jsonwebtoken");
 const Admin = require("../models/Admin");
 
-// Generate JWT token
+
 const generateToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
         expiresIn: "7d",
     });
 };
 
-// @desc    Register admin
-// @route   POST /api/auth/register
-// @access  Public for development only
+
 const registerAdmin = async (req, res) => {
     try {
         const { name, email, password } = req.body;
@@ -50,9 +48,7 @@ const registerAdmin = async (req, res) => {
     }
 };
 
-// @desc    Login admin
-// @route   POST /api/auth/login
-// @access  Public
+
 const loginAdmin = async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -94,9 +90,7 @@ const loginAdmin = async (req, res) => {
     }
 };
 
-// @desc    Get logged-in admin profile
-// @route   GET /api/auth/profile
-// @access  Private
+
 const getAdminProfile = async (req, res) => {
     res.status(200).json({
         _id: req.admin._id,

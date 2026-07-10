@@ -4,9 +4,7 @@ const Inquiry = require("../models/Inquiry");
 const Booking = require("../models/Booking");
 const Vehicle = require("../models/Vehicle");
 
-// @desc    Get dashboard statistics
-// @route   GET /api/dashboard/stats
-// @access  Private
+
 const getDashboardStats = async (req, res) => {
     try {
         const totalDestinations = await Destination.countDocuments();

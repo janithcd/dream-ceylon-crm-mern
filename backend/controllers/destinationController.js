@@ -1,8 +1,6 @@
 const Destination = require("../models/Destination");
 
-// @desc    Create destination
-// @route   POST /api/destinations
-// @access  Private
+
 const createDestination = async (req, res) => {
     try {
         const {
@@ -134,9 +132,7 @@ const getDestinationById = async (req, res) => {
     }
 };
 
-// @desc    Update destination
-// @route   PUT /api/destinations/:id
-// @access  Private
+
 const updateDestination = async (req, res) => {
     try {
         const destination = await Destination.findById(req.params.id);
@@ -165,9 +161,7 @@ const updateDestination = async (req, res) => {
     }
 };
 
-// @desc    Delete destination
-// @route   DELETE /api/destinations/:id
-// @access  Private
+
 const deleteDestination = async (req, res) => {
     try {
         const destination = await Destination.findById(req.params.id);

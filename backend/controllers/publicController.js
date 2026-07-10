@@ -2,9 +2,7 @@ const Destination = require("../models/Destination");
 const TourPackage = require("../models/TourPackage");
 const Vehicle = require("../models/Vehicle");
 
-// @desc    Get homepage public data
-// @route   GET /api/public/home
-// @access  Public
+
 const getPublicHomeData = async (req, res) => {
     try {
         const popularDestinations = await Destination.find({
@@ -49,9 +47,7 @@ const getPublicHomeData = async (req, res) => {
     }
 };
 
-// @desc    Get public destinations
-// @route   GET /api/public/destinations
-// @access  Public
+
 const getPublicDestinations = async (req, res) => {
     try {
         const {
@@ -111,9 +107,7 @@ const getPublicDestinations = async (req, res) => {
     }
 };
 
-// @desc    Get single public destination
-// @route   GET /api/public/destinations/:id
-// @access  Public
+
 const getPublicDestinationById = async (req, res) => {
     try {
         const destination = await Destination.findOne({
@@ -138,9 +132,7 @@ const getPublicDestinationById = async (req, res) => {
     }
 };
 
-// @desc    Get public packages
-// @route   GET /api/public/packages
-// @access  Public
+
 const getPublicPackages = async (req, res) => {
     try {
         const {
@@ -200,9 +192,7 @@ const getPublicPackages = async (req, res) => {
     }
 };
 
-// @desc    Get single public package
-// @route   GET /api/public/packages/:id
-// @access  Public
+
 const getPublicPackageById = async (req, res) => {
     try {
         const tourPackage = await TourPackage.findOne({
@@ -229,9 +219,7 @@ const getPublicPackageById = async (req, res) => {
     }
 };
 
-// @desc    Get public vehicles
-// @route   GET /api/public/vehicles
-// @access  Public
+
 const getPublicVehicles = async (req, res) => {
     try {
         const {
