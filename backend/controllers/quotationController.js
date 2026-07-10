@@ -235,7 +235,7 @@ const addLink = (state, x, topY, width, height, url) => {
             );
         }
     } catch (error) {
-        // PDF still generates even if link annotation fails
+        // Keep PDF generation working even if clickable links fail
     }
 };
 
@@ -266,7 +266,9 @@ const getTextWidth = (text, font, size) => {
 
 const drawText = (state, text, x, topY, options = {}) => {
     const clean = safeText(text);
-    const font = options.bold ? state.fonts.bold : options.font || state.fonts.regular;
+    const font = options.bold
+        ? state.fonts.bold
+        : options.font || state.fonts.regular;
     const size = options.size || 9;
     const width = options.width || PAGE.contentWidth;
     const color = hexToRgb(options.color || colors.text);
@@ -342,7 +344,9 @@ const wrapText = (text, font, size, maxWidth) => {
 };
 
 const drawWrappedText = (state, text, x, topY, width, options = {}) => {
-    const font = options.bold ? state.fonts.bold : options.font || state.fonts.regular;
+    const font = options.bold
+        ? state.fonts.bold
+        : options.font || state.fonts.regular;
     const size = options.size || 9;
     const lineHeight = options.lineHeight || size + 5;
     const lines = wrapText(text, font, size, width);
@@ -393,7 +397,7 @@ const drawWatermark = (state) => {
             opacity: 0.04,
         });
     } catch (error) {
-        // ignore watermark issue
+        // Ignore watermark issue
     }
 };
 
@@ -529,7 +533,15 @@ const drawSectionTitle = (state, title, minimumContentHeight = 0) => {
 };
 
 const drawQuotationTitle = (state, data) => {
-    drawBox(state, PAGE.left, state.cursorY, PAGE.contentWidth, 92, colors.lightGreen, colors.border);
+    drawBox(
+        state,
+        PAGE.left,
+        state.cursorY,
+        PAGE.contentWidth,
+        92,
+        colors.lightGreen,
+        colors.border
+    );
     drawBox(state, PAGE.left, state.cursorY, 7, 92, colors.gold);
 
     drawText(state, "TOUR QUOTATION", PAGE.left + 20, state.cursorY + 20, {
@@ -687,18 +699,16 @@ const drawCostTable = (state, data, totals) => {
         });
     }
 
-    const headerY = state.cursorY;
+    drawBox(state, x, state.cursorY, tableWidth, rowHeight, colors.primaryDark);
 
-    drawBox(state, x, headerY, tableWidth, rowHeight, colors.primaryDark);
-
-    drawText(state, "Item", columns.item + 12, headerY + 10, {
+    drawText(state, "Item", columns.item + 12, state.cursorY + 10, {
         color: colors.white,
         bold: true,
         size: 8.5,
         width: 220,
     });
 
-    drawText(state, "Qty", columns.qty, headerY + 10, {
+    drawText(state, "Qty", columns.qty, state.cursorY + 10, {
         color: colors.white,
         bold: true,
         size: 8.5,
@@ -706,7 +716,7 @@ const drawCostTable = (state, data, totals) => {
         align: "center",
     });
 
-    drawText(state, "Rate", columns.rate, headerY + 10, {
+    drawText(state, "Rate", columns.rate, state.cursorY + 10, {
         color: colors.white,
         bold: true,
         size: 8.5,
@@ -714,7 +724,7 @@ const drawCostTable = (state, data, totals) => {
         align: "right",
     });
 
-    drawText(state, "Amount", columns.amount, headerY + 10, {
+    drawText(state, "Amount", columns.amount, state.cursorY + 10, {
         color: colors.white,
         bold: true,
         size: 8.5,
@@ -831,12 +841,17 @@ const drawCostTable = (state, data, totals) => {
 };
 
 const drawListSection = (state, title, items, options = {}) => {
-    const safeItems = Array.isArray(items) && items.length > 0
-        ? items
-        : ["Not provided"];
+    const safeItems =
+        Array.isArray(items) && items.length > 0 ? items : ["Not provided"];
 
     const itemHeights = safeItems.map((item) => {
-        const lines = wrapText(item, state.fonts.regular, 8.8, PAGE.contentWidth - 48);
+        const lines = wrapText(
+            item,
+            state.fonts.regular,
+            8.8,
+            PAGE.contentWidth - 48
+        );
+
         return Math.max(20, lines.length * 12 + 8);
     });
 
@@ -845,7 +860,6 @@ const drawListSection = (state, title, items, options = {}) => {
         itemHeights.reduce((total, height) => total + height, 0) + 24
     );
 
-    // This prevents the heading from staying at the bottom alone
     drawSectionTitle(state, title, boxHeight + 20);
 
     const y = state.cursorY;
@@ -885,15 +899,11 @@ const drawListSection = (state, title, items, options = {}) => {
 };
 
 const drawNotesSection = (state, notes) => {
-    if (!notes) {
-        return;
-    }
+    if (!notes) return;
 
     const cleanNotes = safeText(notes).trim();
 
-    if (!cleanNotes) {
-        return;
-    }
+    if (!cleanNotes) return;
 
     const lines = wrapText(
         cleanNotes,
@@ -935,7 +945,7 @@ const drawNotesSection = (state, notes) => {
 };
 
 const drawPaymentTerms = (state) => {
-    drawSectionTitle(state, "Payment Terms", 110);
+    drawSectionTitle(state, "Payment Terms", 135);
 
     const terms = [
         "Quotation is subject to final availability at the time of confirmation.",
@@ -946,27 +956,34 @@ const drawPaymentTerms = (state) => {
 
     const y = state.cursorY;
 
-    drawBox(state, PAGE.left, y, PAGE.contentWidth, 118, colors.goldSoft, colors.border);
+    drawBox(state, PAGE.left, y, PAGE.contentWidth, 128, colors.goldSoft, colors.border);
 
     let termY = y + 17;
 
     terms.forEach((term) => {
         drawBox(state, PAGE.left + 14, termY + 4, 6, 6, colors.primary);
 
-        drawWrappedText(state, term, PAGE.left + 30, termY, PAGE.contentWidth - 48, {
-            size: 8.8,
-            lineHeight: 12,
-            color: colors.text,
-        });
+        const usedHeight = drawWrappedText(
+            state,
+            term,
+            PAGE.left + 30,
+            termY,
+            PAGE.contentWidth - 48,
+            {
+                size: 8.8,
+                lineHeight: 12,
+                color: colors.text,
+            }
+        );
 
-        termY += 24;
+        termY += Math.max(24, usedHeight + 8);
     });
 
-    state.cursorY = y + 138;
+    state.cursorY = y + 148;
 };
 
 const drawContactSection = (state) => {
-    drawSectionTitle(state, "Contact Details", 205);
+    drawSectionTitle(state, "Contact Details", 220);
 
     const companyName = getBrandValue("companyName", "Dream Ceylon Journeys");
     const address = getBrandValue("address", "Sri Lanka");
@@ -975,7 +992,7 @@ const drawContactSection = (state) => {
 
     const y = state.cursorY;
 
-    drawBox(state, PAGE.left, y, PAGE.contentWidth, 190, colors.primaryDark);
+    drawBox(state, PAGE.left, y, PAGE.contentWidth, 205, colors.primaryDark);
 
     drawText(state, "Ready to confirm your Sri Lanka journey?", PAGE.left + 25, y + 24, {
         color: colors.gold,
@@ -1014,7 +1031,6 @@ const drawContactSection = (state) => {
         align: "center",
     });
 
-    // Website button row
     drawBox(state, PAGE.left + 170, y + 129, 155, 22, colors.gold);
 
     drawText(state, "Visit Website", PAGE.left + 170, y + 137, {
@@ -1026,7 +1042,6 @@ const drawContactSection = (state) => {
         link: getWebsite(),
     });
 
-    // Social links row - separated properly
     const visibleSocialLinks = socialLinks.slice(0, 4);
     const buttonWidth = 92;
     const buttonGap = 16;
@@ -1035,7 +1050,7 @@ const drawContactSection = (state) => {
         Math.max(visibleSocialLinks.length - 1, 0) * buttonGap;
 
     let socialX = PAGE.left + (PAGE.contentWidth - totalButtonsWidth) / 2;
-    const socialY = y + 160;
+    const socialY = y + 165;
 
     visibleSocialLinks.forEach((item) => {
         drawBox(state, socialX, socialY, buttonWidth, 20, colors.gold);
@@ -1052,7 +1067,7 @@ const drawContactSection = (state) => {
         socialX += buttonWidth + buttonGap;
     });
 
-    state.cursorY = y + 210;
+    state.cursorY = y + 225;
 };
 
 const calculateQuotationTotals = (body) => {
@@ -1201,14 +1216,17 @@ const generateQuotationPdf = async (req, res) => {
         drawQuotationTitle(state, data);
         drawClientAndTourSummary(state, data);
         drawCostTable(state, data, totals);
+
         drawListSection(state, "Package Inclusions", data.inclusions, {
             background: colors.lightGreen,
             bulletColor: colors.primary,
         });
+
         drawListSection(state, "Package Exclusions", data.exclusions, {
             background: colors.white,
             bulletColor: colors.red,
         });
+
         drawNotesSection(state, data.notes);
         drawPaymentTerms(state);
         drawContactSection(state);
