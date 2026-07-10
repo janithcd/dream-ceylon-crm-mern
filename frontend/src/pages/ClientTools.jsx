@@ -9,6 +9,8 @@ import {
 } from "react-icons/fa";
 import AIReplyGenerator from "../components/AIReplyGenerator";
 
+import AIItineraryGenerator from "../components/AIItineraryGenerator";
+
 const countries = [
     {
         label: "Sri Lanka",
@@ -263,6 +265,13 @@ const ClientTools = () => {
 
             <AIReplyGenerator
                 onUseReply={(text) => {
+                    setReplyText(text);
+                    setCopied(false);
+                }}
+            />
+
+            <AIItineraryGenerator
+                onUseItinerary={(text) => {
                     setReplyText(text);
                     setCopied(false);
                 }}

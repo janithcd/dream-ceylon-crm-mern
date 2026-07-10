@@ -1,35 +1,42 @@
 import { useState } from "react";
-import { FaCopy, FaMagic, FaRobot } from "react-icons/fa";
+import { FaCopy, FaMapMarkedAlt, FaMagic } from "react-icons/fa";
 import api from "../api/axios";
 
 const initialFormState = {
     clientName: "",
     country: "",
-    clientMessage: "",
     travelers: "",
     durationDays: "",
     interests: "",
-    tone: "Friendly and professional",
-    channel: "WhatsApp",
+    preferredDestinations: "",
+    travelStyle: "Comfortable private tour",
+    budgetLevel: "Mid-range",
+    vehicleType: "SUV",
+    arrivalCity: "",
+    endingPreference: "",
     language: "English",
 };
 
-const AIReplyGenerator = ({ onUseReply }) => {
+const AIItineraryGenerator = ({ onUseItinerary }) => {
     const [formData, setFormData] = useState(initialFormState);
-    const [generatedReply, setGeneratedReply] = useState("");
+    const [generatedItinerary, setGeneratedItinerary] = useState("");
     const [loading, setLoading] = useState(false);
     const [copied, setCopied] = useState(false);
     const [error, setError] = useState("");
 
-    const toneOptions = [
-        "Friendly and professional",
-        "Luxury and premium",
-        "Short and direct",
-        "Warm and personal",
-        "Formal email style",
+    const travelStyleOptions = [
+        "Comfortable private tour",
+        "Luxury private tour",
+        "Budget-friendly private tour",
+        "Family-friendly tour",
+        "Honeymoon tour",
+        "Adventure and nature tour",
+        "Relaxed slow-paced tour",
     ];
 
-    const channelOptions = ["WhatsApp", "Email", "Facebook Message"];
+    const budgetOptions = ["Budget", "Mid-range", "Comfort", "Luxury", "Premium"];
+
+    const vehicleOptions = ["Car", "SUV", "Van", "Mini Bus"];
 
     const languageOptions = [
         "English",
@@ -63,16 +70,16 @@ const AIReplyGenerator = ({ onUseReply }) => {
             const payload = {
                 ...formData,
                 travelers: formData.travelers ? Number(formData.travelers) : "",
-                durationDays: formData.durationDays
-                    ? Number(formData.durationDays)
-                    : "",
+                durationDays: Number(formData.durationDays),
             };
 
-            const response = await api.post("/ai/client-reply", payload);
+            const response = await api.post("/ai/itinerary", payload);
 
-            setGeneratedReply(response.data.reply || "");
+            setGeneratedItinerary(response.data.itinerary || "");
         } catch (err) {
-            setError(err.response?.data?.message || "Failed to generate AI reply");
+            setError(
+                err.response?.data?.message || "Failed to generate AI itinerary"
+            );
         } finally {
             setLoading(false);
         }
@@ -80,20 +87,20 @@ const AIReplyGenerator = ({ onUseReply }) => {
 
     const handleCopy = async () => {
         try {
-            await navigator.clipboard.writeText(generatedReply);
+            await navigator.clipboard.writeText(generatedItinerary);
             setCopied(true);
 
             setTimeout(() => {
                 setCopied(false);
             }, 2000);
         } catch (error) {
-            alert("Failed to copy reply");
+            alert("Failed to copy itinerary");
         }
     };
 
-    const handleUseReply = () => {
-        if (generatedReply && onUseReply) {
-            onUseReply(generatedReply);
+    const handleUseItinerary = () => {
+        if (generatedItinerary && onUseItinerary) {
+            onUseItinerary(generatedItinerary);
         }
     };
 
@@ -101,13 +108,13 @@ const AIReplyGenerator = ({ onUseReply }) => {
         <div className="card border-0 shadow-sm rounded-4 mb-4">
             <div className="card-body">
                 <div className="d-flex align-items-center gap-2 mb-3">
-                    <FaRobot className="text-primary" />
-                    <h5 className="fw-bold mb-0">AI Reply Generator</h5>
+                    <FaMapMarkedAlt className="text-primary" />
+                    <h5 className="fw-bold mb-0">AI Itinerary Generator</h5>
                 </div>
 
                 <p className="text-muted">
-                    Generate professional replies for travel inquiries, WhatsApp messages,
-                    and email follow-ups.
+                    Generate a day-by-day Sri Lanka itinerary based on client interests,
+                    travel style, budget, and preferred destinations.
                 </p>
 
                 {error && <div className="alert alert-danger">{error}</div>}
@@ -138,18 +145,6 @@ const AIReplyGenerator = ({ onUseReply }) => {
                             />
                         </div>
 
-                        <div className="col-12">
-                            <label className="form-label fw-semibold">Client Message</label>
-                            <textarea
-                                name="clientMessage"
-                                className="form-control"
-                                rows="4"
-                                value={formData.clientMessage}
-                                onChange={handleChange}
-                                placeholder="Paste the client's inquiry message here..."
-                            ></textarea>
-                        </div>
-
                         <div className="col-12 col-md-3">
                             <label className="form-label fw-semibold">Travelers</label>
                             <input
@@ -173,30 +168,51 @@ const AIReplyGenerator = ({ onUseReply }) => {
                                 onChange={handleChange}
                                 min="1"
                                 placeholder="14"
+                                required
                             />
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                            <label className="form-label fw-semibold">Budget Level</label>
+                            <select
+                                name="budgetLevel"
+                                className="form-select"
+                                value={formData.budgetLevel}
+                                onChange={handleChange}
+                            >
+                                {budgetOptions.map((item) => (
+                                    <option key={item} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="col-12 col-md-3">
+                            <label className="form-label fw-semibold">Vehicle Type</label>
+                            <select
+                                name="vehicleType"
+                                className="form-select"
+                                value={formData.vehicleType}
+                                onChange={handleChange}
+                            >
+                                {vehicleOptions.map((item) => (
+                                    <option key={item} value={item}>
+                                        {item}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="col-12 col-md-6">
-                            <label className="form-label fw-semibold">Interests</label>
-                            <input
-                                type="text"
-                                name="interests"
-                                className="form-control"
-                                value={formData.interests}
-                                onChange={handleChange}
-                                placeholder="Culture, wildlife, beaches, scenic train ride"
-                            />
-                        </div>
-
-                        <div className="col-12 col-md-4">
-                            <label className="form-label fw-semibold">Tone</label>
+                            <label className="form-label fw-semibold">Travel Style</label>
                             <select
-                                name="tone"
+                                name="travelStyle"
                                 className="form-select"
-                                value={formData.tone}
+                                value={formData.travelStyle}
                                 onChange={handleChange}
                             >
-                                {toneOptions.map((item) => (
+                                {travelStyleOptions.map((item) => (
                                     <option key={item} value={item}>
                                         {item}
                                     </option>
@@ -204,23 +220,7 @@ const AIReplyGenerator = ({ onUseReply }) => {
                             </select>
                         </div>
 
-                        <div className="col-12 col-md-4">
-                            <label className="form-label fw-semibold">Channel</label>
-                            <select
-                                name="channel"
-                                className="form-select"
-                                value={formData.channel}
-                                onChange={handleChange}
-                            >
-                                {channelOptions.map((item) => (
-                                    <option key={item} value={item}>
-                                        {item}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="col-12 col-md-4">
+                        <div className="col-12 col-md-6">
                             <label className="form-label fw-semibold">Language</label>
                             <select
                                 name="language"
@@ -235,22 +235,77 @@ const AIReplyGenerator = ({ onUseReply }) => {
                                 ))}
                             </select>
                         </div>
+
+                        <div className="col-12">
+                            <label className="form-label fw-semibold">Interests</label>
+                            <input
+                                type="text"
+                                name="interests"
+                                className="form-control"
+                                value={formData.interests}
+                                onChange={handleChange}
+                                placeholder="Culture, wildlife, beaches, local food, scenic train journey"
+                                required
+                            />
+                        </div>
+
+                        <div className="col-12">
+                            <label className="form-label fw-semibold">
+                                Preferred Destinations
+                            </label>
+                            <input
+                                type="text"
+                                name="preferredDestinations"
+                                className="form-control"
+                                value={formData.preferredDestinations}
+                                onChange={handleChange}
+                                placeholder="Sigiriya, Kandy, Nuwara Eliya, Ella, Yala, Mirissa, Galle"
+                            />
+                        </div>
+
+                        <div className="col-12 col-md-6">
+                            <label className="form-label fw-semibold">
+                                Arrival City / Airport
+                            </label>
+                            <input
+                                type="text"
+                                name="arrivalCity"
+                                className="form-control"
+                                value={formData.arrivalCity}
+                                onChange={handleChange}
+                                placeholder="Colombo Airport"
+                            />
+                        </div>
+
+                        <div className="col-12 col-md-6">
+                            <label className="form-label fw-semibold">Ending Preference</label>
+                            <input
+                                type="text"
+                                name="endingPreference"
+                                className="form-control"
+                                value={formData.endingPreference}
+                                onChange={handleChange}
+                                placeholder="Beach stay at the end"
+                            />
+                        </div>
                     </div>
 
                     <button className="btn btn-primary mt-4" disabled={loading}>
                         <FaMagic className="me-2" />
-                        {loading ? "Generating..." : "Generate AI Reply"}
+                        {loading ? "Generating Itinerary..." : "Generate AI Itinerary"}
                     </button>
                 </form>
 
-                {generatedReply && (
+                {generatedItinerary && (
                     <div className="mt-4">
-                        <label className="form-label fw-semibold">Generated Reply</label>
+                        <label className="form-label fw-semibold">
+                            Generated Itinerary
+                        </label>
                         <textarea
                             className="form-control"
-                            rows="8"
-                            value={generatedReply}
-                            onChange={(e) => setGeneratedReply(e.target.value)}
+                            rows="14"
+                            value={generatedItinerary}
+                            onChange={(e) => setGeneratedItinerary(e.target.value)}
                         ></textarea>
 
                         <div className="d-flex flex-wrap gap-2 mt-3">
@@ -260,13 +315,13 @@ const AIReplyGenerator = ({ onUseReply }) => {
                                 onClick={handleCopy}
                             >
                                 <FaCopy className="me-2" />
-                                {copied ? "Copied!" : "Copy AI Reply"}
+                                {copied ? "Copied!" : "Copy Itinerary"}
                             </button>
 
                             <button
                                 type="button"
                                 className="btn btn-outline-primary"
-                                onClick={handleUseReply}
+                                onClick={handleUseItinerary}
                             >
                                 Use in Translator / WhatsApp Tool
                             </button>
@@ -278,4 +333,4 @@ const AIReplyGenerator = ({ onUseReply }) => {
     );
 };
 
-export default AIReplyGenerator;
+export default AIItineraryGenerator;
