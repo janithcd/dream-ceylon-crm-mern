@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
     FaBoxOpen,
     FaCalendarCheck,
@@ -9,7 +10,6 @@ import {
     FaFileInvoiceDollar,
     FaGlobeAsia,
     FaMapMarkedAlt,
-    FaUsers,
 } from "react-icons/fa";
 import {
     Bar,
@@ -28,7 +28,14 @@ import {
 } from "recharts";
 import api from "../api/axios";
 
-const COLORS = ["#0f766e", "#2563eb", "#f59e0b", "#16a34a", "#dc2626", "#7c3aed"];
+const COLORS = [
+    "#0f766e",
+    "#2563eb",
+    "#f59e0b",
+    "#16a34a",
+    "#dc2626",
+    "#7c3aed",
+];
 
 const monthNames = [
     "Jan",
@@ -153,6 +160,8 @@ const EmptyChart = ({ message = "No chart data available yet." }) => {
 };
 
 const Dashboard = () => {
+    const navigate = useNavigate();
+
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -332,6 +341,81 @@ const Dashboard = () => {
                 </button>
             </div>
 
+            <div className="card border-0 shadow-sm rounded-4 mb-4">
+                <div className="card-body p-4">
+                    <div className="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
+                        <div>
+                            <h5 className="fw-bold mb-1">Quick Actions</h5>
+                            <p className="text-muted mb-0 small">
+                                Fast shortcuts for daily CRM work.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="row g-3">
+                        <div className="col-xl-2 col-md-4 col-sm-6">
+                            <button
+                                className="btn btn-success w-100 py-3"
+                                onClick={() => navigate("/quotations")}
+                            >
+                                <FaFileInvoiceDollar className="me-2" />
+                                New Quotation
+                            </button>
+                        </div>
+
+                        <div className="col-xl-2 col-md-4 col-sm-6">
+                            <button
+                                className="btn btn-outline-success w-100 py-3"
+                                onClick={() => navigate("/quotation-history")}
+                            >
+                                <FaChartLine className="me-2" />
+                                Quote History
+                            </button>
+                        </div>
+
+                        <div className="col-xl-2 col-md-4 col-sm-6">
+                            <button
+                                className="btn btn-outline-primary w-100 py-3"
+                                onClick={() => navigate("/inquiries")}
+                            >
+                                <FaClipboardList className="me-2" />
+                                Inquiries
+                            </button>
+                        </div>
+
+                        <div className="col-xl-2 col-md-4 col-sm-6">
+                            <button
+                                className="btn btn-outline-dark w-100 py-3"
+                                onClick={() => navigate("/bookings")}
+                            >
+                                <FaCalendarCheck className="me-2" />
+                                Bookings
+                            </button>
+                        </div>
+
+                        <div className="col-xl-2 col-md-4 col-sm-6">
+                            <button
+                                className="btn btn-outline-secondary w-100 py-3"
+                                onClick={() => navigate("/client-tools")}
+                            >
+                                <FaGlobeAsia className="me-2" />
+                                Client Tools
+                            </button>
+                        </div>
+
+                        <div className="col-xl-2 col-md-4 col-sm-6">
+                            <button
+                                className="btn btn-outline-warning w-100 py-3"
+                                onClick={() => navigate("/packages")}
+                            >
+                                <FaBoxOpen className="me-2" />
+                                Packages
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div className="row g-4 mb-4">
                 <div className="col-xl-3 col-md-6">
                     <StatCard
@@ -408,10 +492,10 @@ const Dashboard = () => {
                             stats?.revenue?.totalRevenue || stats?.revenue?.total || 0,
                             stats?.revenue?.currency || "USD"
                         )}
-                        subtitle={formatMoney(
+                        subtitle={`Advance: ${formatMoney(
                             stats?.revenue?.totalAdvancePayments || 0,
                             stats?.revenue?.currency || "USD"
-                        )}
+                        )}`}
                         icon={FaDollarSign}
                     />
                 </div>
@@ -469,7 +553,12 @@ const Dashboard = () => {
                                     <XAxis dataKey="stage" />
                                     <YAxis allowDecimals={false} />
                                     <Tooltip />
-                                    <Bar dataKey="count" name="Count" fill="#0f766e" radius={[8, 8, 0, 0]} />
+                                    <Bar
+                                        dataKey="count"
+                                        name="Count"
+                                        fill="#0f766e"
+                                        radius={[8, 8, 0, 0]}
+                                    />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -524,7 +613,12 @@ const Dashboard = () => {
                                     <XAxis dataKey="name" />
                                     <YAxis tickFormatter={formatShortMoney} />
                                     <Tooltip formatter={(value) => formatMoney(value, "USD")} />
-                                    <Bar dataKey="value" name="Value" fill="#2563eb" radius={[8, 8, 0, 0]} />
+                                    <Bar
+                                        dataKey="value"
+                                        name="Value"
+                                        fill="#2563eb"
+                                        radius={[8, 8, 0, 0]}
+                                    />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>
@@ -580,7 +674,8 @@ const Dashboard = () => {
                                 <FaBoxOpen className="text-success" />
                             </div>
 
-                            {!stats?.recentQuotations || stats.recentQuotations.length === 0 ? (
+                            {!stats?.recentQuotations ||
+                            stats.recentQuotations.length === 0 ? (
                                 <p className="text-muted mb-0">No recent quotations found.</p>
                             ) : (
                                 <div className="table-responsive">
@@ -599,7 +694,9 @@ const Dashboard = () => {
                                         {stats.recentQuotations.map((quotation) => (
                                             <tr key={quotation._id}>
                                                 <td>
-                                                    <div className="fw-bold">{quotation.quotationNo}</div>
+                                                    <div className="fw-bold">
+                                                        {quotation.quotationNo}
+                                                    </div>
                                                     <small className="text-muted">
                                                         {quotation.tourTitle}
                                                     </small>
