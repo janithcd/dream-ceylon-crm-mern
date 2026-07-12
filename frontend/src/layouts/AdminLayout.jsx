@@ -8,6 +8,9 @@ import {
     FaMapMarkedAlt,
     FaRoute,
     FaSignOutAlt,
+
+    FaHistory,
+
 } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import { FaFileInvoiceDollar } from "react-icons/fa";
@@ -59,6 +62,10 @@ const AdminLayout = () => {
                     <NavLink to="/quotations">
                         <FaFileInvoiceDollar />
                         Quotations
+                    </NavLink>
+                    <NavLink to="/quotation-history">
+                        <FaHistory />
+                        Quotation History
                     </NavLink>
                     <NavLink to="/client-tools">
                         <FaGlobeAsia /> Client Tools

@@ -4,6 +4,7 @@ import {
     FaDownload,
     FaFileInvoiceDollar,
     FaMoneyBillWave,
+    FaSave,
 } from "react-icons/fa";
 import api from "../api/axios";
 
@@ -34,12 +35,14 @@ const initialFormState = {
     discount: "0",
     advancePayment: "0",
     currency: "USD",
+    status: "Draft",
     inclusionsText:
         "Private air-conditioned car\nProfessional chauffeur guide\nAirport pickup and drop-off\nCustomized route planning\nWater bottles during transfers",
     exclusionsText:
         "Hotel accommodation\nEntrance fees\nSafari and activity fees\nMeals\nPersonal expenses",
     notes:
         "This quotation is based on private transport only. Hotels, entrance tickets, safari fees, and activities can be added separately according to the client's preferred budget.",
+    adminNotes: "",
 };
 
 const numberValue = (value) => {
@@ -63,8 +66,10 @@ const splitLines = (value) => {
 
 const Quotations = () => {
     const [formData, setFormData] = useState(initialFormState);
-    const [loading, setLoading] = useState(false);
+    const [pdfLoading, setPdfLoading] = useState(false);
+    const [saveLoading, setSaveLoading] = useState(false);
     const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
 
     const totals = useMemo(() => {
         const durationDays = numberValue(formData.durationDays);
@@ -109,6 +114,47 @@ const Quotations = () => {
         };
     }, [formData]);
 
+    const buildPayload = () => {
+        return {
+            clientName: formData.clientName,
+            country: formData.country,
+            tourTitle: formData.tourTitle,
+            travelStartDate: formData.travelStartDate,
+            travelEndDate: formData.travelEndDate,
+            travelers: numberValue(formData.travelers),
+            durationDays: numberValue(formData.durationDays),
+            vehicleType: formData.vehicleType,
+            vehicleDailyRate: numberValue(formData.vehicleDailyRate),
+            vehicleDays: numberValue(formData.vehicleDays || formData.durationDays),
+            hotelCost: numberValue(formData.hotelCost),
+            activitiesCost: numberValue(formData.activitiesCost),
+            entranceFeesCost: numberValue(formData.entranceFeesCost),
+            otherCost: numberValue(formData.otherCost),
+            discount: numberValue(formData.discount),
+            advancePayment: numberValue(formData.advancePayment),
+            currency: formData.currency,
+            status: formData.status,
+            inclusions: splitLines(formData.inclusionsText),
+            exclusions: splitLines(formData.exclusionsText),
+            notes: formData.notes,
+            adminNotes: formData.adminNotes,
+        };
+    };
+
+    const validateForm = () => {
+        if (!formData.clientName.trim()) {
+            setError("Client name is required.");
+            return false;
+        }
+
+        if (!formData.tourTitle.trim()) {
+            setError("Tour title is required.");
+            return false;
+        }
+
+        return true;
+    };
+
     const handleChange = (e) => {
         const { name, value } = e.target;
 
@@ -134,49 +180,49 @@ const Quotations = () => {
     const handleReset = () => {
         setFormData(initialFormState);
         setError("");
+        setSuccess("");
+    };
+
+    const handleSaveQuotation = async () => {
+        setError("");
+        setSuccess("");
+
+        if (!validateForm()) {
+            return;
+        }
+
+        try {
+            setSaveLoading(true);
+
+            const response = await api.post("/quotations", buildPayload());
+
+            setSuccess(
+                `Quotation saved successfully. Quotation No: ${response.data.quotation.quotationNo}`
+            );
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                err.response?.data?.error ||
+                "Failed to save quotation."
+            );
+        } finally {
+            setSaveLoading(false);
+        }
     };
 
     const handleGeneratePdf = async (e) => {
         e.preventDefault();
         setError("");
+        setSuccess("");
 
-        if (!formData.clientName.trim()) {
-            setError("Client name is required.");
-            return;
-        }
-
-        if (!formData.tourTitle.trim()) {
-            setError("Tour title is required.");
+        if (!validateForm()) {
             return;
         }
 
         try {
-            setLoading(true);
+            setPdfLoading(true);
 
-            const payload = {
-                clientName: formData.clientName,
-                country: formData.country,
-                tourTitle: formData.tourTitle,
-                travelStartDate: formData.travelStartDate,
-                travelEndDate: formData.travelEndDate,
-                travelers: numberValue(formData.travelers),
-                durationDays: numberValue(formData.durationDays),
-                vehicleType: formData.vehicleType,
-                vehicleDailyRate: numberValue(formData.vehicleDailyRate),
-                vehicleDays: numberValue(formData.vehicleDays || formData.durationDays),
-                hotelCost: numberValue(formData.hotelCost),
-                activitiesCost: numberValue(formData.activitiesCost),
-                entranceFeesCost: numberValue(formData.entranceFeesCost),
-                otherCost: numberValue(formData.otherCost),
-                discount: numberValue(formData.discount),
-                advancePayment: numberValue(formData.advancePayment),
-                currency: formData.currency,
-                inclusions: splitLines(formData.inclusionsText),
-                exclusions: splitLines(formData.exclusionsText),
-                notes: formData.notes,
-            };
-
-            const response = await api.post("/quotations/pdf", payload, {
+            const response = await api.post("/quotations/pdf", buildPayload(), {
                 responseType: "blob",
             });
 
@@ -218,7 +264,7 @@ const Quotations = () => {
 
             setError(message);
         } finally {
-            setLoading(false);
+            setPdfLoading(false);
         }
     };
 
@@ -228,7 +274,7 @@ const Quotations = () => {
                 <div>
                     <h3 className="fw-bold mb-1">Quotation Generator</h3>
                     <p className="text-muted mb-0">
-                        Create professional client quotation PDFs for Dream Ceylon Journeys.
+                        Create, save, and download professional quotation PDFs.
                     </p>
                 </div>
 
@@ -238,6 +284,7 @@ const Quotations = () => {
             </div>
 
             {error && <div className="alert alert-danger">{error}</div>}
+            {success && <div className="alert alert-success">{success}</div>}
 
             <div className="row g-4">
                 <div className="col-lg-8">
@@ -346,6 +393,22 @@ const Quotations = () => {
                                             <option value="LKR">LKR</option>
                                             <option value="EUR">EUR</option>
                                             <option value="GBP">GBP</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="col-md-4">
+                                        <label className="form-label">Status</label>
+                                        <select
+                                            name="status"
+                                            className="form-select"
+                                            value={formData.status}
+                                            onChange={handleChange}
+                                        >
+                                            <option value="Draft">Draft</option>
+                                            <option value="Sent">Sent</option>
+                                            <option value="Accepted">Accepted</option>
+                                            <option value="Rejected">Rejected</option>
+                                            <option value="Expired">Expired</option>
                                         </select>
                                     </div>
                                 </div>
@@ -507,7 +570,7 @@ const Quotations = () => {
                                     />
                                 </div>
 
-                                <div>
+                                <div className="mb-3">
                                     <label className="form-label">Additional Notes</label>
                                     <textarea
                                         name="notes"
@@ -517,17 +580,45 @@ const Quotations = () => {
                                         onChange={handleChange}
                                     />
                                 </div>
+
+                                <div>
+                                    <label className="form-label">Admin Notes</label>
+                                    <textarea
+                                        name="adminNotes"
+                                        className="form-control"
+                                        rows="3"
+                                        value={formData.adminNotes}
+                                        onChange={handleChange}
+                                        placeholder="Internal note for admin use"
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        <button
-                            type="submit"
-                            className="btn btn-success btn-lg w-100 mb-4"
-                            disabled={loading}
-                        >
-                            <FaDownload className="me-2" />
-                            {loading ? "Generating Quotation PDF..." : "Download Quotation PDF"}
-                        </button>
+                        <div className="row g-3 mb-4">
+                            <div className="col-md-6">
+                                <button
+                                    type="button"
+                                    className="btn btn-outline-success btn-lg w-100"
+                                    disabled={saveLoading}
+                                    onClick={handleSaveQuotation}
+                                >
+                                    <FaSave className="me-2" />
+                                    {saveLoading ? "Saving..." : "Save Quotation"}
+                                </button>
+                            </div>
+
+                            <div className="col-md-6">
+                                <button
+                                    type="submit"
+                                    className="btn btn-success btn-lg w-100"
+                                    disabled={pdfLoading}
+                                >
+                                    <FaDownload className="me-2" />
+                                    {pdfLoading ? "Generating PDF..." : "Download PDF"}
+                                </button>
+                            </div>
+                        </div>
                     </form>
                 </div>
 
@@ -600,7 +691,7 @@ const Quotations = () => {
                             </div>
 
                             <div className="alert alert-info mt-3 mb-0 small">
-                                This calculation will be used in the generated quotation PDF.
+                                Save the quotation first to keep it in quotation history.
                             </div>
                         </div>
                     </div>
