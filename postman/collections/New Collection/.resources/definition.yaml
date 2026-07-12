@@ -3,3 +3,5 @@ name: New Collection
 variables:
   - key: json_web_token_118q
     secret: true
+  - key: json_web_token_0cza
+    secret: true

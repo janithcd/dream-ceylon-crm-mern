@@ -3,113 +3,226 @@ const TourPackage = require("../models/TourPackage");
 const Inquiry = require("../models/Inquiry");
 const Booking = require("../models/Booking");
 const Vehicle = require("../models/Vehicle");
+const Quotation = require("../models/Quotation");
 
+const getStartOfMonthDate = (monthsBack = 5) => {
+    const date = new Date();
+    date.setMonth(date.getMonth() - monthsBack);
+    date.setDate(1);
+    date.setHours(0, 0, 0, 0);
 
+    return date;
+};
+
+// @desc    Get dashboard statistics
+// @route   GET /api/dashboard/stats
+// @access  Private
 const getDashboardStats = async (req, res) => {
     try {
-        const totalDestinations = await Destination.countDocuments();
-        const activeDestinations = await Destination.countDocuments({
-            status: "Active",
-        });
+        const sixMonthsAgo = getStartOfMonthDate(5);
 
-        const totalPackages = await TourPackage.countDocuments();
-        const activePackages = await TourPackage.countDocuments({
-            status: "Active",
-        });
-        const totalVehicles = await Vehicle.countDocuments();
-        const activeVehicles = await Vehicle.countDocuments({
-            status: "Active",
-        });
+        const [
+            totalDestinations,
+            activeDestinations,
 
-        const totalInquiries = await Inquiry.countDocuments();
-        const newInquiries = await Inquiry.countDocuments({ status: "New" });
-        const contactedInquiries = await Inquiry.countDocuments({
-            status: "Contacted",
-        });
-        const followUpInquiries = await Inquiry.countDocuments({
-            status: "Follow Up",
-        });
-        const convertedInquiries = await Inquiry.countDocuments({
-            status: "Converted",
-        });
-        const cancelledInquiries = await Inquiry.countDocuments({
-            status: "Cancelled",
-        });
-        const highPriorityInquiries = await Inquiry.countDocuments({
-            priority: "High",
-        });
+            totalPackages,
+            activePackages,
 
-        const totalBookings = await Booking.countDocuments();
-        const pendingBookings = await Booking.countDocuments({
-            bookingStatus: "Pending",
-        });
-        const confirmedBookings = await Booking.countDocuments({
-            bookingStatus: "Confirmed",
-        });
-        const inProgressBookings = await Booking.countDocuments({
-            bookingStatus: "In Progress",
-        });
-        const completedBookings = await Booking.countDocuments({
-            bookingStatus: "Completed",
-        });
-        const cancelledBookings = await Booking.countDocuments({
-            bookingStatus: "Cancelled",
-        });
+            totalVehicles,
+            activeVehicles,
 
-        const pendingPayments = await Booking.countDocuments({
-            paymentStatus: "Pending",
-        });
-        const partiallyPaidPayments = await Booking.countDocuments({
-            paymentStatus: "Partially Paid",
-        });
-        const paidPayments = await Booking.countDocuments({
-            paymentStatus: "Paid",
-        });
+            totalInquiries,
+            newInquiries,
+            followUpInquiries,
+            convertedInquiries,
 
-        const revenueStats = await Booking.aggregate([
+            totalBookings,
+            confirmedBookings,
+            completedBookings,
+            cancelledBookings,
+
+            totalQuotations,
+            draftQuotations,
+            sentQuotations,
+            acceptedQuotations,
+            rejectedQuotations,
+            expiredQuotations,
+            convertedQuotations,
+        ] = await Promise.all([
+            Destination.countDocuments(),
+            Destination.countDocuments({ status: "Active" }),
+
+            TourPackage.countDocuments(),
+            TourPackage.countDocuments({ status: "Active" }),
+
+            Vehicle.countDocuments(),
+            Vehicle.countDocuments({ status: "Active" }),
+
+            Inquiry.countDocuments(),
+            Inquiry.countDocuments({ status: "New" }),
+            Inquiry.countDocuments({ status: "Follow Up" }),
+            Inquiry.countDocuments({ status: "Converted" }),
+
+            Booking.countDocuments(),
+            Booking.countDocuments({ bookingStatus: "Confirmed" }),
+            Booking.countDocuments({ bookingStatus: "Completed" }),
+            Booking.countDocuments({ bookingStatus: "Cancelled" }),
+
+            Quotation.countDocuments(),
+            Quotation.countDocuments({ status: "Draft" }),
+            Quotation.countDocuments({ status: "Sent" }),
+            Quotation.countDocuments({ status: "Accepted" }),
+            Quotation.countDocuments({ status: "Rejected" }),
+            Quotation.countDocuments({ status: "Expired" }),
+            Quotation.countDocuments({ booking: { $ne: null } }),
+        ]);
+
+        const bookingRevenueResult = await Booking.aggregate([
             {
                 $match: {
-                    bookingStatus: { $ne: "Cancelled" },
                     currency: "USD",
                 },
             },
             {
                 $group: {
                     _id: null,
-                    totalRevenue: { $sum: "$totalPrice" },
-                    totalAdvancePayments: { $sum: "$advancePayment" },
-                    bookingCount: { $sum: 1 },
+                    totalRevenue: {
+                        $sum: {
+                            $ifNull: ["$totalPrice", 0],
+                        },
+                    },
+                    totalAdvancePayments: {
+                        $sum: {
+                            $ifNull: ["$advancePayment", 0],
+                        },
+                    },
                 },
             },
         ]);
 
-        const revenueSummary = revenueStats[0] || {
-            totalRevenue: 0,
-            totalAdvancePayments: 0,
-            bookingCount: 0,
-        };
-
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-        sixMonthsAgo.setDate(1);
-        sixMonthsAgo.setHours(0, 0, 0, 0);
-
-        const monthlyBookingStats = await Booking.aggregate([
+        const quotationValueResult = await Quotation.aggregate([
             {
                 $match: {
-                    createdAt: { $gte: sixMonthsAgo },
-                    bookingStatus: { $ne: "Cancelled" },
                     currency: "USD",
                 },
             },
             {
                 $group: {
-                    _id: {
-                        year: { $year: "$createdAt" },
-                        month: { $month: "$createdAt" },
+                    _id: null,
+
+                    totalQuotationValue: {
+                        $sum: {
+                            $ifNull: ["$totals.grandTotal", 0],
+                        },
                     },
-                    totalBookings: { $sum: 1 },
-                    totalRevenue: { $sum: "$totalPrice" },
+
+                    acceptedQuotationValue: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $eq: ["$status", "Accepted"],
+                                },
+                                {
+                                    $ifNull: ["$totals.grandTotal", 0],
+                                },
+                                0,
+                            ],
+                        },
+                    },
+
+                    pendingQuotationValue: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $in: ["$status", ["Draft", "Sent"]],
+                                },
+                                {
+                                    $ifNull: ["$totals.grandTotal", 0],
+                                },
+                                0,
+                            ],
+                        },
+                    },
+
+                    rejectedQuotationValue: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $eq: ["$status", "Rejected"],
+                                },
+                                {
+                                    $ifNull: ["$totals.grandTotal", 0],
+                                },
+                                0,
+                            ],
+                        },
+                    },
+                },
+            },
+        ]);
+
+        const monthlyBookingStats = await Booking.aggregate([
+            {
+                $match: {
+                    createdAt: {
+                        $gte: sixMonthsAgo,
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: {
+                        year: {
+                            $year: "$createdAt",
+                        },
+                        month: {
+                            $month: "$createdAt",
+                        },
+                    },
+                    count: {
+                        $sum: 1,
+                    },
+                    revenue: {
+                        $sum: {
+                            $ifNull: ["$totalPrice", 0],
+                        },
+                    },
+                },
+            },
+            {
+                $sort: {
+                    "_id.year": 1,
+                    "_id.month": 1,
+                },
+            },
+        ]);
+
+        const monthlyQuotationStats = await Quotation.aggregate([
+            {
+                $match: {
+                    createdAt: {
+                        $gte: sixMonthsAgo,
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: {
+                        year: {
+                            $year: "$createdAt",
+                        },
+                        month: {
+                            $month: "$createdAt",
+                        },
+                    },
+                    count: {
+                        $sum: 1,
+                    },
+                    value: {
+                        $sum: {
+                            $ifNull: ["$totals.grandTotal", 0],
+                        },
+                    },
                 },
             },
             {
@@ -121,14 +234,32 @@ const getDashboardStats = async (req, res) => {
         ]);
 
         const recentInquiries = await Inquiry.find()
-            .populate("interestedPackage", "title durationDays category priceFrom currency")
+            .populate("interestedPackage", "title durationDays category")
             .sort({ createdAt: -1 })
             .limit(5);
 
         const recentBookings = await Booking.find()
-            .populate("selectedPackage", "title durationDays category priceFrom currency")
+            .populate("selectedPackage", "title durationDays category")
             .sort({ createdAt: -1 })
             .limit(5);
+
+        const recentQuotations = await Quotation.find()
+            .populate("inquiry", "fullName email whatsappNumber country status")
+            .populate("booking", "bookingCode bookingStatus paymentStatus")
+            .sort({ createdAt: -1 })
+            .limit(5);
+
+        const bookingRevenue = bookingRevenueResult[0] || {
+            totalRevenue: 0,
+            totalAdvancePayments: 0,
+        };
+
+        const quotationValues = quotationValueResult[0] || {
+            totalQuotationValue: 0,
+            acceptedQuotationValue: 0,
+            pendingQuotationValue: 0,
+            rejectedQuotationValue: 0,
+        };
 
         res.status(200).json({
             destinations: {
@@ -140,54 +271,62 @@ const getDashboardStats = async (req, res) => {
                 total: totalPackages,
                 active: activePackages,
             },
+
             vehicles: {
                 total: totalVehicles,
                 active: activeVehicles,
             },
 
-
             inquiries: {
                 total: totalInquiries,
                 new: newInquiries,
-                contacted: contactedInquiries,
                 followUp: followUpInquiries,
                 converted: convertedInquiries,
-                cancelled: cancelledInquiries,
-                highPriority: highPriorityInquiries,
             },
 
             bookings: {
                 total: totalBookings,
-                pending: pendingBookings,
                 confirmed: confirmedBookings,
-                inProgress: inProgressBookings,
                 completed: completedBookings,
                 cancelled: cancelledBookings,
             },
 
-            payments: {
-                pending: pendingPayments,
-                partiallyPaid: partiallyPaidPayments,
-                paid: paidPayments,
+            quotations: {
+                total: totalQuotations,
+                draft: draftQuotations,
+                sent: sentQuotations,
+                accepted: acceptedQuotations,
+                rejected: rejectedQuotations,
+                expired: expiredQuotations,
+                converted: convertedQuotations,
             },
 
             revenue: {
                 currency: "USD",
-                totalRevenue: revenueSummary.totalRevenue,
-                totalAdvancePayments: revenueSummary.totalAdvancePayments,
-                balanceAmount:
-                    revenueSummary.totalRevenue - revenueSummary.totalAdvancePayments,
+                total: bookingRevenue.totalRevenue || 0,
+                totalRevenue: bookingRevenue.totalRevenue || 0,
+                totalAdvancePayments: bookingRevenue.totalAdvancePayments || 0,
+            },
+
+            quotationValues: {
+                currency: "USD",
+                total: quotationValues.totalQuotationValue || 0,
+                totalQuotationValue: quotationValues.totalQuotationValue || 0,
+                acceptedQuotationValue: quotationValues.acceptedQuotationValue || 0,
+                pendingQuotationValue: quotationValues.pendingQuotationValue || 0,
+                rejectedQuotationValue: quotationValues.rejectedQuotationValue || 0,
             },
 
             monthlyBookingStats,
+            monthlyQuotationStats,
 
             recentInquiries,
-
             recentBookings,
+            recentQuotations,
         });
     } catch (error) {
         res.status(500).json({
-            message: "Server error",
+            message: "Failed to fetch dashboard statistics",
             error: error.message,
         });
     }
