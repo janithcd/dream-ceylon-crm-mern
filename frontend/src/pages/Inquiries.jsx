@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { FaEdit, FaPlus, FaSearch, FaTrash } from "react-icons/fa";
+import { FaEdit, FaPlus, FaSearch, FaTrash,FaFileInvoiceDollar } from "react-icons/fa";
 import api from "../api/axios";
+import { useNavigate } from "react-router-dom";
 
 const initialFormState = {
     fullName: "",
@@ -39,6 +40,8 @@ const Inquiries = () => {
     const [formLoading, setFormLoading] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+
+    const navigate = useNavigate();
 
     const statusOptions = ["New", "Contacted", "Follow Up", "Converted", "Cancelled"];
     const priorityOptions = ["Low", "Medium", "High"];
@@ -587,6 +590,14 @@ const Inquiries = () => {
                                                 onClick={() => handleEdit(inquiry)}
                                             >
                                                 <FaEdit />
+                                            </button>
+
+                                            <button
+                                                className="btn btn-sm btn-outline-success me-2"
+                                                onClick={() => navigate(`/quotations?inquiry=${inquiry._id}`)}
+                                                title="Create quotation from this inquiry"
+                                            >
+                                                <FaFileInvoiceDollar />
                                             </button>
 
                                             <button

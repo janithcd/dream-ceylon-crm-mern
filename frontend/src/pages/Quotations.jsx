@@ -44,6 +44,8 @@ const initialFormState = {
     notes:
         "This quotation is based on private transport only. Hotels, entrance tickets, safari fees, and activities can be added separately according to the client's preferred budget.",
     adminNotes: "",
+    inquiry: null,
+    booking: null,
 };
 
 const numberValue = (value) => {
@@ -127,16 +129,50 @@ const mapQuotationToForm = (quotation) => {
         booking: getIdValue(quotation.booking),
     };
 };
+const mapInquiryToQuotationForm = (inquiry) => {
+    const packageTitle =
+        inquiry.interestedPackage?.title || "Sri Lanka Private Tour Quotation";
+
+    const packageDuration = inquiry.interestedPackage?.durationDays || "";
+
+    const inquiryMessage = inquiry.message
+        ? `Client Message:\n${inquiry.message}`
+        : "";
+
+    const adminNotes = inquiry.adminNotes
+        ? `\n\nPrevious Admin Notes:\n${inquiry.adminNotes}`
+        : "";
+
+    return {
+        ...initialFormState,
+        inquiry: inquiry._id,
+        booking: null,
+
+        clientName: inquiry.fullName || "",
+        country: inquiry.country || "",
+        tourTitle: packageTitle,
+
+        travelStartDate: formatDateForInput(inquiry.travelDate),
+        travelEndDate: "",
+
+        travelers: inquiry.numberOfTravelers ?? "",
+        durationDays: packageDuration,
+
+        notes: `${inquiryMessage}${adminNotes}`.trim(),
+        adminNotes: `Quotation created from inquiry.`,
+    };
+};
 
 const Quotations = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const editId = searchParams.get("edit");
-
+    const inquiryId = searchParams.get("inquiry");
     const [formData, setFormData] = useState(initialFormState);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [saveLoading, setSaveLoading] = useState(false);
     const [editLoading, setEditLoading] = useState(false);
-    const [error, setError] = useState("");
+    const [inquiryLoading, setInquiryLoading] = useState(false);
+    const [error, setError] = useState("");useEffect
     const [success, setSuccess] = useState("");
     const [quotationNo, setQuotationNo] = useState("");
 
@@ -171,6 +207,40 @@ const Quotations = () => {
 
         fetchQuotationForEdit();
     }, [editId]);
+
+    useEffect(() => {
+        const fetchInquiryForQuotation = async () => {
+            if (!inquiryId || editId) {
+                return;
+            }
+
+            try {
+                setInquiryLoading(true);
+                setError("");
+                setSuccess("");
+                setQuotationNo("");
+
+                const response = await api.get(`/inquiries/${inquiryId}`);
+                const inquiry = response.data;
+
+                setFormData(mapInquiryToQuotationForm(inquiry));
+
+                setSuccess(
+                    `Inquiry loaded successfully. You can now prepare a quotation for ${inquiry.fullName}.`
+                );
+            } catch (err) {
+                setError(
+                    err.response?.data?.message ||
+                    err.response?.data?.error ||
+                    "Failed to load inquiry details."
+                );
+            } finally {
+                setInquiryLoading(false);
+            }
+        };
+
+        fetchInquiryForQuotation();
+    }, [inquiryId, editId]);
 
     const totals = useMemo(() => {
         const durationDays = numberValue(formData.durationDays);
@@ -384,11 +454,11 @@ const Quotations = () => {
         }
     };
 
-    if (editLoading) {
+    if (editLoading || inquiryLoading) {
         return (
             <div className="card border-0 shadow-sm rounded-4">
                 <div className="card-body p-5 text-center text-muted">
-                    Loading quotation for editing...
+                    {editLoading ? "Loading quotation for editing..." : "Loading inquiry details..."}
                 </div>
             </div>
         );
@@ -399,12 +469,18 @@ const Quotations = () => {
             <div className="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
                 <div>
                     <h3 className="fw-bold mb-1">
-                        {isEditMode ? "Edit Quotation" : "Quotation Generator"}
+                        {isEditMode
+                            ? "Edit Quotation"
+                            : inquiryId
+                                ? "Create Quotation From Inquiry"
+                                : "Quotation Generator"}
                     </h3>
                     <p className="text-muted mb-0">
                         {isEditMode
                             ? "Update saved quotation details and download the latest PDF."
-                            : "Create, save, and download professional quotation PDFs."}
+                            : inquiryId
+                                ? "Review the inquiry details, add pricing, and save the quotation."
+                                : "Create, save, and download professional quotation PDFs."}
                     </p>
 
                     {quotationNo && (
