@@ -10,7 +10,12 @@ const {
     deleteQuotation,
 } = require("../controllers/quotationCrudController");
 
+const {
+    convertQuotationToBooking,
+} = require("../controllers/quotationConversionController");
+
 const { protect } = require("../middleware/authMiddleware");
+
 
 const router = express.Router();
 
@@ -22,5 +27,7 @@ router.get("/", protect, getQuotations);
 router.get("/:id", protect, getQuotationById);
 router.put("/:id", protect, updateQuotation);
 router.delete("/:id", protect, deleteQuotation);
+
+router.post("/:id/convert-to-booking", protect, convertQuotationToBooking);
 
 module.exports = router;

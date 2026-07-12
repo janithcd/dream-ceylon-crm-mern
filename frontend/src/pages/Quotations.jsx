@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
     FaCalculator,
     FaDownload,
@@ -64,12 +65,112 @@ const splitLines = (value) => {
         .filter(Boolean);
 };
 
+const formatDateForInput = (value) => {
+    if (!value) {
+        return "";
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return "";
+    }
+
+    return date.toISOString().split("T")[0];
+};
+
+const arrayToText = (value) => {
+    if (Array.isArray(value)) {
+        return value.join("\n");
+    }
+
+    return "";
+};
+
+const getIdValue = (value) => {
+    if (!value) {
+        return null;
+    }
+
+    if (typeof value === "string") {
+        return value;
+    }
+
+    return value._id || null;
+};
+
+const mapQuotationToForm = (quotation) => {
+    return {
+        clientName: quotation.clientName || "",
+        country: quotation.country || "",
+        tourTitle: quotation.tourTitle || "",
+        travelStartDate: formatDateForInput(quotation.travelStartDate),
+        travelEndDate: formatDateForInput(quotation.travelEndDate),
+        travelers: quotation.travelers ?? "",
+        durationDays: quotation.durationDays ?? "",
+        vehicleType: quotation.vehicleType || "Car",
+        vehicleDailyRate: quotation.vehicleDailyRate ?? "0",
+        vehicleDays: quotation.vehicleDays ?? "",
+        hotelCost: quotation.hotelCost ?? "0",
+        activitiesCost: quotation.activitiesCost ?? "0",
+        entranceFeesCost: quotation.entranceFeesCost ?? "0",
+        otherCost: quotation.otherCost ?? "0",
+        discount: quotation.discount ?? "0",
+        advancePayment: quotation.advancePayment ?? "0",
+        currency: quotation.currency || "USD",
+        status: quotation.status || "Draft",
+        inclusionsText: arrayToText(quotation.inclusions),
+        exclusionsText: arrayToText(quotation.exclusions),
+        notes: quotation.notes || "",
+        adminNotes: quotation.adminNotes || "",
+        inquiry: getIdValue(quotation.inquiry),
+        booking: getIdValue(quotation.booking),
+    };
+};
+
 const Quotations = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const editId = searchParams.get("edit");
+
     const [formData, setFormData] = useState(initialFormState);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [saveLoading, setSaveLoading] = useState(false);
+    const [editLoading, setEditLoading] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [quotationNo, setQuotationNo] = useState("");
+
+    const isEditMode = Boolean(editId);
+
+    useEffect(() => {
+        const fetchQuotationForEdit = async () => {
+            if (!editId) {
+                return;
+            }
+
+            try {
+                setEditLoading(true);
+                setError("");
+                setSuccess("");
+
+                const response = await api.get(`/quotations/${editId}`);
+                const quotation = response.data;
+
+                setFormData(mapQuotationToForm(quotation));
+                setQuotationNo(quotation.quotationNo || "");
+            } catch (err) {
+                setError(
+                    err.response?.data?.message ||
+                    err.response?.data?.error ||
+                    "Failed to load quotation for editing."
+                );
+            } finally {
+                setEditLoading(false);
+            }
+        };
+
+        fetchQuotationForEdit();
+    }, [editId]);
 
     const totals = useMemo(() => {
         const durationDays = numberValue(formData.durationDays);
@@ -116,6 +217,8 @@ const Quotations = () => {
 
     const buildPayload = () => {
         return {
+            inquiry: formData.inquiry || null,
+            booking: formData.booking || null,
             clientName: formData.clientName,
             country: formData.country,
             tourTitle: formData.tourTitle,
@@ -181,6 +284,8 @@ const Quotations = () => {
         setFormData(initialFormState);
         setError("");
         setSuccess("");
+        setQuotationNo("");
+        setSearchParams({});
     };
 
     const handleSaveQuotation = async () => {
@@ -194,11 +299,22 @@ const Quotations = () => {
         try {
             setSaveLoading(true);
 
-            const response = await api.post("/quotations", buildPayload());
+            if (isEditMode) {
+                const response = await api.put(`/quotations/${editId}`, buildPayload());
 
-            setSuccess(
-                `Quotation saved successfully. Quotation No: ${response.data.quotation.quotationNo}`
-            );
+                setSuccess(
+                    `Quotation updated successfully. Quotation No: ${response.data.quotation.quotationNo}`
+                );
+                setQuotationNo(response.data.quotation.quotationNo || quotationNo);
+            } else {
+                const response = await api.post("/quotations", buildPayload());
+
+                setSuccess(
+                    `Quotation saved successfully. Quotation No: ${response.data.quotation.quotationNo}`
+                );
+                setQuotationNo(response.data.quotation.quotationNo || "");
+                setSearchParams({ edit: response.data.quotation._id });
+            }
         } catch (err) {
             setError(
                 err.response?.data?.message ||
@@ -268,18 +384,38 @@ const Quotations = () => {
         }
     };
 
+    if (editLoading) {
+        return (
+            <div className="card border-0 shadow-sm rounded-4">
+                <div className="card-body p-5 text-center text-muted">
+                    Loading quotation for editing...
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div>
             <div className="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
                 <div>
-                    <h3 className="fw-bold mb-1">Quotation Generator</h3>
+                    <h3 className="fw-bold mb-1">
+                        {isEditMode ? "Edit Quotation" : "Quotation Generator"}
+                    </h3>
                     <p className="text-muted mb-0">
-                        Create, save, and download professional quotation PDFs.
+                        {isEditMode
+                            ? "Update saved quotation details and download the latest PDF."
+                            : "Create, save, and download professional quotation PDFs."}
                     </p>
+
+                    {quotationNo && (
+                        <div className="badge bg-success-subtle text-success mt-2 px-3 py-2 rounded-pill">
+                            {quotationNo}
+                        </div>
+                    )}
                 </div>
 
                 <button className="btn btn-outline-secondary" onClick={handleReset}>
-                    Reset Form
+                    {isEditMode ? "Create New Quotation" : "Reset Form"}
                 </button>
             </div>
 
@@ -604,7 +740,13 @@ const Quotations = () => {
                                     onClick={handleSaveQuotation}
                                 >
                                     <FaSave className="me-2" />
-                                    {saveLoading ? "Saving..." : "Save Quotation"}
+                                    {saveLoading
+                                        ? isEditMode
+                                            ? "Updating..."
+                                            : "Saving..."
+                                        : isEditMode
+                                            ? "Update Quotation"
+                                            : "Save Quotation"}
                                 </button>
                             </div>
 
@@ -691,7 +833,9 @@ const Quotations = () => {
                             </div>
 
                             <div className="alert alert-info mt-3 mb-0 small">
-                                Save the quotation first to keep it in quotation history.
+                                {isEditMode
+                                    ? "You are editing a saved quotation. Click Update Quotation to save changes."
+                                    : "Save the quotation first to keep it in quotation history."}
                             </div>
                         </div>
                     </div>

@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
+    FaCalendarCheck,
     FaDownload,
     FaEdit,
     FaFileInvoiceDollar,
@@ -120,11 +122,14 @@ const buildQuotationPayload = (quotation, overrides = {}) => {
 };
 
 const QuotationHistory = () => {
+    const navigate = useNavigate();
+
     const [quotations, setQuotations] = useState([]);
     const [keyword, setKeyword] = useState("");
     const [status, setStatus] = useState("");
     const [currency, setCurrency] = useState("");
     const [page, setPage] = useState(1);
+
     const [pagination, setPagination] = useState({
         currentPage: 1,
         totalPages: 1,
@@ -134,30 +139,36 @@ const QuotationHistory = () => {
     const [loading, setLoading] = useState(false);
     const [pdfLoadingId, setPdfLoadingId] = useState("");
     const [statusLoadingId, setStatusLoadingId] = useState("");
+    const [convertLoadingId, setConvertLoadingId] = useState("");
     const [deleteLoadingId, setDeleteLoadingId] = useState("");
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
-    const fetchQuotations = async () => {
+    const fetchQuotations = async ({
+                                       pageValue = page,
+                                       keywordValue = keyword,
+                                       statusValue = status,
+                                       currencyValue = currency,
+                                   } = {}) => {
         try {
             setLoading(true);
             setError("");
 
             const params = {
-                page,
+                page: pageValue,
                 limit: 8,
             };
 
-            if (keyword.trim()) {
-                params.keyword = keyword.trim();
+            if (keywordValue.trim()) {
+                params.keyword = keywordValue.trim();
             }
 
-            if (status) {
-                params.status = status;
+            if (statusValue) {
+                params.status = statusValue;
             }
 
-            if (currency) {
-                params.currency = currency;
+            if (currencyValue) {
+                params.currency = currencyValue;
             }
 
             const response = await api.get("/quotations", { params });
@@ -180,14 +191,20 @@ const QuotationHistory = () => {
     };
 
     useEffect(() => {
-        fetchQuotations();
+        fetchQuotations({ pageValue: page });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, status, currency]);
 
     const handleSearch = (e) => {
         e.preventDefault();
+
         setPage(1);
-        fetchQuotations();
+        fetchQuotations({
+            pageValue: 1,
+            keywordValue: keyword,
+            statusValue: status,
+            currencyValue: currency,
+        });
     };
 
     const handleResetFilters = () => {
@@ -195,6 +212,13 @@ const QuotationHistory = () => {
         setStatus("");
         setCurrency("");
         setPage(1);
+
+        fetchQuotations({
+            pageValue: 1,
+            keywordValue: "",
+            statusValue: "",
+            currencyValue: "",
+        });
     };
 
     const handleDownloadPdf = async (quotation) => {
@@ -240,6 +264,8 @@ const QuotationHistory = () => {
                 } catch {
                     message = errorText || message;
                 }
+            } else if (err.response?.data?.message) {
+                message = err.response.data.message;
             }
 
             setError(message);
@@ -271,6 +297,76 @@ const QuotationHistory = () => {
             );
         } finally {
             setStatusLoadingId("");
+        }
+    };
+
+    const handleConvertToBooking = async (quotation) => {
+        if (quotation.booking) {
+            setError("This quotation is already converted to a booking.");
+            return;
+        }
+
+        const confirmed = window.confirm(
+            "Convert this quotation to a confirmed booking?"
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        let email = quotation.inquiry?.email || "";
+        let whatsappNumber = quotation.inquiry?.whatsappNumber || "";
+
+        if (!email) {
+            email = window.prompt("Enter client email address:");
+
+            if (!email) {
+                setError("Client email is required to create a booking.");
+                return;
+            }
+        }
+
+        if (!whatsappNumber) {
+            whatsappNumber = window.prompt("Enter client WhatsApp number:");
+
+            if (!whatsappNumber) {
+                setError("Client WhatsApp number is required to create a booking.");
+                return;
+            }
+        }
+
+        try {
+            setConvertLoadingId(quotation._id);
+            setError("");
+            setSuccess("");
+
+            const response = await api.post(
+                `/quotations/${quotation._id}/convert-to-booking`,
+                {
+                    confirmAccepted: true,
+                    email,
+                    whatsappNumber,
+                    bookingStatus: "Confirmed",
+                    specialRequests:
+                        quotation.notes ||
+                        `Client accepted quotation ${quotation.quotationNo}.`,
+                    adminNotes: `Booking created from quotation ${quotation.quotationNo}.`,
+                }
+            );
+
+            setSuccess(
+                `Quotation converted successfully. Booking Code: ${response.data.booking.bookingCode}`
+            );
+
+            fetchQuotations();
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                err.response?.data?.error ||
+                "Failed to convert quotation to booking."
+            );
+        } finally {
+            setConvertLoadingId("");
         }
     };
 
@@ -309,7 +405,8 @@ const QuotationHistory = () => {
                 <div>
                     <h3 className="fw-bold mb-1">Quotation History</h3>
                     <p className="text-muted mb-0">
-                        View, filter, update, delete, and download saved quotation PDFs.
+                        View, filter, update, delete, download, and convert quotations to
+                        bookings.
                     </p>
                 </div>
 
@@ -400,7 +497,9 @@ const QuotationHistory = () => {
             <div className="card border-0 shadow-sm rounded-4">
                 <div className="card-body p-0">
                     {loading ? (
-                        <div className="p-4 text-center text-muted">Loading quotations...</div>
+                        <div className="p-4 text-center text-muted">
+                            Loading quotations...
+                        </div>
                     ) : quotations.length === 0 ? (
                         <div className="p-5 text-center">
                             <FaFileInvoiceDollar className="text-muted mb-3" size={42} />
@@ -432,17 +531,32 @@ const QuotationHistory = () => {
                                             <small className="text-muted">
                                                 {quotation.currency}
                                             </small>
+
+                                            {quotation.booking && (
+                                                <div className="mt-1">
+                            <span className="badge bg-success-subtle text-success">
+                              Converted
+                            </span>
+                                                </div>
+                                            )}
                                         </td>
 
                                         <td>
-                                            <div className="fw-semibold">{quotation.clientName}</div>
-                                            <small className="text-muted">{quotation.country}</small>
+                                            <div className="fw-semibold">
+                                                {quotation.clientName}
+                                            </div>
+                                            <small className="text-muted">
+                                                {quotation.country}
+                                            </small>
                                         </td>
 
                                         <td style={{ minWidth: "240px" }}>
-                                            <div className="fw-semibold">{quotation.tourTitle}</div>
+                                            <div className="fw-semibold">
+                                                {quotation.tourTitle}
+                                            </div>
                                             <small className="text-muted">
-                                                {quotation.durationDays} days · {quotation.vehicleType}
+                                                {quotation.durationDays} days ·{" "}
+                                                {quotation.vehicleType}
                                             </small>
                                         </td>
 
@@ -507,10 +621,28 @@ const QuotationHistory = () => {
 
                                                 <button
                                                     className="btn btn-sm btn-outline-primary"
-                                                    disabled
-                                                    title="Edit feature will be added next"
+                                                    onClick={() =>
+                                                        navigate(`/quotations?edit=${quotation._id}`)
+                                                    }
+                                                    title="Edit quotation"
                                                 >
                                                     <FaEdit />
+                                                </button>
+
+                                                <button
+                                                    className="btn btn-sm btn-outline-dark"
+                                                    onClick={() => handleConvertToBooking(quotation)}
+                                                    disabled={
+                                                        convertLoadingId === quotation._id ||
+                                                        Boolean(quotation.booking)
+                                                    }
+                                                    title={
+                                                        quotation.booking
+                                                            ? "Already converted"
+                                                            : "Convert to booking"
+                                                    }
+                                                >
+                                                    <FaCalendarCheck />
                                                 </button>
 
                                                 <button

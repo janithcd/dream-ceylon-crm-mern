@@ -1004,6 +1004,8 @@ GET /api/public/vehicles?isFeatured=true
 - [x] Bookings CRUD page
 - [x] Vehicles CRUD page
 - [x] Client tools page
+- [x] Quotation page
+- [x] Quotation History page
 - [x] AI reply generator component
 - [x] AI itinerary generator component
 - [x] Itinerary PDF download button
@@ -1015,8 +1017,8 @@ GET /api/public/vehicles?isFeatured=true
 - [x] Quotation PDF design
 - [x] Quotation Generator frontend page
 - [x] Save quotations to database
-- [ ] Quotation history page
-- [ ] Convert quotation into booking
+- [x] Quotation history page
+- [x] Convert quotation into booking
 
 ---
 
