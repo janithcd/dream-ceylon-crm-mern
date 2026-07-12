@@ -1013,8 +1013,8 @@ GET /api/public/vehicles?isFeatured=true
 - [x] Quotation PDF backend route
 - [x] Quotation cost calculation
 - [x] Quotation PDF design
-- [ ] Quotation Generator frontend page
-- [ ] Save quotations to database
+- [x] Quotation Generator frontend page
+- [x] Save quotations to database
 - [ ] Quotation history page
 - [ ] Convert quotation into booking
 
