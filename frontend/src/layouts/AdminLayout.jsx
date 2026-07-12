@@ -8,7 +8,7 @@ import {
     FaMapMarkedAlt,
     FaRoute,
     FaSignOutAlt,
-
+    FaCalendarAlt,
     FaHistory,
 
 } from "react-icons/fa";
@@ -54,6 +54,10 @@ const AdminLayout = () => {
 
                     <NavLink to="/bookings">
                         <FaCalendarCheck /> Bookings
+                    </NavLink>
+                    <NavLink to="/bookings-calendar">
+                        <FaCalendarAlt />
+                        Booking Calendar
                     </NavLink>
 
                     <NavLink to="/vehicles">

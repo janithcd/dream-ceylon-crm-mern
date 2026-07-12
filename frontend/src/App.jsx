@@ -12,6 +12,7 @@ import Bookings from "./pages/Bookings";
 import Vehicles from "./pages/Vehicles";
 import Quotations from "./pages/Quotations";
 import QuotationHistory from "./pages/QuotationHistory";
+import BookingCalendar from "./pages/BookingCalendar";
 
 const App = () => {
     return (
@@ -33,6 +34,7 @@ const App = () => {
                         <Route path="packages" element={<Packages />} />
                         <Route path="inquiries" element={<Inquiries />} />
                         <Route path="bookings" element={<Bookings />} />
+                        <Route path="bookings-calendar" element={<BookingCalendar />} />
                         <Route path="vehicles" element={<Vehicles />} />
                         <Route path="client-tools" element={<ClientTools />} />
                         <Route path="quotations" element={<Quotations />} />
