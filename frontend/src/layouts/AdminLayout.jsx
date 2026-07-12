@@ -10,6 +10,7 @@ import {
     FaSignOutAlt,
 } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
+import { FaFileInvoiceDollar } from "react-icons/fa";
 
 const AdminLayout = () => {
     const { admin, logout } = useAuth();
@@ -54,6 +55,10 @@ const AdminLayout = () => {
 
                     <NavLink to="/vehicles">
                         <FaCar /> Vehicles
+                    </NavLink>
+                    <NavLink to="/quotations">
+                        <FaFileInvoiceDollar />
+                        Quotations
                     </NavLink>
                     <NavLink to="/client-tools">
                         <FaGlobeAsia /> Client Tools
