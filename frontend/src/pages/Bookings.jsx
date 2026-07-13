@@ -6,8 +6,10 @@ import {
     FaTrash,
     FaFileInvoiceDollar,
     FaReceipt,
+    FaWallet,
 } from "react-icons/fa";
 import api from "../api/axios";
+import BookingPaymentsModal from "../components/BookingPaymentsModal";
 
 const initialFormState = {
     inquiry: "",
@@ -39,6 +41,8 @@ const Bookings = () => {
     const [formData, setFormData] = useState(initialFormState);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    const [selectedPaymentBooking, setSelectedPaymentBooking] = useState(null);
+
 
     const [searchInput, setSearchInput] = useState("");
     const [keyword, setKeyword] = useState("");
@@ -915,6 +919,13 @@ const Bookings = () => {
                                         <td className="text-end">
                                             <div className="d-flex justify-content-end gap-2">
                                                 <button
+                                                    className="btn btn-sm btn-outline-warning"
+                                                    onClick={() => setSelectedPaymentBooking(booking)}
+                                                    title="Payment history"
+                                                >
+                                                    <FaWallet />
+                                                </button>
+                                                <button
                                                     className="btn btn-sm btn-outline-success"
                                                     onClick={() =>
                                                         handleDownloadBookingPdf(booking, "invoice")
@@ -987,6 +998,13 @@ const Bookings = () => {
                     </div>
                 </div>
             </div>
+            {selectedPaymentBooking && (
+                <BookingPaymentsModal
+                    booking={selectedPaymentBooking}
+                    onClose={() => setSelectedPaymentBooking(null)}
+                    onPaymentChanged={fetchBookings}
+                />
+            )}
         </div>
     );
 };
