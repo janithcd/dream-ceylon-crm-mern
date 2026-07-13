@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
     FaPlus,
+    FaReceipt,
     FaSyncAlt,
     FaTimes,
     FaTrash,
@@ -94,6 +95,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
     const [loading, setLoading] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
     const [deleteLoadingId, setDeleteLoadingId] = useState("");
+    const [receiptLoadingId, setReceiptLoadingId] = useState("");
 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
@@ -247,6 +249,63 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
             );
         } finally {
             setDeleteLoadingId("");
+        }
+    };
+
+    const handleDownloadPaymentReceipt = async (payment) => {
+        try {
+            setReceiptLoadingId(payment._id);
+            setError("");
+            setSuccess("");
+
+            const response = await api.post(
+                `/payment-receipts/${payment._id}`,
+                {},
+                {
+                    responseType: "blob",
+                }
+            );
+
+            const blob = new Blob([response.data], {
+                type: "application/pdf",
+            });
+
+            const fileUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+
+            const cleanPaymentNo =
+                payment.paymentNo
+                    ?.toLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-+|-+$/g, "") || "payment-receipt";
+
+            link.href = fileUrl;
+            link.download = `dream-ceylon-payment-receipt-${cleanPaymentNo}.pdf`;
+
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            window.URL.revokeObjectURL(fileUrl);
+        } catch (err) {
+            let message = "Failed to download payment receipt PDF.";
+
+            if (err.response?.data instanceof Blob) {
+                const errorText = await err.response.data.text();
+
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    message = errorJson.error || errorJson.message || message;
+                } catch {
+                    message = errorText || message;
+                }
+            } else if (err.response?.data?.message) {
+                message = err.response.data.message;
+            }
+
+            setError(message);
+        } finally {
+            setReceiptLoadingId("");
         }
     };
 
@@ -580,16 +639,25 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                     </td>
 
                                                     <td className="text-end">
-                                                        <button
-                                                            className="btn btn-sm btn-outline-danger"
-                                                            onClick={() =>
-                                                                handleDeletePayment(payment._id)
-                                                            }
-                                                            disabled={deleteLoadingId === payment._id}
-                                                            title="Delete payment"
-                                                        >
-                                                            <FaTrash />
-                                                        </button>
+                                                        <div className="d-flex justify-content-end gap-2">
+                                                            <button
+                                                                className="btn btn-sm btn-outline-success"
+                                                                onClick={() => handleDownloadPaymentReceipt(payment)}
+                                                                disabled={receiptLoadingId === payment._id}
+                                                                title="Download payment receipt"
+                                                            >
+                                                                <FaReceipt />
+                                                            </button>
+
+                                                            <button
+                                                                className="btn btn-sm btn-outline-danger"
+                                                                onClick={() => handleDeletePayment(payment._id)}
+                                                                disabled={deleteLoadingId === payment._id}
+                                                                title="Delete payment"
+                                                            >
+                                                                <FaTrash />
+                                                            </button>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             ))}
