@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
     FaBell,
     FaCheckCircle,
@@ -180,6 +181,18 @@ const SummaryCard = ({ title, value, subtitle, icon, variant = "success" }) => {
 };
 
 const FollowUps = () => {
+    const [searchParams] = useSearchParams();
+
+    const inquiryParam = searchParams.get("inquiry");
+    const quotationParam = searchParams.get("quotation");
+    const bookingParam = searchParams.get("booking");
+
+    const prefillKey = `${inquiryParam || ""}|${quotationParam || ""}|${
+        bookingParam || ""
+    }`;
+
+    const [appliedPrefillKey, setAppliedPrefillKey] = useState("");
+
     const [followUps, setFollowUps] = useState([]);
     const [summary, setSummary] = useState({
         totalPending: 0,
@@ -343,6 +356,137 @@ const FollowUps = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, keyword, status, priority, type, dateFilter]);
 
+    useEffect(() => {
+        if (!inquiryParam && !quotationParam && !bookingParam) {
+            return;
+        }
+
+        if (appliedPrefillKey === prefillKey) {
+            return;
+        }
+
+        if (inquiryParam) {
+            const selectedInquiry = inquiries.find(
+                (item) => item._id === inquiryParam
+            );
+
+            if (!selectedInquiry && inquiries.length === 0) {
+                return;
+            }
+
+            setEditingId(null);
+            setShowForm(true);
+
+            setFormData({
+                ...initialFormState,
+                title: selectedInquiry
+                    ? `Follow up with ${selectedInquiry.fullName}`
+                    : "Follow up inquiry",
+                type: "Inquiry",
+                inquiry: inquiryParam,
+                quotation: "",
+                booking: "",
+                customerName: selectedInquiry?.fullName || "",
+                customerContact:
+                    selectedInquiry?.whatsappNumber || selectedInquiry?.email || "",
+                followUpDate: new Date().toISOString().split("T")[0],
+                priority: "Medium",
+                status: "Pending",
+                notes: selectedInquiry?.message
+                    ? `Inquiry message: ${selectedInquiry.message}`
+                    : "",
+            });
+
+            setAppliedPrefillKey(prefillKey);
+            return;
+        }
+
+        if (quotationParam) {
+            const selectedQuotation = quotations.find(
+                (item) => item._id === quotationParam
+            );
+
+            if (!selectedQuotation && quotations.length === 0) {
+                return;
+            }
+
+            setEditingId(null);
+            setShowForm(true);
+
+            setFormData({
+                ...initialFormState,
+                title: selectedQuotation
+                    ? `Follow up quotation ${selectedQuotation.quotationNo}`
+                    : "Follow up quotation",
+                type: "Quotation",
+                inquiry: "",
+                quotation: quotationParam,
+                booking: "",
+                customerName:
+                    selectedQuotation?.clientName ||
+                    selectedQuotation?.inquiry?.fullName ||
+                    "",
+                customerContact:
+                    selectedQuotation?.inquiry?.whatsappNumber ||
+                    selectedQuotation?.inquiry?.email ||
+                    "",
+                followUpDate: new Date().toISOString().split("T")[0],
+                priority: "High",
+                status: "Pending",
+                notes: selectedQuotation?.tourTitle
+                    ? `Quotation follow-up for: ${selectedQuotation.tourTitle}`
+                    : "",
+            });
+
+            setAppliedPrefillKey(prefillKey);
+            return;
+        }
+
+        if (bookingParam) {
+            const selectedBooking = bookings.find((item) => item._id === bookingParam);
+
+            if (!selectedBooking && bookings.length === 0) {
+                return;
+            }
+
+            setEditingId(null);
+            setShowForm(true);
+
+            setFormData({
+                ...initialFormState,
+                title: selectedBooking
+                    ? `Follow up booking ${selectedBooking.bookingCode}`
+                    : "Follow up booking",
+                type: "Booking",
+                inquiry: "",
+                quotation: "",
+                booking: bookingParam,
+                customerName: selectedBooking?.customer?.fullName || "",
+                customerContact:
+                    selectedBooking?.customer?.whatsappNumber ||
+                    selectedBooking?.customer?.email ||
+                    "",
+                followUpDate: new Date().toISOString().split("T")[0],
+                priority: "High",
+                status: "Pending",
+                notes: selectedBooking
+                    ? `Booking follow-up for ${selectedBooking.bookingCode}`
+                    : "",
+            });
+
+            setAppliedPrefillKey(prefillKey);
+        }
+    }, [
+        inquiryParam,
+        quotationParam,
+        bookingParam,
+        prefillKey,
+        appliedPrefillKey,
+        inquiries,
+        quotations,
+        bookings,
+    ]);
+
     const resetForm = () => {
         setFormData(initialFormState);
         setEditingId(null);
@@ -481,9 +625,7 @@ const FollowUps = () => {
     };
 
     const handleComplete = async (followUp) => {
-        const confirmComplete = window.confirm(
-            "Mark this follow-up as completed?"
-        );
+        const confirmComplete = window.confirm("Mark this follow-up as completed?");
 
         if (!confirmComplete) {
             return;

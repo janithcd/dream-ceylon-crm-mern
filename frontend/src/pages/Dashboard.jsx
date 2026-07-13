@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
+    FaBell,
     FaBoxOpen,
     FaCalendarCheck,
     FaCar,
@@ -26,7 +27,9 @@ import {
     XAxis,
     YAxis,
 } from "recharts";
+
 import api from "../api/axios";
+import DashboardFollowUpAlerts from "../components/DashboardFollowUpAlerts";
 
 const COLORS = [
     "#0f766e",
@@ -332,7 +335,8 @@ const Dashboard = () => {
                 <div>
                     <h3 className="fw-bold mb-1">Dashboard</h3>
                     <p className="text-muted mb-0">
-                        Business overview, quotation pipeline, bookings, and revenue summary.
+                        Business overview, quotation pipeline, bookings, follow-ups, and
+                        revenue summary.
                     </p>
                 </div>
 
@@ -390,6 +394,16 @@ const Dashboard = () => {
                             >
                                 <FaCalendarCheck className="me-2" />
                                 Bookings
+                            </button>
+                        </div>
+
+                        <div className="col-xl-2 col-md-4 col-sm-6">
+                            <button
+                                className="btn btn-outline-danger w-100 py-3"
+                                onClick={() => navigate("/follow-ups")}
+                            >
+                                <FaBell className="me-2" />
+                                Follow-Ups
                             </button>
                         </div>
 
@@ -500,6 +514,8 @@ const Dashboard = () => {
                     />
                 </div>
             </div>
+
+            <DashboardFollowUpAlerts />
 
             <div className="row g-4 mb-4">
                 <div className="col-xl-6">

@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
+    FaBell,
     FaEdit,
+    FaFileInvoiceDollar,
     FaPlus,
+    FaReceipt,
     FaSearch,
     FaTrash,
-    FaFileInvoiceDollar,
-    FaReceipt,
     FaWallet,
 } from "react-icons/fa";
 import api from "../api/axios";
@@ -34,6 +36,8 @@ const initialFormState = {
 };
 
 const Bookings = () => {
+    const navigate = useNavigate();
+
     const [bookings, setBookings] = useState([]);
     const [inquiries, setInquiries] = useState([]);
     const [packages, setPackages] = useState([]);
@@ -42,7 +46,6 @@ const Bookings = () => {
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [selectedPaymentBooking, setSelectedPaymentBooking] = useState(null);
-
 
     const [searchInput, setSearchInput] = useState("");
     const [keyword, setKeyword] = useState("");
@@ -920,11 +923,22 @@ const Bookings = () => {
                                             <div className="d-flex justify-content-end gap-2">
                                                 <button
                                                     className="btn btn-sm btn-outline-warning"
+                                                    onClick={() =>
+                                                        navigate(`/follow-ups?booking=${booking._id}`)
+                                                    }
+                                                    title="Create follow-up"
+                                                >
+                                                    <FaBell />
+                                                </button>
+
+                                                <button
+                                                    className="btn btn-sm btn-outline-warning"
                                                     onClick={() => setSelectedPaymentBooking(booking)}
                                                     title="Payment history"
                                                 >
                                                     <FaWallet />
                                                 </button>
+
                                                 <button
                                                     className="btn btn-sm btn-outline-success"
                                                     onClick={() =>
@@ -998,6 +1012,7 @@ const Bookings = () => {
                     </div>
                 </div>
             </div>
+
             {selectedPaymentBooking && (
                 <BookingPaymentsModal
                     booking={selectedPaymentBooking}
