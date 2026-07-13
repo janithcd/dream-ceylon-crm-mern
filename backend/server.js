@@ -18,6 +18,7 @@ const quotationRoutes = require("./routes/quotationRoutes");
 const bookingPdfRoutes = require("./routes/bookingPdfRoutes");
 const bookingPaymentRoutes = require("./routes/bookingPaymentRoutes");
 const paymentReceiptPdfRoutes = require("./routes/paymentReceiptPdfRoutes");
+const followUpRoutes = require("./routes/followUpRoutes");
 
 
 dotenv.config();
@@ -50,6 +51,7 @@ app.use("/api/quotations", quotationRoutes);
 app.use("/api/booking-pdf", bookingPdfRoutes);
 app.use("/api/booking-payments", bookingPaymentRoutes);
 app.use("/api/payment-receipts", paymentReceiptPdfRoutes);
+app.use("/api/follow-ups", followUpRoutes);
 
 
 const PORT = process.env.PORT || 5000;

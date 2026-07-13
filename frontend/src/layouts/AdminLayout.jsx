@@ -10,6 +10,7 @@ import {
     FaSignOutAlt,
     FaCalendarAlt,
     FaHistory,
+    FaBell,
 
 } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
@@ -59,7 +60,10 @@ const AdminLayout = () => {
                         <FaCalendarAlt />
                         Booking Calendar
                     </NavLink>
-
+                    <NavLink to="/follow-ups">
+                        <FaBell />
+                        Follow-Ups
+                    </NavLink>
                     <NavLink to="/vehicles">
                         <FaCar /> Vehicles
                     </NavLink>
