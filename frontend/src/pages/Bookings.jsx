@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
-import { FaEdit, FaPlus, FaSearch, FaTrash } from "react-icons/fa";
+import {
+    FaEdit,
+    FaPlus,
+    FaSearch,
+    FaTrash,
+    FaFileInvoiceDollar,
+    FaReceipt,
+} from "react-icons/fa";
 import api from "../api/axios";
 
 const initialFormState = {
@@ -45,10 +52,13 @@ const Bookings = () => {
 
     const [loading, setLoading] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
+    const [pdfLoadingKey, setPdfLoadingKey] = useState("");
+
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
     const vehicleOptions = ["Car", "SUV", "Van", "Mini Bus", "Other"];
+
     const bookingStatusOptions = [
         "Pending",
         "Confirmed",
@@ -56,6 +66,7 @@ const Bookings = () => {
         "Completed",
         "Cancelled",
     ];
+
     const paymentStatusOptions = [
         "Pending",
         "Partially Paid",
@@ -102,10 +113,21 @@ const Bookings = () => {
                 limit: 5,
             };
 
-            if (keyword) params.keyword = keyword;
-            if (bookingStatus) params.bookingStatus = bookingStatus;
-            if (paymentStatus) params.paymentStatus = paymentStatus;
-            if (vehicleType) params.vehicleType = vehicleType;
+            if (keyword) {
+                params.keyword = keyword;
+            }
+
+            if (bookingStatus) {
+                params.bookingStatus = bookingStatus;
+            }
+
+            if (paymentStatus) {
+                params.paymentStatus = paymentStatus;
+            }
+
+            if (vehicleType) {
+                params.vehicleType = vehicleType;
+            }
 
             const response = await api.get("/bookings", { params });
 
@@ -126,11 +148,41 @@ const Bookings = () => {
 
     useEffect(() => {
         fetchBookings();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, keyword, bookingStatus, paymentStatus, vehicleType]);
 
     const formatDateInput = (dateValue) => {
-        if (!dateValue) return "";
+        if (!dateValue) {
+            return "";
+        }
+
         return new Date(dateValue).toISOString().split("T")[0];
+    };
+
+    const formatDate = (dateValue) => {
+        if (!dateValue) {
+            return "-";
+        }
+
+        const date = new Date(dateValue);
+
+        if (Number.isNaN(date.getTime())) {
+            return "-";
+        }
+
+        return date.toLocaleDateString();
+    };
+
+    const formatMoney = (amount, currency = "USD") => {
+        const number = Number(amount);
+
+        return `${currency} ${(Number.isFinite(number) ? number : 0).toLocaleString(
+            "en-US",
+            {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }
+        )}`;
     };
 
     const handleCustomerChange = (e) => {
@@ -257,7 +309,9 @@ const Bookings = () => {
             "Are you sure you want to delete this booking?"
         );
 
-        if (!confirmDelete) return;
+        if (!confirmDelete) {
+            return;
+        }
 
         try {
             setError("");
@@ -269,6 +323,76 @@ const Bookings = () => {
             fetchBookings();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to delete booking");
+        }
+    };
+
+    const handleDownloadBookingPdf = async (booking, type) => {
+        const loadingKey = `${type}-${booking._id}`;
+
+        try {
+            setPdfLoadingKey(loadingKey);
+            setError("");
+            setSuccess("");
+
+            const endpoint =
+                type === "invoice"
+                    ? `/booking-pdf/invoice/${booking._id}`
+                    : `/booking-pdf/receipt/${booking._id}`;
+
+            const response = await api.post(
+                endpoint,
+                {},
+                {
+                    responseType: "blob",
+                }
+            );
+
+            const blob = new Blob([response.data], {
+                type: "application/pdf",
+            });
+
+            const fileUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement("a");
+
+            const cleanBookingCode =
+                booking.bookingCode
+                    ?.toLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-+|-+$/g, "") || "booking";
+
+            link.href = fileUrl;
+            link.download =
+                type === "invoice"
+                    ? `dream-ceylon-invoice-${cleanBookingCode}.pdf`
+                    : `dream-ceylon-receipt-${cleanBookingCode}.pdf`;
+
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            window.URL.revokeObjectURL(fileUrl);
+        } catch (err) {
+            let message =
+                type === "invoice"
+                    ? "Failed to download invoice PDF."
+                    : "Failed to download receipt PDF.";
+
+            if (err.response?.data instanceof Blob) {
+                const errorText = await err.response.data.text();
+
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    message = errorJson.error || errorJson.message || message;
+                } catch {
+                    message = errorText || message;
+                }
+            } else if (err.response?.data?.message) {
+                message = err.response.data.message;
+            }
+
+            setError(message);
+        } finally {
+            setPdfLoadingKey("");
         }
     };
 
@@ -293,7 +417,8 @@ const Bookings = () => {
                 <div>
                     <h2 className="fw-bold mb-1">Bookings</h2>
                     <p className="text-muted mb-0">
-                        Manage confirmed customers, travel dates, payments, and booking status.
+                        Manage confirmed customers, travel dates, payments, and booking
+                        status.
                     </p>
                 </div>
 
@@ -335,7 +460,8 @@ const Bookings = () => {
                                         <option value="">No inquiry selected</option>
                                         {inquiries.map((inquiry) => (
                                             <option key={inquiry._id} value={inquiry._id}>
-                                                {inquiry.fullName} - {inquiry.country} - {inquiry.status}
+                                                {inquiry.fullName} - {inquiry.country} -{" "}
+                                                {inquiry.status}
                                             </option>
                                         ))}
                                     </select>
@@ -373,7 +499,9 @@ const Bookings = () => {
                                 </div>
 
                                 <div className="col-12 col-md-6">
-                                    <label className="form-label fw-semibold">WhatsApp Number</label>
+                                    <label className="form-label fw-semibold">
+                                        WhatsApp Number
+                                    </label>
                                     <input
                                         type="text"
                                         name="whatsappNumber"
@@ -503,7 +631,9 @@ const Bookings = () => {
                                 </div>
 
                                 <div className="col-12 col-md-4">
-                                    <label className="form-label fw-semibold">Advance Payment</label>
+                                    <label className="form-label fw-semibold">
+                                        Advance Payment
+                                    </label>
                                     <input
                                         type="number"
                                         name="advancePayment"
@@ -515,7 +645,9 @@ const Bookings = () => {
                                 </div>
 
                                 <div className="col-12 col-md-4">
-                                    <label className="form-label fw-semibold">Payment Status</label>
+                                    <label className="form-label fw-semibold">
+                                        Payment Status
+                                    </label>
                                     <select
                                         name="paymentStatus"
                                         className="form-select"
@@ -531,7 +663,9 @@ const Bookings = () => {
                                 </div>
 
                                 <div className="col-12 col-md-6">
-                                    <label className="form-label fw-semibold">Booking Status</label>
+                                    <label className="form-label fw-semibold">
+                                        Booking Status
+                                    </label>
                                     <select
                                         name="bookingStatus"
                                         className="form-select"
@@ -547,14 +681,17 @@ const Bookings = () => {
                                 </div>
 
                                 <div className="col-12 col-md-6">
-                                    <label className="form-label fw-semibold">Balance Amount</label>
+                                    <label className="form-label fw-semibold">
+                                        Balance Amount
+                                    </label>
                                     <input
                                         type="text"
                                         className="form-control"
-                                        value={`${formData.currency} ${
+                                        value={formatMoney(
                                             Number(formData.totalPrice || 0) -
-                                            Number(formData.advancePayment || 0)
-                                        }`}
+                                            Number(formData.advancePayment || 0),
+                                            formData.currency
+                                        )}
                                         disabled
                                     />
                                 </div>
@@ -748,23 +885,22 @@ const Bookings = () => {
 
                                         <td>
                                             <small>
-                                                {new Date(
-                                                    booking.travelStartDate
-                                                ).toLocaleDateString()}{" "}
-                                                -{" "}
-                                                {new Date(
-                                                    booking.travelEndDate
-                                                ).toLocaleDateString()}
+                                                {formatDate(booking.travelStartDate)} -{" "}
+                                                {formatDate(booking.travelEndDate)}
                                             </small>
                                         </td>
 
                                         <td>{booking.vehicleType}</td>
 
                                         <td>
-                                            {booking.currency} {booking.totalPrice}
+                                            {formatMoney(booking.totalPrice, booking.currency)}
                                             <br />
                                             <small className="text-muted">
-                                                Advance: {booking.currency} {booking.advancePayment}
+                                                Advance:{" "}
+                                                {formatMoney(
+                                                    booking.advancePayment,
+                                                    booking.currency
+                                                )}
                                             </small>
                                         </td>
 
@@ -777,19 +913,49 @@ const Bookings = () => {
                                         </td>
 
                                         <td className="text-end">
-                                            <button
-                                                className="btn btn-sm btn-outline-primary me-2"
-                                                onClick={() => handleEdit(booking)}
-                                            >
-                                                <FaEdit />
-                                            </button>
+                                            <div className="d-flex justify-content-end gap-2">
+                                                <button
+                                                    className="btn btn-sm btn-outline-success"
+                                                    onClick={() =>
+                                                        handleDownloadBookingPdf(booking, "invoice")
+                                                    }
+                                                    disabled={
+                                                        pdfLoadingKey === `invoice-${booking._id}`
+                                                    }
+                                                    title="Download invoice PDF"
+                                                >
+                                                    <FaFileInvoiceDollar />
+                                                </button>
 
-                                            <button
-                                                className="btn btn-sm btn-outline-danger"
-                                                onClick={() => handleDelete(booking._id)}
-                                            >
-                                                <FaTrash />
-                                            </button>
+                                                <button
+                                                    className="btn btn-sm btn-outline-dark"
+                                                    onClick={() =>
+                                                        handleDownloadBookingPdf(booking, "receipt")
+                                                    }
+                                                    disabled={
+                                                        pdfLoadingKey === `receipt-${booking._id}`
+                                                    }
+                                                    title="Download receipt PDF"
+                                                >
+                                                    <FaReceipt />
+                                                </button>
+
+                                                <button
+                                                    className="btn btn-sm btn-outline-primary"
+                                                    onClick={() => handleEdit(booking)}
+                                                    title="Edit booking"
+                                                >
+                                                    <FaEdit />
+                                                </button>
+
+                                                <button
+                                                    className="btn btn-sm btn-outline-danger"
+                                                    onClick={() => handleDelete(booking._id)}
+                                                    title="Delete booking"
+                                                >
+                                                    <FaTrash />
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 ))}
