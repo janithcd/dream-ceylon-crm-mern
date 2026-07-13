@@ -7,6 +7,7 @@ import {
     FaFileInvoiceDollar,
     FaSearch,
     FaTrash,
+    FaBell
 } from "react-icons/fa";
 import api from "../api/axios";
 
@@ -610,6 +611,14 @@ const QuotationHistory = () => {
 
                                         <td>
                                             <div className="d-flex justify-content-end gap-2">
+                                                <button
+                                                    className="btn btn-sm btn-outline-warning"
+                                                    onClick={() => navigate(`/follow-ups?quotation=${quotation._id}`)}
+                                                    title="Create follow-up"
+                                                >
+                                                    <FaBell />
+                                                </button>
+
                                                 <button
                                                     className="btn btn-sm btn-outline-success"
                                                     onClick={() => handleDownloadPdf(quotation)}
