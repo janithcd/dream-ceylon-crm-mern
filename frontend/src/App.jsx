@@ -18,6 +18,7 @@ import Customers from "./pages/Customers";
 import PaymentReports from "./pages/PaymentReports";
 import Settings from "./pages/Settings";
 import ActivityLogs from "./pages/ActivityLogs";
+import Admins from "./pages/Admins";
 
 const App = () => {
     return (
@@ -40,6 +41,7 @@ const App = () => {
                         <Route path="inquiries" element={<Inquiries />} />
                         <Route path="customers" element={<Customers />} />
                         <Route path="activity-logs" element={<ActivityLogs />} />
+                        <Route path="admins" element={<Admins />} />
                         <Route path="settings" element={<Settings />} />
                         <Route path="bookings" element={<Bookings />} />
                         <Route path="bookings-calendar" element={<BookingCalendar />} />
