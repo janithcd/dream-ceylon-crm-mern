@@ -17,6 +17,7 @@ import FollowUps from "./pages/FollowUps";
 import Customers from "./pages/Customers";
 import PaymentReports from "./pages/PaymentReports";
 import Settings from "./pages/Settings";
+import ActivityLogs from "./pages/ActivityLogs";
 
 const App = () => {
     return (
@@ -38,6 +39,7 @@ const App = () => {
                         <Route path="packages" element={<Packages />} />
                         <Route path="inquiries" element={<Inquiries />} />
                         <Route path="customers" element={<Customers />} />
+                        <Route path="activity-logs" element={<ActivityLogs />} />
                         <Route path="settings" element={<Settings />} />
                         <Route path="bookings" element={<Bookings />} />
                         <Route path="bookings-calendar" element={<BookingCalendar />} />
