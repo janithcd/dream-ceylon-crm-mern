@@ -13,6 +13,7 @@ import {
     FaBell,
     FaUsers,
     FaMoneyBillWave,
+    FaCog,
 } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import { FaFileInvoiceDollar } from "react-icons/fa";
@@ -85,6 +86,10 @@ const AdminLayout = () => {
                     </NavLink>
                     <NavLink to="/client-tools">
                         <FaGlobeAsia /> Client Tools
+                    </NavLink>
+                    <NavLink to="/settings">
+                        <FaCog />
+                        Settings
                     </NavLink>
                 </nav>
             </aside>
