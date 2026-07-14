@@ -8,8 +8,11 @@ const {
     PDFString,
 } = require("pdf-lib");
 
-const brand = require("../config/brandConfig");
+let brand = require("../config/brandConfig");
 
+const {
+    getDocumentBrandConfig,
+} = require("../utils/documentSettings");
 const PAGE = {
     width: 595.28,
     height: 841.89,
@@ -384,7 +387,15 @@ const checkPageSpace = (state, neededHeight = 80) => {
 };
 
 const drawWatermark = (state) => {
+    const pdfSettings = brand?.pdfSettings || {};
+
+    if (pdfSettings.showWatermark === false) {
+        return;
+    }
+
     if (!state.images.logo) return;
+
+    const watermarkOpacity = Number(pdfSettings.watermarkOpacity ?? 0.04);
 
     try {
         const scale = state.images.logo.scaleToFit(350, 220);
@@ -394,7 +405,7 @@ const drawWatermark = (state) => {
             y: PAGE.height / 2 - scale.height / 2,
             width: scale.width,
             height: scale.height,
-            opacity: 0.04,
+            opacity: watermarkOpacity,
         });
     } catch (error) {
         // Ignore watermark issue
@@ -1118,6 +1129,7 @@ const calculateQuotationTotals = (body) => {
 // @access  Private
 const generateQuotationPdf = async (req, res) => {
     try {
+        brand = await getDocumentBrandConfig();
         const {
             clientName,
             country,

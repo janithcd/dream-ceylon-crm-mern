@@ -8,7 +8,11 @@ const {
     PDFString,
 } = require("pdf-lib");
 
-const brand = require("../config/brandConfig");
+let brand = require("../config/brandConfig");
+
+const {
+    getDocumentBrandConfig,
+} = require("../utils/documentSettings");
 
 const PAGE = {
     width: 595.28,
@@ -432,6 +436,14 @@ const checkPageSpace = (state, neededHeight = 80) => {
 };
 
 const drawWatermark = (state) => {
+    const pdfSettings = brand?.pdfSettings || {};
+
+    if (pdfSettings.showWatermark === false) {
+        return;
+    }
+
+    const watermarkOpacity = Number(pdfSettings.watermarkOpacity ?? 0.045);
+
     if (state.images.logo) {
         try {
             const image = state.images.logo;
@@ -442,7 +454,7 @@ const drawWatermark = (state) => {
                 y: PAGE.height / 2 - scale.height / 2,
                 width: scale.width,
                 height: scale.height,
-                opacity: 0.045,
+                opacity: watermarkOpacity,
             });
 
             return;
@@ -1131,6 +1143,7 @@ const drawContactSection = (state) => {
 
 const generateItineraryPdf = async (req, res) => {
     try {
+        brand = await getDocumentBrandConfig();
         const {
             generatedItinerary,
             clientName,

@@ -3,7 +3,11 @@ const path = require("path");
 const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
 
 const Booking = require("../models/Booking");
-const brandConfig = require("../config/brandConfig");
+let brandConfig = require("../config/brandConfig");
+
+const {
+    getDocumentBrandConfig,
+} = require("../utils/documentSettings");
 
 const COLORS = {
     primary: rgb(0.05, 0.46, 0.42),
@@ -198,6 +202,14 @@ const drawLogo = async (pdfDoc, page, x, y, maxWidth = 95, maxHeight = 60) => {
 };
 
 const drawWatermark = async (pdfDoc, page) => {
+    const pdfSettings = brandConfig?.pdfSettings || {};
+
+    if (pdfSettings.showWatermark === false) {
+        return;
+    }
+
+    const watermarkOpacity = Number(pdfSettings.watermarkOpacity ?? 0.06);
+
     const logo = await loadImage(pdfDoc, brandConfig.logoPath);
 
     if (!logo) {
@@ -215,7 +227,7 @@ const drawWatermark = async (pdfDoc, page) => {
         y: (height - targetHeight) / 2,
         width: targetWidth,
         height: targetHeight,
-        opacity: 0.06,
+        opacity: watermarkOpacity,
     });
 };
 
@@ -380,7 +392,7 @@ const drawFooter = (page, fonts) => {
 
     drawLine(page, 45, 55, width - 45, 55, COLORS.border);
 
-    page.drawText("Thank you for choosing Dream Ceylon Journeys.", {
+    page.drawText(brandConfig.pdfSettings?.footerText || "Thank you for choosing Dream Ceylon Journeys.", {
         x: 45,
         y: 38,
         size: 8,
@@ -831,6 +843,7 @@ const createReceiptPdf = async (booking) => {
 
 const generateBookingInvoicePdf = async (req, res) => {
     try {
+        brandConfig = await getDocumentBrandConfig();
         const booking = await getBookingById(req.params.id);
 
         if (!booking) {
@@ -858,6 +871,7 @@ const generateBookingInvoicePdf = async (req, res) => {
 
 const generateBookingReceiptPdf = async (req, res) => {
     try {
+        brandConfig = await getDocumentBrandConfig();
         const booking = await getBookingById(req.params.id);
 
         if (!booking) {

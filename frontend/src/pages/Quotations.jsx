@@ -9,7 +9,7 @@ import {
 } from "react-icons/fa";
 import api from "../api/axios";
 
-const vehicleRates = {
+const fallbackVehicleRates = {
     Car: 80,
     SUV: 95,
     Van: 110,
@@ -129,6 +129,7 @@ const mapQuotationToForm = (quotation) => {
         booking: getIdValue(quotation.booking),
     };
 };
+
 const mapInquiryToQuotationForm = (inquiry) => {
     const packageTitle =
         inquiry.interestedPackage?.title || "Sri Lanka Private Tour Quotation";
@@ -159,24 +160,77 @@ const mapInquiryToQuotationForm = (inquiry) => {
         durationDays: packageDuration,
 
         notes: `${inquiryMessage}${adminNotes}`.trim(),
-        adminNotes: `Quotation created from inquiry.`,
+        adminNotes: "Quotation created from inquiry.",
     };
 };
 
 const Quotations = () => {
     const [searchParams, setSearchParams] = useSearchParams();
+
     const editId = searchParams.get("edit");
     const inquiryId = searchParams.get("inquiry");
+
     const [formData, setFormData] = useState(initialFormState);
+    const [vehicleRates, setVehicleRates] = useState(fallbackVehicleRates);
+
     const [pdfLoading, setPdfLoading] = useState(false);
     const [saveLoading, setSaveLoading] = useState(false);
     const [editLoading, setEditLoading] = useState(false);
     const [inquiryLoading, setInquiryLoading] = useState(false);
-    const [error, setError] = useState("");useEffect
+
+    const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [quotationNo, setQuotationNo] = useState("");
 
     const isEditMode = Boolean(editId);
+
+    useEffect(() => {
+        const fetchCompanySettings = async () => {
+            try {
+                const response = await api.get("/settings/company");
+                const settings = response.data;
+
+                const updatedRates = {
+                    Car: settings.vehicleRates?.car ?? 80,
+                    SUV: settings.vehicleRates?.suv ?? 95,
+                    Van: settings.vehicleRates?.van ?? 110,
+                    "Mini Bus": settings.vehicleRates?.miniBus ?? 0,
+                    Bus: settings.vehicleRates?.bus ?? 0,
+                    Other: 0,
+                };
+
+                setVehicleRates(updatedRates);
+
+                if (editId) {
+                    return;
+                }
+
+                setFormData((previous) => {
+                    const currentRate = Number(previous.vehicleDailyRate);
+                    const fallbackRate =
+                        fallbackVehicleRates[previous.vehicleType] ?? 0;
+
+                    const shouldReplaceRate =
+                        !currentRate || currentRate === fallbackRate;
+
+                    return {
+                        ...previous,
+                        currency:
+                            settings.defaultCurrency ||
+                            previous.currency ||
+                            "USD",
+                        vehicleDailyRate: shouldReplaceRate
+                            ? String(updatedRates[previous.vehicleType] || 0)
+                            : previous.vehicleDailyRate,
+                    };
+                });
+            } catch (err) {
+                console.error("Failed to load company settings", err);
+            }
+        };
+
+        fetchCompanySettings();
+    }, [editId]);
 
     useEffect(() => {
         const fetchQuotationForEdit = async () => {
@@ -223,7 +277,16 @@ const Quotations = () => {
                 const response = await api.get(`/inquiries/${inquiryId}`);
                 const inquiry = response.data;
 
-                setFormData(mapInquiryToQuotationForm(inquiry));
+                const mappedForm = mapInquiryToQuotationForm(inquiry);
+
+                setFormData((previous) => ({
+                    ...mappedForm,
+                    currency: previous.currency || "USD",
+                    vehicleDailyRate: String(
+                        vehicleRates[mappedForm.vehicleType] ??
+                        mappedForm.vehicleDailyRate
+                    ),
+                }));
 
                 setSuccess(
                     `Inquiry loaded successfully. You can now prepare a quotation for ${inquiry.fullName}.`
@@ -240,7 +303,7 @@ const Quotations = () => {
         };
 
         fetchInquiryForQuotation();
-    }, [inquiryId, editId]);
+    }, [inquiryId, editId, vehicleRates]);
 
     const totals = useMemo(() => {
         const durationDays = numberValue(formData.durationDays);
@@ -331,27 +394,30 @@ const Quotations = () => {
     const handleChange = (e) => {
         const { name, value } = e.target;
 
+        if (name === "vehicleType") {
+            setFormData((previous) => ({
+                ...previous,
+                vehicleType: value,
+                vehicleDailyRate:
+                    vehicleRates[value] !== undefined
+                        ? String(vehicleRates[value])
+                        : previous.vehicleDailyRate,
+            }));
+
+            return;
+        }
+
         setFormData((previous) => ({
             ...previous,
             [name]: value,
         }));
     };
 
-    const handleVehicleTypeChange = (e) => {
-        const selectedVehicle = e.target.value;
-
-        setFormData((previous) => ({
-            ...previous,
-            vehicleType: selectedVehicle,
-            vehicleDailyRate:
-                vehicleRates[selectedVehicle] !== undefined
-                    ? String(vehicleRates[selectedVehicle])
-                    : previous.vehicleDailyRate,
-        }));
-    };
-
     const handleReset = () => {
-        setFormData(initialFormState);
+        setFormData({
+            ...initialFormState,
+            vehicleDailyRate: String(vehicleRates.Car || 80),
+        });
         setError("");
         setSuccess("");
         setQuotationNo("");
@@ -458,7 +524,9 @@ const Quotations = () => {
         return (
             <div className="card border-0 shadow-sm rounded-4">
                 <div className="card-body p-5 text-center text-muted">
-                    {editLoading ? "Loading quotation for editing..." : "Loading inquiry details..."}
+                    {editLoading
+                        ? "Loading quotation for editing..."
+                        : "Loading inquiry details..."}
                 </div>
             </div>
         );
@@ -475,6 +543,7 @@ const Quotations = () => {
                                 ? "Create Quotation From Inquiry"
                                 : "Quotation Generator"}
                     </h3>
+
                     <p className="text-muted mb-0">
                         {isEditMode
                             ? "Update saved quotation details and download the latest PDF."
@@ -641,7 +710,7 @@ const Quotations = () => {
                                             name="vehicleType"
                                             className="form-select"
                                             value={formData.vehicleType}
-                                            onChange={handleVehicleTypeChange}
+                                            onChange={handleChange}
                                         >
                                             <option value="Car">Car</option>
                                             <option value="SUV">SUV</option>
@@ -754,11 +823,14 @@ const Quotations = () => {
 
                         <div className="card border-0 shadow-sm rounded-4 mb-4">
                             <div className="card-body p-4">
-                                <h5 className="fw-bold mb-3">Inclusions, Exclusions & Notes</h5>
+                                <h5 className="fw-bold mb-3">
+                                    Inclusions, Exclusions & Notes
+                                </h5>
 
                                 <div className="mb-3">
                                     <label className="form-label">
-                                        Inclusions <span className="text-muted">(one per line)</span>
+                                        Inclusions{" "}
+                                        <span className="text-muted">(one per line)</span>
                                     </label>
                                     <textarea
                                         name="inclusionsText"
@@ -771,7 +843,8 @@ const Quotations = () => {
 
                                 <div className="mb-3">
                                     <label className="form-label">
-                                        Exclusions <span className="text-muted">(one per line)</span>
+                                        Exclusions{" "}
+                                        <span className="text-muted">(one per line)</span>
                                     </label>
                                     <textarea
                                         name="exclusionsText"
@@ -857,7 +930,9 @@ const Quotations = () => {
 
                             <div className="d-flex justify-content-between border-bottom py-2">
                                 <span className="text-muted">Hotel Total</span>
-                                <strong>{formatMoney(totals.hotelTotal, formData.currency)}</strong>
+                                <strong>
+                                    {formatMoney(totals.hotelTotal, formData.currency)}
+                                </strong>
                             </div>
 
                             <div className="d-flex justify-content-between border-bottom py-2">
@@ -870,41 +945,58 @@ const Quotations = () => {
                             <div className="d-flex justify-content-between border-bottom py-2">
                                 <span className="text-muted">Entrance Fees</span>
                                 <strong>
-                                    {formatMoney(totals.entranceFeesTotal, formData.currency)}
+                                    {formatMoney(
+                                        totals.entranceFeesTotal,
+                                        formData.currency
+                                    )}
                                 </strong>
                             </div>
 
                             <div className="d-flex justify-content-between border-bottom py-2">
                                 <span className="text-muted">Other Cost</span>
-                                <strong>{formatMoney(totals.otherTotal, formData.currency)}</strong>
+                                <strong>
+                                    {formatMoney(totals.otherTotal, formData.currency)}
+                                </strong>
                             </div>
 
                             <div className="d-flex justify-content-between border-bottom py-2">
                                 <span className="text-muted">Subtotal</span>
-                                <strong>{formatMoney(totals.subtotal, formData.currency)}</strong>
+                                <strong>
+                                    {formatMoney(totals.subtotal, formData.currency)}
+                                </strong>
                             </div>
 
                             <div className="d-flex justify-content-between border-bottom py-2 text-danger">
                                 <span>Discount</span>
-                                <strong>- {formatMoney(totals.discount, formData.currency)}</strong>
+                                <strong>
+                                    - {formatMoney(totals.discount, formData.currency)}
+                                </strong>
                             </div>
 
                             <div className="d-flex justify-content-between bg-success text-white rounded-3 px-3 py-3 my-3">
                                 <span className="fw-bold">Grand Total</span>
-                                <strong>{formatMoney(totals.grandTotal, formData.currency)}</strong>
+                                <strong>
+                                    {formatMoney(totals.grandTotal, formData.currency)}
+                                </strong>
                             </div>
 
                             <div className="d-flex justify-content-between border-bottom py-2">
                                 <span className="text-muted">Advance Payment</span>
                                 <strong>
-                                    {formatMoney(totals.advancePayment, formData.currency)}
+                                    {formatMoney(
+                                        totals.advancePayment,
+                                        formData.currency
+                                    )}
                                 </strong>
                             </div>
 
                             <div className="d-flex justify-content-between py-2">
                                 <span className="text-muted">Balance Payment</span>
                                 <strong className="text-success">
-                                    {formatMoney(totals.balancePayment, formData.currency)}
+                                    {formatMoney(
+                                        totals.balancePayment,
+                                        formData.currency
+                                    )}
                                 </strong>
                             </div>
 
