@@ -1,7 +1,9 @@
+const mongoose = require("mongoose");
 const FollowUp = require("../models/FollowUp");
 const Inquiry = require("../models/Inquiry");
 const Quotation = require("../models/Quotation");
 const Booking = require("../models/Booking");
+const { createActivityLog } = require("../utils/createActivityLog");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -11,347 +13,430 @@ const safeText = (value) => {
     return String(value).trim();
 };
 
-const getStartOfDay = (date = new Date()) => {
-    const newDate = new Date(date);
-    newDate.setHours(0, 0, 0, 0);
-    return newDate;
+const escapeRegex = (value) => {
+    return safeText(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
 
-const getEndOfDay = (date = new Date()) => {
-    const newDate = new Date(date);
-    newDate.setHours(23, 59, 59, 999);
-    return newDate;
+const buildRegex = (value) => {
+    return {
+        $regex: escapeRegex(value),
+        $options: "i",
+    };
 };
 
-const buildDateFilter = (filterType) => {
-    const todayStart = getStartOfDay();
-    const todayEnd = getEndOfDay();
-
-    if (filterType === "today") {
-        return {
-            followUpDate: {
-                $gte: todayStart,
-                $lte: todayEnd,
-            },
-            status: "Pending",
-        };
-    }
-
-    if (filterType === "overdue") {
-        return {
-            followUpDate: {
-                $lt: todayStart,
-            },
-            status: "Pending",
-        };
-    }
-
-    if (filterType === "upcoming") {
-        return {
-            followUpDate: {
-                $gt: todayEnd,
-            },
-            status: "Pending",
-        };
-    }
-
-    return {};
+const isValidObjectId = (value) => {
+    return Boolean(value && mongoose.Types.ObjectId.isValid(value));
 };
 
-const autoFillCustomerDetails = async (data) => {
-    let customerName = safeText(data.customerName);
-    let customerContact = safeText(data.customerContact);
+const parsePositiveInteger = (value, fallback) => {
+    const number = Number.parseInt(value, 10);
 
-    if (customerName && customerContact) {
-        return {
-            customerName,
-            customerContact,
-        };
+    if (!Number.isFinite(number) || number < 1) {
+        return fallback;
     }
 
-    if (data.inquiry) {
-        const inquiry = await Inquiry.findById(data.inquiry);
+    return number;
+};
 
-        if (inquiry) {
-            customerName = customerName || inquiry.fullName || "";
-            customerContact =
-                customerContact || inquiry.whatsappNumber || inquiry.email || "";
+const getStartOfToday = () => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    return date;
+};
+
+const getEndOfToday = () => {
+    const date = new Date();
+    date.setHours(23, 59, 59, 999);
+    return date;
+};
+
+const getLinkedCustomerData = async ({ inquiry, quotation, booking }) => {
+    if (isValidObjectId(booking)) {
+        const bookingRecord = await Booking.findById(booking).select(
+            "bookingCode customer"
+        );
+
+        if (bookingRecord) {
+            return {
+                customerName: safeText(bookingRecord.customer?.fullName),
+                customerContact:
+                    safeText(bookingRecord.customer?.whatsappNumber) ||
+                    safeText(bookingRecord.customer?.email) ||
+                    safeText(bookingRecord.customer?.country),
+            };
         }
     }
 
-    if (data.quotation) {
-        const quotation = await Quotation.findById(data.quotation).populate(
-            "inquiry",
+    if (isValidObjectId(quotation)) {
+        const quotationRecord = await Quotation.findById(quotation).select(
+            "clientName country quotationNo"
+        );
+
+        if (quotationRecord) {
+            return {
+                customerName: safeText(quotationRecord.clientName),
+                customerContact: safeText(quotationRecord.country),
+            };
+        }
+    }
+
+    if (isValidObjectId(inquiry)) {
+        const inquiryRecord = await Inquiry.findById(inquiry).select(
             "fullName email whatsappNumber country"
         );
 
-        if (quotation) {
-            customerName =
-                customerName ||
-                quotation.clientName ||
-                quotation.inquiry?.fullName ||
-                "";
-
-            customerContact =
-                customerContact ||
-                quotation.inquiry?.whatsappNumber ||
-                quotation.inquiry?.email ||
-                "";
-        }
-    }
-
-    if (data.booking) {
-        const booking = await Booking.findById(data.booking);
-
-        if (booking) {
-            customerName = customerName || booking.customer?.fullName || "";
-            customerContact =
-                customerContact ||
-                booking.customer?.whatsappNumber ||
-                booking.customer?.email ||
-                "";
+        if (inquiryRecord) {
+            return {
+                customerName: safeText(inquiryRecord.fullName),
+                customerContact:
+                    safeText(inquiryRecord.whatsappNumber) ||
+                    safeText(inquiryRecord.email) ||
+                    safeText(inquiryRecord.country),
+            };
         }
     }
 
     return {
-        customerName,
-        customerContact,
+        customerName: "",
+        customerContact: "",
     };
 };
 
+const populateFollowUp = (query) => {
+    return query
+        .populate(
+            "inquiry",
+            "fullName email whatsappNumber country status travelDate"
+        )
+        .populate(
+            "quotation",
+            "quotationNo clientName country tourTitle status currency totals"
+        )
+        .populate(
+            "booking",
+            "bookingCode customer bookingStatus paymentStatus travelStartDate travelEndDate"
+        );
+};
 
+const buildFollowUpQuery = (queryParams) => {
+    const {
+        keyword,
+        status,
+        priority,
+        type,
+        dateFilter,
+        inquiry,
+        quotation,
+        booking,
+    } = queryParams;
+
+    const query = {};
+
+    if (status) {
+        query.status = status;
+    }
+
+    if (priority) {
+        query.priority = priority;
+    }
+
+    if (type) {
+        query.type = type;
+    }
+
+    if (isValidObjectId(inquiry)) {
+        query.inquiry = inquiry;
+    }
+
+    if (isValidObjectId(quotation)) {
+        query.quotation = quotation;
+    }
+
+    if (isValidObjectId(booking)) {
+        query.booking = booking;
+    }
+
+    if (keyword) {
+        query.$or = [
+            {
+                title: buildRegex(keyword),
+            },
+            {
+                notes: buildRegex(keyword),
+            },
+            {
+                customerName: buildRegex(keyword),
+            },
+            {
+                customerContact: buildRegex(keyword),
+            },
+        ];
+    }
+
+    const todayStart = getStartOfToday();
+    const todayEnd = getEndOfToday();
+
+    if (dateFilter === "today") {
+        query.followUpDate = {
+            $gte: todayStart,
+            $lte: todayEnd,
+        };
+    }
+
+    if (dateFilter === "overdue") {
+        query.followUpDate = {
+            $lt: todayStart,
+        };
+
+        if (!status) {
+            query.status = "Pending";
+        }
+    }
+
+    if (dateFilter === "upcoming") {
+        query.followUpDate = {
+            $gt: todayEnd,
+        };
+
+        if (!status) {
+            query.status = "Pending";
+        }
+    }
+
+    return query;
+};
+
+const buildFollowUpPayload = async (body, existingFollowUp = null) => {
+    const inquiry = body.inquiry !== undefined ? body.inquiry || null : existingFollowUp?.inquiry || null;
+    const quotation =
+        body.quotation !== undefined
+            ? body.quotation || null
+            : existingFollowUp?.quotation || null;
+    const booking = body.booking !== undefined ? body.booking || null : existingFollowUp?.booking || null;
+
+    const linkedCustomer = await getLinkedCustomerData({
+        inquiry,
+        quotation,
+        booking,
+    });
+
+    return {
+        title:
+            body.title !== undefined
+                ? safeText(body.title)
+                : safeText(existingFollowUp?.title),
+        type:
+            body.type !== undefined
+                ? safeText(body.type)
+                : safeText(existingFollowUp?.type) || "General",
+        inquiry,
+        quotation,
+        booking,
+        customerName:
+            body.customerName !== undefined
+                ? safeText(body.customerName)
+                : linkedCustomer.customerName || safeText(existingFollowUp?.customerName),
+        customerContact:
+            body.customerContact !== undefined
+                ? safeText(body.customerContact)
+                : linkedCustomer.customerContact ||
+                safeText(existingFollowUp?.customerContact),
+        followUpDate:
+            body.followUpDate !== undefined
+                ? body.followUpDate
+                : existingFollowUp?.followUpDate,
+        priority:
+            body.priority !== undefined
+                ? safeText(body.priority)
+                : safeText(existingFollowUp?.priority) || "Medium",
+        status:
+            body.status !== undefined
+                ? safeText(body.status)
+                : safeText(existingFollowUp?.status) || "Pending",
+        notes:
+            body.notes !== undefined
+                ? safeText(body.notes)
+                : safeText(existingFollowUp?.notes),
+    };
+};
+
+// @desc    Create a follow-up
+// @route   POST /api/follow-ups
+// @access  Private
 const createFollowUp = async (req, res) => {
     try {
-        const {
-            title,
-            type,
-            inquiry,
-            quotation,
-            booking,
-            customerName,
-            customerContact,
-            followUpDate,
-            priority,
-            status,
-            notes,
-        } = req.body;
+        const followUpData = await buildFollowUpPayload(req.body);
 
-        if (!title) {
+        if (!followUpData.title) {
             return res.status(400).json({
                 message: "Follow-up title is required",
             });
         }
 
-        if (!followUpDate) {
+        if (!followUpData.followUpDate) {
             return res.status(400).json({
                 message: "Follow-up date is required",
             });
         }
 
-        const customerDetails = await autoFillCustomerDetails({
-            inquiry,
-            quotation,
-            booking,
-            customerName,
-            customerContact,
+        const followUp = await FollowUp.create(followUpData);
+
+        await createActivityLog({
+            req,
+            action: "CREATE",
+            module: "Follow-Up",
+            description: `Follow-up "${followUp.title}" was created${
+                followUp.customerName ? ` for ${followUp.customerName}` : ""
+            }`,
+            relatedRecordId: followUp._id,
+            relatedModel: "FollowUp",
+            referenceNo: followUp._id.toString(),
+            customerName: followUp.customerName,
+            metadata: {
+                type: followUp.type,
+                priority: followUp.priority,
+                status: followUp.status,
+                followUpDate: followUp.followUpDate,
+            },
         });
 
-        const followUp = await FollowUp.create({
-            title: safeText(title),
-            type: type || "General",
-            inquiry: inquiry || null,
-            quotation: quotation || null,
-            booking: booking || null,
-            customerName: customerDetails.customerName,
-            customerContact: customerDetails.customerContact,
-            followUpDate,
-            priority: priority || "Medium",
-            status: status || "Pending",
-            notes: safeText(notes),
-            completedAt: status === "Completed" ? new Date() : null,
-        });
+        const populatedFollowUp = await populateFollowUp(
+            FollowUp.findById(followUp._id)
+        );
 
-        const populatedFollowUp = await FollowUp.findById(followUp._id)
-            .populate("inquiry", "fullName email whatsappNumber country status")
-            .populate("quotation", "quotationNo clientName tourTitle status totals")
-            .populate(
-                "booking",
-                "bookingCode customer travelStartDate travelEndDate paymentStatus bookingStatus"
-            );
-
-        res.status(201).json({
+        return res.status(201).json({
             message: "Follow-up created successfully",
             followUp: populatedFollowUp,
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to create follow-up",
             error: error.message,
         });
     }
 };
 
-
+// @desc    Get follow-ups
+// @route   GET /api/follow-ups
+// @access  Private
 const getFollowUps = async (req, res) => {
     try {
-        const {
-            keyword,
-            status,
-            priority,
-            type,
-            dateFilter,
-            page = 1,
-            limit = 10,
-        } = req.query;
+        const page = parsePositiveInteger(req.query.page, 1);
+        const limit = Math.min(parsePositiveInteger(req.query.limit, 10), 100);
+        const skip = (page - 1) * limit;
+        const query = buildFollowUpQuery(req.query);
 
-        const query = {
-            ...buildDateFilter(dateFilter),
-        };
+        const [followUps, totalFollowUps] = await Promise.all([
+            populateFollowUp(
+                FollowUp.find(query)
+                    .sort({
+                        followUpDate: 1,
+                        createdAt: -1,
+                    })
+                    .skip(skip)
+                    .limit(limit)
+            ),
+            FollowUp.countDocuments(query),
+        ]);
 
-        if (status) {
-            query.status = status;
-        }
-
-        if (priority) {
-            query.priority = priority;
-        }
-
-        if (type) {
-            query.type = type;
-        }
-
-        if (keyword) {
-            query.$or = [
-                {
-                    title: {
-                        $regex: keyword,
-                        $options: "i",
-                    },
-                },
-                {
-                    customerName: {
-                        $regex: keyword,
-                        $options: "i",
-                    },
-                },
-                {
-                    customerContact: {
-                        $regex: keyword,
-                        $options: "i",
-                    },
-                },
-                {
-                    notes: {
-                        $regex: keyword,
-                        $options: "i",
-                    },
-                },
-            ];
-        }
-
-        const currentPage = Number(page);
-        const pageLimit = Number(limit);
-        const skip = (currentPage - 1) * pageLimit;
-
-        const totalFollowUps = await FollowUp.countDocuments(query);
-
-        const followUps = await FollowUp.find(query)
-            .populate("inquiry", "fullName email whatsappNumber country status")
-            .populate("quotation", "quotationNo clientName tourTitle status totals")
-            .populate(
-                "booking",
-                "bookingCode customer travelStartDate travelEndDate paymentStatus bookingStatus"
-            )
-            .sort({
-                status: 1,
-                followUpDate: 1,
-                priority: -1,
-                createdAt: -1,
-            })
-            .skip(skip)
-            .limit(pageLimit);
-
-        res.status(200).json({
+        return res.status(200).json({
             followUps,
-            currentPage,
-            totalPages: Math.ceil(totalFollowUps / pageLimit),
+            currentPage: page,
+            totalPages: Math.ceil(totalFollowUps / limit) || 1,
             totalFollowUps,
+            limit,
         });
     } catch (error) {
-        res.status(500).json({
-            message: "Failed to fetch follow-ups",
+        return res.status(500).json({
+            message: "Failed to load follow-ups",
             error: error.message,
         });
     }
 };
 
-
+// @desc    Get follow-up summary
+// @route   GET /api/follow-ups/summary
+// @access  Private
 const getFollowUpSummary = async (req, res) => {
     try {
-        const todayStart = getStartOfDay();
-        const todayEnd = getEndOfDay();
+        const todayStart = getStartOfToday();
+        const todayEnd = getEndOfToday();
 
-        const totalPending = await FollowUp.countDocuments({
-            status: "Pending",
-        });
+        const [
+            totalFollowUps,
+            pendingFollowUps,
+            completedFollowUps,
+            cancelledFollowUps,
+            todayFollowUps,
+            overdueFollowUps,
+            upcomingFollowUps,
+            urgentFollowUps,
+        ] = await Promise.all([
+            FollowUp.countDocuments(),
+            FollowUp.countDocuments({ status: "Pending" }),
+            FollowUp.countDocuments({ status: "Completed" }),
+            FollowUp.countDocuments({ status: "Cancelled" }),
+            FollowUp.countDocuments({
+                status: "Pending",
+                followUpDate: {
+                    $gte: todayStart,
+                    $lte: todayEnd,
+                },
+            }),
+            FollowUp.countDocuments({
+                status: "Pending",
+                followUpDate: {
+                    $lt: todayStart,
+                },
+            }),
+            FollowUp.countDocuments({
+                status: "Pending",
+                followUpDate: {
+                    $gt: todayEnd,
+                },
+            }),
+            FollowUp.countDocuments({
+                status: "Pending",
+                priority: "Urgent",
+            }),
+        ]);
 
-        const today = await FollowUp.countDocuments({
-            status: "Pending",
-            followUpDate: {
-                $gte: todayStart,
-                $lte: todayEnd,
-            },
-        });
+        return res.status(200).json({
+            totalFollowUps,
+            pendingFollowUps,
+            completedFollowUps,
+            cancelledFollowUps,
+            todayFollowUps,
+            overdueFollowUps,
+            upcomingFollowUps,
+            urgentFollowUps,
 
-        const overdue = await FollowUp.countDocuments({
-            status: "Pending",
-            followUpDate: {
-                $lt: todayStart,
-            },
-        });
-
-        const upcoming = await FollowUp.countDocuments({
-            status: "Pending",
-            followUpDate: {
-                $gt: todayEnd,
-            },
-        });
-
-        const completed = await FollowUp.countDocuments({
-            status: "Completed",
-        });
-
-        const urgent = await FollowUp.countDocuments({
-            status: "Pending",
-            priority: "Urgent",
-        });
-
-        res.status(200).json({
-            totalPending,
-            today,
-            overdue,
-            upcoming,
-            completed,
-            urgent,
+            // Compatibility aliases for existing frontend components
+            total: totalFollowUps,
+            pending: pendingFollowUps,
+            completed: completedFollowUps,
+            cancelled: cancelledFollowUps,
+            today: todayFollowUps,
+            overdue: overdueFollowUps,
+            upcoming: upcomingFollowUps,
+            urgent: urgentFollowUps,
         });
     } catch (error) {
-        res.status(500).json({
-            message: "Failed to fetch follow-up summary",
+        return res.status(500).json({
+            message: "Failed to load follow-up summary",
             error: error.message,
         });
     }
 };
 
-
+// @desc    Get one follow-up
+// @route   GET /api/follow-ups/:id
+// @access  Private
 const getFollowUpById = async (req, res) => {
     try {
-        const followUp = await FollowUp.findById(req.params.id)
-            .populate("inquiry", "fullName email whatsappNumber country status")
-            .populate("quotation", "quotationNo clientName tourTitle status totals")
-            .populate(
-                "booking",
-                "bookingCode customer travelStartDate travelEndDate paymentStatus bookingStatus"
-            );
+        const followUp = await populateFollowUp(
+            FollowUp.findById(req.params.id)
+        );
 
         if (!followUp) {
             return res.status(404).json({
@@ -359,16 +444,18 @@ const getFollowUpById = async (req, res) => {
             });
         }
 
-        res.status(200).json(followUp);
+        return res.status(200).json(followUp);
     } catch (error) {
-        res.status(500).json({
-            message: "Failed to fetch follow-up",
+        return res.status(500).json({
+            message: "Failed to load follow-up",
             error: error.message,
         });
     }
 };
 
-
+// @desc    Update follow-up
+// @route   PUT /api/follow-ups/:id
+// @access  Private
 const updateFollowUp = async (req, res) => {
     try {
         const followUp = await FollowUp.findById(req.params.id);
@@ -379,25 +466,19 @@ const updateFollowUp = async (req, res) => {
             });
         }
 
-        const customerDetails = await autoFillCustomerDetails({
-            inquiry: req.body.inquiry ?? followUp.inquiry,
-            quotation: req.body.quotation ?? followUp.quotation,
-            booking: req.body.booking ?? followUp.booking,
-            customerName: req.body.customerName ?? followUp.customerName,
-            customerContact: req.body.customerContact ?? followUp.customerContact,
-        });
+        const updatedData = await buildFollowUpPayload(req.body, followUp);
 
-        followUp.title = safeText(req.body.title ?? followUp.title);
-        followUp.type = req.body.type || followUp.type;
-        followUp.inquiry = req.body.inquiry ?? followUp.inquiry;
-        followUp.quotation = req.body.quotation ?? followUp.quotation;
-        followUp.booking = req.body.booking ?? followUp.booking;
-        followUp.customerName = customerDetails.customerName;
-        followUp.customerContact = customerDetails.customerContact;
-        followUp.followUpDate = req.body.followUpDate || followUp.followUpDate;
-        followUp.priority = req.body.priority || followUp.priority;
-        followUp.status = req.body.status || followUp.status;
-        followUp.notes = safeText(req.body.notes ?? followUp.notes);
+        followUp.title = updatedData.title;
+        followUp.type = updatedData.type;
+        followUp.inquiry = updatedData.inquiry;
+        followUp.quotation = updatedData.quotation;
+        followUp.booking = updatedData.booking;
+        followUp.customerName = updatedData.customerName;
+        followUp.customerContact = updatedData.customerContact;
+        followUp.followUpDate = updatedData.followUpDate;
+        followUp.priority = updatedData.priority;
+        followUp.status = updatedData.status;
+        followUp.notes = updatedData.notes;
 
         if (followUp.status === "Completed" && !followUp.completedAt) {
             followUp.completedAt = new Date();
@@ -409,27 +490,43 @@ const updateFollowUp = async (req, res) => {
 
         await followUp.save();
 
-        const populatedFollowUp = await FollowUp.findById(followUp._id)
-            .populate("inquiry", "fullName email whatsappNumber country status")
-            .populate("quotation", "quotationNo clientName tourTitle status totals")
-            .populate(
-                "booking",
-                "bookingCode customer travelStartDate travelEndDate paymentStatus bookingStatus"
-            );
+        await createActivityLog({
+            req,
+            action: "UPDATE",
+            module: "Follow-Up",
+            description: `Follow-up "${followUp.title}" was updated`,
+            relatedRecordId: followUp._id,
+            relatedModel: "FollowUp",
+            referenceNo: followUp._id.toString(),
+            customerName: followUp.customerName,
+            metadata: {
+                updatedFields: Object.keys(req.body || {}),
+                type: followUp.type,
+                priority: followUp.priority,
+                status: followUp.status,
+                followUpDate: followUp.followUpDate,
+            },
+        });
 
-        res.status(200).json({
+        const populatedFollowUp = await populateFollowUp(
+            FollowUp.findById(followUp._id)
+        );
+
+        return res.status(200).json({
             message: "Follow-up updated successfully",
             followUp: populatedFollowUp,
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to update follow-up",
             error: error.message,
         });
     }
 };
 
-
+// @desc    Complete follow-up
+// @route   PATCH /api/follow-ups/:id/complete
+// @access  Private
 const completeFollowUp = async (req, res) => {
     try {
         const followUp = await FollowUp.findById(req.params.id);
@@ -443,25 +540,45 @@ const completeFollowUp = async (req, res) => {
         followUp.status = "Completed";
         followUp.completedAt = new Date();
 
-        if (req.body.notes) {
-            followUp.notes = safeText(req.body.notes);
-        }
-
         await followUp.save();
 
-        res.status(200).json({
-            message: "Follow-up marked as completed",
-            followUp,
+        await createActivityLog({
+            req,
+            action: "COMPLETE",
+            module: "Follow-Up",
+            description: `Follow-up "${followUp.title}" was completed${
+                followUp.customerName ? ` for ${followUp.customerName}` : ""
+            }`,
+            relatedRecordId: followUp._id,
+            relatedModel: "FollowUp",
+            referenceNo: followUp._id.toString(),
+            customerName: followUp.customerName,
+            metadata: {
+                type: followUp.type,
+                priority: followUp.priority,
+                completedAt: followUp.completedAt,
+            },
+        });
+
+        const populatedFollowUp = await populateFollowUp(
+            FollowUp.findById(followUp._id)
+        );
+
+        return res.status(200).json({
+            message: "Follow-up completed successfully",
+            followUp: populatedFollowUp,
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to complete follow-up",
             error: error.message,
         });
     }
 };
 
-
+// @desc    Delete follow-up
+// @route   DELETE /api/follow-ups/:id
+// @access  Private
 const deleteFollowUp = async (req, res) => {
     try {
         const followUp = await FollowUp.findById(req.params.id);
@@ -472,13 +589,42 @@ const deleteFollowUp = async (req, res) => {
             });
         }
 
+        const deletedDetails = {
+            id: followUp._id,
+            title: followUp.title,
+            customerName: followUp.customerName,
+            type: followUp.type,
+            priority: followUp.priority,
+            followUpDate: followUp.followUpDate,
+        };
+
         await followUp.deleteOne();
 
-        res.status(200).json({
+        await createActivityLog({
+            req,
+            action: "DELETE",
+            module: "Follow-Up",
+            description: `Follow-up "${deletedDetails.title}" was deleted${
+                deletedDetails.customerName
+                    ? ` for ${deletedDetails.customerName}`
+                    : ""
+            }`,
+            relatedRecordId: deletedDetails.id,
+            relatedModel: "FollowUp",
+            referenceNo: deletedDetails.id.toString(),
+            customerName: deletedDetails.customerName,
+            metadata: {
+                type: deletedDetails.type,
+                priority: deletedDetails.priority,
+                followUpDate: deletedDetails.followUpDate,
+            },
+        });
+
+        return res.status(200).json({
             message: "Follow-up deleted successfully",
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to delete follow-up",
             error: error.message,
         });

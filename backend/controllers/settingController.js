@@ -1,4 +1,5 @@
 const CompanySetting = require("../models/CompanySetting");
+const { createActivityLog } = require("../utils/createActivityLog");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -35,8 +36,8 @@ const normalizeSocialLinks = (value) => {
 
     return value
         .map((item) => ({
-            name: safeText(item.name),
-            url: safeText(item.url),
+            name: safeText(item?.name),
+            url: safeText(item?.url),
         }))
         .filter((item) => item.name || item.url);
 };
@@ -109,9 +110,9 @@ const getCompanySettings = async (req, res) => {
     try {
         const settings = await getOrCreateSettings();
 
-        res.status(200).json(settings);
+        return res.status(200).json(settings);
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to load company settings",
             error: error.message,
         });
@@ -161,7 +162,7 @@ const updateCompanySettings = async (req, res) => {
         }
 
         if (email !== undefined) {
-            settings.email = safeText(email);
+            settings.email = safeText(email).toLowerCase();
         }
 
         if (website !== undefined) {
@@ -173,23 +174,23 @@ const updateCompanySettings = async (req, res) => {
         }
 
         if (defaultCurrency !== undefined) {
-            settings.defaultCurrency = defaultCurrency;
+            settings.defaultCurrency = safeText(defaultCurrency).toUpperCase();
         }
 
-        if (vehicleRates) {
+        if (vehicleRates && typeof vehicleRates === "object") {
             settings.vehicleRates = {
-                car: toNumber(vehicleRates.car, settings.vehicleRates?.car || 80),
-                suv: toNumber(vehicleRates.suv, settings.vehicleRates?.suv || 95),
-                van: toNumber(vehicleRates.van, settings.vehicleRates?.van || 110),
+                car: toNumber(vehicleRates.car, settings.vehicleRates?.car ?? 80),
+                suv: toNumber(vehicleRates.suv, settings.vehicleRates?.suv ?? 95),
+                van: toNumber(vehicleRates.van, settings.vehicleRates?.van ?? 110),
                 miniBus: toNumber(
                     vehicleRates.miniBus,
-                    settings.vehicleRates?.miniBus || 0
+                    settings.vehicleRates?.miniBus ?? 0
                 ),
-                bus: toNumber(vehicleRates.bus, settings.vehicleRates?.bus || 0),
+                bus: toNumber(vehicleRates.bus, settings.vehicleRates?.bus ?? 0),
             };
         }
 
-        if (pdfSettings) {
+        if (pdfSettings && typeof pdfSettings === "object") {
             settings.pdfSettings = {
                 showWatermark:
                     pdfSettings.showWatermark !== undefined
@@ -198,7 +199,7 @@ const updateCompanySettings = async (req, res) => {
 
                 watermarkOpacity: toNumber(
                     pdfSettings.watermarkOpacity,
-                    settings.pdfSettings?.watermarkOpacity || 0.06
+                    settings.pdfSettings?.watermarkOpacity ?? 0.06
                 ),
 
                 footerText:
@@ -219,29 +220,44 @@ const updateCompanySettings = async (req, res) => {
         }
 
         if (status !== undefined) {
-            settings.status = status;
+            settings.status = safeText(status);
         }
 
         await settings.save();
 
-        res.status(200).json({
+        await createActivityLog({
+            req,
+            action: "UPDATE",
+            module: "Settings",
+            description: "Company settings were updated",
+            relatedRecordId: settings._id,
+            relatedModel: "CompanySetting",
+            referenceNo: settings.singletonKey,
+            metadata: {
+                updatedFields: Object.keys(req.body || {}),
+                companyName: settings.companyName,
+                defaultCurrency: settings.defaultCurrency,
+            },
+        });
+
+        return res.status(200).json({
             message: "Company settings updated successfully",
             settings,
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to update company settings",
             error: error.message,
         });
     }
 };
 
-// @desc    Reset company settings to default
+// @desc    Reset company settings to defaults
 // @route   POST /api/settings/company/reset
 // @access  Private
 const resetCompanySettings = async (req, res) => {
     try {
-        await CompanySetting.findOneAndUpdate(
+        const settings = await CompanySetting.findOneAndUpdate(
             {
                 singletonKey: "company-profile",
             },
@@ -250,17 +266,30 @@ const resetCompanySettings = async (req, res) => {
                 returnDocument: "after",
                 upsert: true,
                 runValidators: true,
+                setDefaultsOnInsert: true,
             }
         );
 
-        const settings = await getOrCreateSettings();
+        await createActivityLog({
+            req,
+            action: "RESTORE",
+            module: "Settings",
+            description: "Company settings were reset to default values",
+            relatedRecordId: settings._id,
+            relatedModel: "CompanySetting",
+            referenceNo: settings.singletonKey,
+            metadata: {
+                companyName: settings.companyName,
+                defaultCurrency: settings.defaultCurrency,
+            },
+        });
 
-        res.status(200).json({
+        return res.status(200).json({
             message: "Company settings reset successfully",
             settings,
         });
     } catch (error) {
-        res.status(500).json({
+        return res.status(500).json({
             message: "Failed to reset company settings",
             error: error.message,
         });
