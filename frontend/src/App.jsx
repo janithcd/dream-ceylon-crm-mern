@@ -15,6 +15,7 @@ import QuotationHistory from "./pages/QuotationHistory";
 import BookingCalendar from "./pages/BookingCalendar";
 import FollowUps from "./pages/FollowUps";
 import Customers from "./pages/Customers";
+import PaymentReports from "./pages/PaymentReports";
 
 const App = () => {
     return (
@@ -38,6 +39,7 @@ const App = () => {
                         <Route path="customers" element={<Customers />} />
                         <Route path="bookings" element={<Bookings />} />
                         <Route path="bookings-calendar" element={<BookingCalendar />} />
+                        <Route path="payment-reports" element={<PaymentReports />} />
                         <Route path="follow-ups" element={<FollowUps />} />
                         <Route path="vehicles" element={<Vehicles />} />
                         <Route path="client-tools" element={<ClientTools />} />

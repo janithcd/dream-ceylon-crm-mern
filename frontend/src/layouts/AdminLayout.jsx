@@ -12,7 +12,7 @@ import {
     FaHistory,
     FaBell,
     FaUsers,
-
+    FaMoneyBillWave,
 } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 import { FaFileInvoiceDollar } from "react-icons/fa";
@@ -63,6 +63,10 @@ const AdminLayout = () => {
                     <NavLink to="/bookings-calendar">
                         <FaCalendarAlt />
                         Booking Calendar
+                    </NavLink>
+                    <NavLink to="/payment-reports">
+                        <FaMoneyBillWave />
+                        Payment Reports
                     </NavLink>
                     <NavLink to="/follow-ups">
                         <FaBell />
