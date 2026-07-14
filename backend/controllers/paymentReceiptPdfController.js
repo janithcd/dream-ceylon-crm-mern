@@ -8,6 +8,7 @@ let brandConfig = require("../config/brandConfig");
 const {
     getDocumentBrandConfig,
 } = require("../utils/documentSettings");
+const { createActivityLog } = require("../utils/createActivityLog");
 
 const COLORS = {
     primary: rgb(0.05, 0.46, 0.42),
@@ -625,11 +626,47 @@ const generateSinglePaymentReceiptPdf = async (req, res) => {
 
         const fileName = `dream-ceylon-payment-receipt-${payment.paymentNo}.pdf`;
 
+        await createActivityLog({
+            req,
+            action: "GENERATE",
+            module: "PDF",
+            description: `Payment receipt ${payment.paymentNo} was generated`,
+            relatedRecordId: payment._id,
+            relatedModel: "BookingPayment",
+            referenceNo: payment.paymentNo,
+            customerName: payment.booking?.customer?.fullName,
+            metadata: {
+                documentType: "Payment Receipt",
+                filename: fileName,
+                bookingCode: payment.booking?.bookingCode,
+                amount: payment.amount,
+                currency: payment.currency,
+                paymentType: payment.paymentType,
+                paymentMethod: payment.paymentMethod,
+                paymentStatus: payment.status,
+            },
+        });
+
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
 
         return res.send(Buffer.from(pdfBytes));
     } catch (error) {
+        await createActivityLog({
+            req,
+            action: "GENERATE",
+            module: "PDF",
+            description: `Payment receipt generation failed for payment ${req.params.id}`,
+            relatedRecordId: req.params.id,
+            relatedModel: "BookingPayment",
+            referenceNo: req.params.id,
+            status: "Failed",
+            metadata: {
+                documentType: "Payment Receipt",
+                error: error.message,
+            },
+        });
+
         res.status(500).json({
             message: "Failed to generate payment receipt PDF",
             error: error.message,

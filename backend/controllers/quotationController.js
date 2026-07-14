@@ -13,6 +13,7 @@ let brand = require("../config/brandConfig");
 const {
     getDocumentBrandConfig,
 } = require("../utils/documentSettings");
+const { createActivityLog } = require("../utils/createActivityLog");
 const PAGE = {
     width: 595.28,
     height: 841.89,
@@ -1257,6 +1258,31 @@ const generateQuotationPdf = async (req, res) => {
 
         const filename = `dream-ceylon-quotation-${cleanFileName(clientName)}.pdf`;
 
+        await createActivityLog({
+            req,
+            action: "GENERATE",
+            module: "PDF",
+            description: `Quotation PDF ${data.quotationNo} was generated for ${data.clientName}`,
+            relatedRecordId: req.body.booking || req.body.inquiry || null,
+            relatedModel: req.body.booking
+                ? "Booking"
+                : req.body.inquiry
+                    ? "Inquiry"
+                    : "Quotation",
+            referenceNo: data.quotationNo,
+            customerName: data.clientName,
+            metadata: {
+                documentType: "Quotation",
+                filename,
+                tourTitle: data.tourTitle,
+                currency: data.currency,
+                grandTotal: totals.grandTotal,
+                advancePayment: totals.advancePayment,
+                balancePayment: totals.balancePayment,
+                pageCount: pages.length,
+            },
+        });
+
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader(
             "Content-Disposition",
@@ -1267,6 +1293,26 @@ const generateQuotationPdf = async (req, res) => {
         res.status(200).send(Buffer.from(pdfBytes));
     } catch (error) {
         console.error("Quotation PDF Generation Error:", error);
+
+        await createActivityLog({
+            req,
+            action: "GENERATE",
+            module: "PDF",
+            description: `Quotation PDF generation failed for ${safeText(req.body?.clientName) || "client"}`,
+            relatedRecordId: req.body?.booking || req.body?.inquiry || null,
+            relatedModel: req.body?.booking
+                ? "Booking"
+                : req.body?.inquiry
+                    ? "Inquiry"
+                    : "Quotation",
+            customerName: safeText(req.body?.clientName),
+            status: "Failed",
+            metadata: {
+                documentType: "Quotation",
+                tourTitle: safeText(req.body?.tourTitle),
+                error: error.message,
+            },
+        });
 
         res.status(500).json({
             message: "Failed to generate quotation PDF",

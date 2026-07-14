@@ -8,6 +8,7 @@ let brandConfig = require("../config/brandConfig");
 const {
     getDocumentBrandConfig,
 } = require("../utils/documentSettings");
+const { createActivityLog } = require("../utils/createActivityLog");
 
 const COLORS = {
     primary: rgb(0.05, 0.46, 0.42),
@@ -856,11 +857,46 @@ const generateBookingInvoicePdf = async (req, res) => {
 
         const fileName = `dream-ceylon-invoice-${booking.bookingCode}.pdf`;
 
+        await createActivityLog({
+            req,
+            action: "GENERATE",
+            module: "PDF",
+            description: `Booking invoice was generated for ${booking.bookingCode}`,
+            relatedRecordId: booking._id,
+            relatedModel: "Booking",
+            referenceNo: booking.bookingCode,
+            customerName: booking.customer?.fullName,
+            metadata: {
+                documentType: "Booking Invoice",
+                filename: fileName,
+                totalPrice: booking.totalPrice,
+                advancePayment: booking.advancePayment,
+                currency: booking.currency,
+                bookingStatus: booking.bookingStatus,
+                paymentStatus: booking.paymentStatus,
+            },
+        });
+
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
 
         return res.send(Buffer.from(pdfBytes));
     } catch (error) {
+        await createActivityLog({
+            req,
+            action: "GENERATE",
+            module: "PDF",
+            description: `Booking invoice generation failed for booking ${req.params.id}`,
+            relatedRecordId: req.params.id,
+            relatedModel: "Booking",
+            referenceNo: req.params.id,
+            status: "Failed",
+            metadata: {
+                documentType: "Booking Invoice",
+                error: error.message,
+            },
+        });
+
         res.status(500).json({
             message: "Failed to generate booking invoice PDF",
             error: error.message,
@@ -884,11 +920,46 @@ const generateBookingReceiptPdf = async (req, res) => {
 
         const fileName = `dream-ceylon-receipt-${booking.bookingCode}.pdf`;
 
+        await createActivityLog({
+            req,
+            action: "GENERATE",
+            module: "PDF",
+            description: `Booking receipt was generated for ${booking.bookingCode}`,
+            relatedRecordId: booking._id,
+            relatedModel: "Booking",
+            referenceNo: booking.bookingCode,
+            customerName: booking.customer?.fullName,
+            metadata: {
+                documentType: "Booking Receipt",
+                filename: fileName,
+                totalPrice: booking.totalPrice,
+                advancePayment: booking.advancePayment,
+                currency: booking.currency,
+                bookingStatus: booking.bookingStatus,
+                paymentStatus: booking.paymentStatus,
+            },
+        });
+
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
 
         return res.send(Buffer.from(pdfBytes));
     } catch (error) {
+        await createActivityLog({
+            req,
+            action: "GENERATE",
+            module: "PDF",
+            description: `Booking receipt generation failed for booking ${req.params.id}`,
+            relatedRecordId: req.params.id,
+            relatedModel: "Booking",
+            referenceNo: req.params.id,
+            status: "Failed",
+            metadata: {
+                documentType: "Booking Receipt",
+                error: error.message,
+            },
+        });
+
         res.status(500).json({
             message: "Failed to generate booking receipt PDF",
             error: error.message,

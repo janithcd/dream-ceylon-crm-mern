@@ -13,6 +13,7 @@ let brand = require("../config/brandConfig");
 const {
     getDocumentBrandConfig,
 } = require("../utils/documentSettings");
+const { createActivityLog } = require("../utils/createActivityLog");
 
 const PAGE = {
     width: 595.28,
@@ -1236,6 +1237,30 @@ const generateItineraryPdf = async (req, res) => {
 
         const filename = `dream-ceylon-itinerary-${cleanFileName(clientName)}.pdf`;
 
+        await createActivityLog({
+            req,
+            action: "GENERATE",
+            module: "PDF",
+            description: `Itinerary PDF was generated for ${data.clientName || "client"}`,
+            relatedRecordId: req.body.booking || req.body.inquiry || null,
+            relatedModel: req.body.booking
+                ? "Booking"
+                : req.body.inquiry
+                    ? "Inquiry"
+                    : "",
+            referenceNo: filename,
+            customerName: data.clientName,
+            metadata: {
+                documentType: "Itinerary",
+                filename,
+                country: data.country,
+                travelers: data.travelers,
+                durationDays: data.durationDays,
+                vehicleType: data.vehicleType,
+                pageCount: pages.length,
+            },
+        });
+
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader(
             "Content-Disposition",
@@ -1246,6 +1271,25 @@ const generateItineraryPdf = async (req, res) => {
         res.status(200).send(Buffer.from(pdfBytes));
     } catch (error) {
         console.error("PDF Generation Error:", error);
+
+        await createActivityLog({
+            req,
+            action: "GENERATE",
+            module: "PDF",
+            description: `Itinerary PDF generation failed for ${safeText(req.body?.clientName) || "client"}`,
+            relatedRecordId: req.body?.booking || req.body?.inquiry || null,
+            relatedModel: req.body?.booking
+                ? "Booking"
+                : req.body?.inquiry
+                    ? "Inquiry"
+                    : "",
+            customerName: safeText(req.body?.clientName),
+            status: "Failed",
+            metadata: {
+                documentType: "Itinerary",
+                error: error.message,
+            },
+        });
 
         res.status(500).json({
             message: "Failed to generate itinerary PDF",
