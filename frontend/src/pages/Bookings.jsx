@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
     FaBell,
     FaEdit,
+    FaFileCsv,
     FaFileInvoiceDollar,
     FaPlus,
     FaReceipt,
@@ -12,6 +13,7 @@ import {
 } from "react-icons/fa";
 import api from "../api/axios";
 import BookingPaymentsModal from "../components/BookingPaymentsModal";
+import { exportToCsv } from "../utils/csvExport";
 
 const initialFormState = {
     inquiry: "",
@@ -60,6 +62,7 @@ const Bookings = () => {
     const [loading, setLoading] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
     const [pdfLoadingKey, setPdfLoadingKey] = useState("");
+    const [exportLoading, setExportLoading] = useState(false);
 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
@@ -418,6 +421,70 @@ const Bookings = () => {
         setPage(1);
     };
 
+    const handleExportCsv = async () => {
+        try {
+            setExportLoading(true);
+            setError("");
+
+            const params = {
+                page: 1,
+                limit: 10000,
+            };
+
+            if (keyword) {
+                params.keyword = keyword;
+            }
+
+            if (bookingStatus) {
+                params.bookingStatus = bookingStatus;
+            }
+
+            if (paymentStatus) {
+                params.paymentStatus = paymentStatus;
+            }
+
+            if (vehicleType) {
+                params.vehicleType = vehicleType;
+            }
+
+            const response = await api.get("/bookings", { params });
+            const exportBookings = response.data.bookings || [];
+
+            const rows = exportBookings.map((booking) => ({
+                "Booking Code": booking.bookingCode || "",
+                "Customer Name": booking.customer?.fullName || "",
+                Email: booking.customer?.email || "",
+                WhatsApp: booking.customer?.whatsappNumber || "",
+                Country: booking.customer?.country || "",
+                Package: booking.selectedPackage?.title || "",
+                "Start Date": formatDate(booking.travelStartDate),
+                "End Date": formatDate(booking.travelEndDate),
+                Travelers: booking.numberOfTravelers || 0,
+                Vehicle: booking.vehicleType || "",
+                "Total Price": booking.totalPrice || 0,
+                "Advance Payment": booking.advancePayment || 0,
+                Balance:
+                    Number(booking.totalPrice || 0) - Number(booking.advancePayment || 0),
+                Currency: booking.currency || "",
+                "Payment Status": booking.paymentStatus || "",
+                "Booking Status": booking.bookingStatus || "",
+                "Special Requests": booking.specialRequests || "",
+                "Admin Notes": booking.adminNotes || "",
+            }));
+
+            const today = new Date().toISOString().split("T")[0];
+            exportToCsv(rows, `dream-ceylon-bookings-${today}.csv`);
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                err.response?.data?.error ||
+                "Failed to export bookings CSV."
+            );
+        } finally {
+            setExportLoading(false);
+        }
+    };
+
     return (
         <div>
             <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
@@ -429,17 +496,28 @@ const Bookings = () => {
                     </p>
                 </div>
 
-                <button
-                    className="btn btn-primary"
-                    onClick={() => {
-                        setShowForm((prev) => !prev);
-                        setEditingId(null);
-                        setFormData(initialFormState);
-                    }}
-                >
-                    <FaPlus className="me-2" />
-                    Add Booking
-                </button>
+                <div className="d-flex gap-2">
+                    <button
+                        className="btn btn-success"
+                        onClick={handleExportCsv}
+                        disabled={exportLoading}
+                    >
+                        <FaFileCsv className="me-2" />
+                        {exportLoading ? "Exporting..." : "Export CSV"}
+                    </button>
+
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => {
+                            setShowForm((prev) => !prev);
+                            setEditingId(null);
+                            setFormData(initialFormState);
+                        }}
+                    >
+                        <FaPlus className="me-2" />
+                        Add Booking
+                    </button>
+                </div>
             </div>
 
             {error && <div className="alert alert-danger">{error}</div>}

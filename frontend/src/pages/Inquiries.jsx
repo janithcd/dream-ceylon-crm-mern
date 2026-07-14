@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom";
 import {
     FaBell,
     FaEdit,
+    FaFileCsv,
     FaFileInvoiceDollar,
     FaPlus,
     FaSearch,
     FaTrash,
 } from "react-icons/fa";
 import api from "../api/axios";
-
+import { exportToCsv } from "../utils/csvExport";
 const initialFormState = {
     fullName: "",
     email: "",
@@ -47,7 +48,7 @@ const Inquiries = () => {
 
     const [loading, setLoading] = useState(false);
     const [formLoading, setFormLoading] = useState(false);
-
+    const [exportLoading, setExportLoading] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
@@ -256,7 +257,63 @@ const Inquiries = () => {
         setSource("");
         setPage(1);
     };
+    const handleExportCsv = async () => {
+        try {
+            setExportLoading(true);
+            setError("");
 
+            const params = {
+                page: 1,
+                limit: 10000,
+            };
+
+            if (keyword) {
+                params.keyword = keyword;
+            }
+
+            if (status) {
+                params.status = status;
+            }
+
+            if (priority) {
+                params.priority = priority;
+            }
+
+            if (source) {
+                params.source = source;
+            }
+
+            const response = await api.get("/inquiries", { params });
+            const exportInquiries = response.data.inquiries || [];
+
+            const rows = exportInquiries.map((inquiry) => ({
+                "Full Name": inquiry.fullName || "",
+                Email: inquiry.email || "",
+                WhatsApp: inquiry.whatsappNumber || "",
+                Country: inquiry.country || "",
+                "Travel Date": formatDate(inquiry.travelDate),
+                Travelers: inquiry.numberOfTravelers || 0,
+                "Interested Package": inquiry.interestedPackage?.title || "",
+                Source: inquiry.source || "",
+                Priority: inquiry.priority || "",
+                Status: inquiry.status || "",
+                Message: inquiry.message || "",
+                "Admin Notes": inquiry.adminNotes || "",
+                "Created Date": formatDate(inquiry.createdAt),
+            }));
+
+            const today = new Date().toISOString().split("T")[0];
+            exportToCsv(rows, `dream-ceylon-inquiries-${today}.csv`);
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                err.response?.data?.error ||
+                "Failed to export inquiries CSV."
+            );
+        } finally {
+            setExportLoading(false);
+        }
+    };
     return (
         <div>
             <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
@@ -268,17 +325,28 @@ const Inquiries = () => {
                     </p>
                 </div>
 
-                <button
-                    className="btn btn-primary"
-                    onClick={() => {
-                        setShowForm((prev) => !prev);
-                        setEditingId(null);
-                        setFormData(initialFormState);
-                    }}
-                >
-                    <FaPlus className="me-2" />
-                    Add Inquiry
-                </button>
+                <div className="d-flex gap-2">
+                    <button
+                        className="btn btn-success"
+                        onClick={handleExportCsv}
+                        disabled={exportLoading}
+                    >
+                        <FaFileCsv className="me-2" />
+                        {exportLoading ? "Exporting..." : "Export CSV"}
+                    </button>
+
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => {
+                            setShowForm((prev) => !prev);
+                            setEditingId(null);
+                            setFormData(initialFormState);
+                        }}
+                    >
+                        <FaPlus className="me-2" />
+                        Add Inquiry
+                    </button>
+                </div>
             </div>
 
             {error && <div className="alert alert-danger">{error}</div>}

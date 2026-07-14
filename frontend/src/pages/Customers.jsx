@@ -4,6 +4,7 @@ import {
     FaBell,
     FaCalendarCheck,
     FaClipboardList,
+    FaFileCsv,
     FaFileInvoiceDollar,
     FaMoneyBillWave,
     FaSearch,
@@ -12,7 +13,7 @@ import {
     FaWallet,
 } from "react-icons/fa";
 import api from "../api/axios";
-
+import { exportToCsv } from "../utils/csvExport";
 const formatDate = (value) => {
     if (!value) {
         return "-";
@@ -192,10 +193,165 @@ const Customers = () => {
             customerName: searchInput.trim(),
         });
     };
+    const handleExportSearchResultsCsv = () => {
+        const rows = customers.map((customer) => ({
+            "Customer Name": customer.customerName || "",
+            Email: customer.email || "",
+            WhatsApp: customer.whatsappNumber || "",
+            Country: customer.country || "",
+            Inquiries: customer.counts?.inquiries || 0,
+            Quotations: customer.counts?.quotations || 0,
+            Bookings: customer.counts?.bookings || 0,
+            Payments: customer.counts?.payments || 0,
+            "Follow Ups": customer.counts?.followUps || 0,
+            "Booking Value": customer.totals?.bookingValue || 0,
+            "Paid Amount": customer.totals?.paidAmount || 0,
+            Balance: customer.totals?.balanceAmount || 0,
+        }));
 
+        const today = new Date().toISOString().split("T")[0];
+        exportToCsv(rows, `dream-ceylon-customer-search-${today}.csv`);
+    };
+
+    const handleExportProfileCsv = () => {
+        if (!profile) {
+            alert("No customer profile loaded.");
+            return;
+        }
+
+        const rows = [];
+
+        rows.push({
+            Section: "Customer",
+            Reference: profile.customer?.customerName || "",
+            Description: profile.customer?.country || "",
+            Date: "",
+            Amount: "",
+            Currency: profile.summary?.currency || "USD",
+            Status: "",
+            Notes: `Email: ${profile.customer?.email || "-"} | WhatsApp: ${
+                profile.customer?.whatsappNumber || "-"
+            }`,
+        });
+
+        rows.push({
+            Section: "Financial Summary",
+            Reference: "Total Booking Value",
+            Description: "",
+            Date: "",
+            Amount: profile.summary?.totalBookingValue || 0,
+            Currency: profile.summary?.currency || "USD",
+            Status: "",
+            Notes: "",
+        });
+
+        rows.push({
+            Section: "Financial Summary",
+            Reference: "Total Paid",
+            Description: "",
+            Date: "",
+            Amount: profile.summary?.totalPaidAmount || 0,
+            Currency: profile.summary?.currency || "USD",
+            Status: "",
+            Notes: "",
+        });
+
+        rows.push({
+            Section: "Financial Summary",
+            Reference: "Balance",
+            Description: "",
+            Date: "",
+            Amount: profile.summary?.totalBalanceAmount || 0,
+            Currency: profile.summary?.currency || "USD",
+            Status: "",
+            Notes: "",
+        });
+
+        (profile.inquiries || []).forEach((inquiry) => {
+            rows.push({
+                Section: "Inquiry",
+                Reference: inquiry.fullName || "",
+                Description: inquiry.message || "",
+                Date: formatDate(inquiry.travelDate),
+                Amount: "",
+                Currency: profile.summary?.currency || "USD",
+                Status: inquiry.status || "",
+                Notes: `Priority: ${inquiry.priority || ""} | Source: ${
+                    inquiry.source || ""
+                }`,
+            });
+        });
+
+        (profile.quotations || []).forEach((quotation) => {
+            rows.push({
+                Section: "Quotation",
+                Reference: quotation.quotationNo || "",
+                Description: quotation.tourTitle || "",
+                Date: formatDate(quotation.createdAt),
+                Amount: quotation.totals?.grandTotal || 0,
+                Currency: quotation.currency || profile.summary?.currency || "USD",
+                Status: quotation.status || "",
+                Notes: `Client: ${quotation.clientName || ""}`,
+            });
+        });
+
+        (profile.bookings || []).forEach((booking) => {
+            rows.push({
+                Section: "Booking",
+                Reference: booking.bookingCode || "",
+                Description: booking.selectedPackage?.title || "",
+                Date: `${formatDate(booking.travelStartDate)} - ${formatDate(
+                    booking.travelEndDate
+                )}`,
+                Amount: booking.totalPrice || 0,
+                Currency: booking.currency || profile.summary?.currency || "USD",
+                Status: booking.bookingStatus || "",
+                Notes: `Payment: ${booking.paymentStatus || ""} | Vehicle: ${
+                    booking.vehicleType || ""
+                }`,
+            });
+        });
+
+        (profile.payments || []).forEach((payment) => {
+            rows.push({
+                Section: "Payment",
+                Reference: payment.paymentNo || "",
+                Description: payment.paymentType || "",
+                Date: formatDate(payment.paymentDate),
+                Amount: payment.amount || 0,
+                Currency: payment.currency || profile.summary?.currency || "USD",
+                Status: payment.status || "",
+                Notes: `Method: ${payment.paymentMethod || ""} | Ref: ${
+                    payment.referenceNumber || ""
+                }`,
+            });
+        });
+
+        (profile.followUps || []).forEach((followUp) => {
+            rows.push({
+                Section: "Follow-Up",
+                Reference: followUp.title || "",
+                Description: followUp.type || "",
+                Date: formatDate(followUp.followUpDate),
+                Amount: "",
+                Currency: profile.summary?.currency || "USD",
+                Status: followUp.status || "",
+                Notes: followUp.notes || "",
+            });
+        });
+
+        const today = new Date().toISOString().split("T")[0];
+        const cleanName =
+            profile.customer?.customerName
+                ?.toLowerCase()
+                .replace(/[^a-z0-9]+/g, "-")
+                .replace(/^-+|-+$/g, "") || "customer";
+
+        exportToCsv(rows, `dream-ceylon-customer-profile-${cleanName}-${today}.csv`);
+    };
     return (
         <div>
-            <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+            <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-2">
                 <div>
                     <h2 className="fw-bold mb-1">Customers</h2>
                     <p className="text-muted mb-0">
@@ -210,7 +366,9 @@ const Customers = () => {
                     <FaBell className="me-2" />
                     Manage Follow-Ups
                 </button>
+
             </div>
+
 
             {error && <div className="alert alert-danger">{error}</div>}
 
@@ -801,7 +959,10 @@ const Customers = () => {
                             <FaUsers className="text-success" />
                             <h5 className="fw-bold mb-0">Search Results</h5>
                         </div>
-
+                        <button className="btn btn-success mb-1" onClick={handleExportProfileCsv}>
+                            <FaFileCsv className="me-2" />
+                            Export Profile CSV
+                        </button>
                         <div className="table-responsive">
                             <table className="table align-middle mb-0">
                                 <thead>

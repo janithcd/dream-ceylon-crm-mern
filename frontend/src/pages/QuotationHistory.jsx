@@ -7,10 +7,11 @@ import {
     FaFileInvoiceDollar,
     FaSearch,
     FaTrash,
-    FaBell
+    FaBell,
+    FaFileCsv,
 } from "react-icons/fa";
 import api from "../api/axios";
-
+import { exportToCsv } from "../utils/csvExport";
 const statusOptions = ["Draft", "Sent", "Accepted", "Rejected", "Expired"];
 const currencyOptions = ["USD", "LKR", "EUR", "GBP"];
 
@@ -130,7 +131,7 @@ const QuotationHistory = () => {
     const [status, setStatus] = useState("");
     const [currency, setCurrency] = useState("");
     const [page, setPage] = useState(1);
-
+    const [exportLoading, setExportLoading] = useState(false);
     const [pagination, setPagination] = useState({
         currentPage: 1,
         totalPages: 1,
@@ -399,10 +400,72 @@ const QuotationHistory = () => {
             setDeleteLoadingId("");
         }
     };
+    const handleExportCsv = async () => {
+        try {
+            setExportLoading(true);
+            setError("");
 
+            const params = {
+                page: 1,
+                limit: 10000,
+            };
+
+            if (keyword) {
+                params.keyword = keyword;
+            }
+
+            if (status) {
+                params.status = status;
+            }
+
+            if (currency) {
+                params.currency = currency;
+            }
+
+            const response = await api.get("/quotations", { params });
+            const exportQuotations = response.data.quotations || [];
+
+            const rows = exportQuotations.map((quotation) => ({
+                "Quotation No": quotation.quotationNo || "",
+                "Client Name": quotation.clientName || "",
+                Country: quotation.country || "",
+                "Tour Title": quotation.tourTitle || "",
+                "Travel Start Date": formatDate(quotation.travelStartDate),
+                "Travel End Date": formatDate(quotation.travelEndDate),
+                Travelers: quotation.travelers || 0,
+                "Duration Days": quotation.durationDays || 0,
+                "Vehicle Type": quotation.vehicleType || "",
+                "Vehicle Total": quotation.totals?.vehicleTotal || 0,
+                "Hotel Total": quotation.totals?.hotelTotal || 0,
+                "Activities Total": quotation.totals?.activitiesTotal || 0,
+                "Entrance Fees Total": quotation.totals?.entranceFeesTotal || 0,
+                Subtotal: quotation.totals?.subtotal || 0,
+                Discount: quotation.totals?.discount || 0,
+                "Grand Total": quotation.totals?.grandTotal || 0,
+                "Advance Payment": quotation.totals?.advancePayment || 0,
+                "Balance Payment": quotation.totals?.balancePayment || 0,
+                Currency: quotation.currency || "",
+                Status: quotation.status || "",
+                Converted: quotation.booking ? "Yes" : "No",
+                "Created Date": formatDate(quotation.createdAt),
+            }));
+
+            const today = new Date().toISOString().split("T")[0];
+            exportToCsv(rows, `dream-ceylon-quotations-${today}.csv`);
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                err.response?.data?.error ||
+                "Failed to export quotations CSV."
+            );
+        } finally {
+            setExportLoading(false);
+        }
+    };
     return (
         <div>
-            <div className="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+            <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+
                 <div>
                     <h3 className="fw-bold mb-1">Quotation History</h3>
                     <p className="text-muted mb-0">
@@ -410,11 +473,28 @@ const QuotationHistory = () => {
                         bookings.
                     </p>
                 </div>
+<div>
+    <div className="badge bg-success-subtle text-success px-3 py-2 rounded-pill">
+    {pagination.totalQuotations} quotations
 
-                <div className="badge bg-success-subtle text-success px-3 py-2 rounded-pill">
-                    {pagination.totalQuotations} quotations
-                </div>
+
+</div>
+    <div className="mb-2 mt-2">
+    <button
+        className="btn btn-success"
+        onClick={handleExportCsv}
+        disabled={exportLoading}
+    >
+        <FaFileCsv className="me-2" />
+        {exportLoading ? "Exporting..." : "Export CSV"}
+    </button>
+</div>
+</div>
+
+
+
             </div>
+
 
             {error && <div className="alert alert-danger">{error}</div>}
             {success && <div className="alert alert-success">{success}</div>}
