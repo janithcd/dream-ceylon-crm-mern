@@ -30,7 +30,7 @@ import {
 
 import api from "../api/axios";
 import DashboardFollowUpAlerts from "../components/DashboardFollowUpAlerts";
-
+import DashboardRecentActivity from "../components/DashboardRecentActivity";
 const COLORS = [
     "#0f766e",
     "#2563eb",
@@ -516,6 +516,8 @@ const Dashboard = () => {
             </div>
 
             <DashboardFollowUpAlerts />
+
+            <DashboardRecentActivity />
 
             <div className="row g-4 mb-4">
                 <div className="col-xl-6">

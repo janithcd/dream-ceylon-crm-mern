@@ -23,6 +23,7 @@ const customerRoutes = require("./routes/customerRoutes");
 const financeReportRoutes = require("./routes/financeReportRoutes");
 const settingRoutes = require("./routes/settingRoutes");
 const activityLogRoutes = require("./routes/activityLogRoutes");
+const adminManagementRoutes = require("./routes/adminManagementRoutes");
 
 
 dotenv.config();
@@ -59,6 +60,7 @@ app.use("/api/follow-ups", followUpRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/finance", financeReportRoutes);
 app.use("/api/settings", settingRoutes);
+app.use("/api/admins", adminManagementRoutes);
 app.use("/api/activity-logs", activityLogRoutes);
 
 
