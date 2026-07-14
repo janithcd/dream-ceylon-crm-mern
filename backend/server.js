@@ -21,6 +21,7 @@ const paymentReceiptPdfRoutes = require("./routes/paymentReceiptPdfRoutes");
 const followUpRoutes = require("./routes/followUpRoutes");
 const customerRoutes = require("./routes/customerRoutes");
 const financeReportRoutes = require("./routes/financeReportRoutes");
+const settingRoutes = require("./routes/settingRoutes");
 
 
 dotenv.config();
@@ -56,6 +57,7 @@ app.use("/api/payment-receipts", paymentReceiptPdfRoutes);
 app.use("/api/follow-ups", followUpRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/finance", financeReportRoutes);
+app.use("/api/settings", settingRoutes);
 
 
 const PORT = process.env.PORT || 5000;
