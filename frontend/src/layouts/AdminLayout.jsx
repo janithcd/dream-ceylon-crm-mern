@@ -11,6 +11,7 @@ import {
     FaCalendarAlt,
     FaHistory,
     FaBell,
+    FaUsers,
 
 } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
@@ -52,7 +53,10 @@ const AdminLayout = () => {
                     <NavLink to="/inquiries">
                         <FaEnvelopeOpenText /> Inquiries
                     </NavLink>
-
+                    <NavLink to="/customers">
+                        <FaUsers />
+                        Customers
+                    </NavLink>
                     <NavLink to="/bookings">
                         <FaCalendarCheck /> Bookings
                     </NavLink>
