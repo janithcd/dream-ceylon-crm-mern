@@ -1,12 +1,12 @@
 import { usePermissions } from "../context/PermissionContext";
 
 const PermissionGuard = ({
-    permission,
-    any = [],
-    all = [],
-    fallback = null,
-    children,
-}) => {
+                             permission,
+                             any = [],
+                             all = [],
+                             fallback = null,
+                             children,
+                         }) => {
     const {
         loading,
         hasPermission,

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { FaCopy, FaMagic, FaRobot } from "react-icons/fa";
 import api from "../api/axios";
+import { usePermissions } from "../context/PermissionContext";
 
 const initialFormState = {
     clientName: "",
@@ -15,6 +16,12 @@ const initialFormState = {
 };
 
 const AIReplyGenerator = ({ onUseReply }) => {
+    const { loading: permissionsLoading, hasAnyPermission } = usePermissions();
+
+    const canGenerateReply = hasAnyPermission([
+        "inquiry.update",
+        "quotation.create",
+    ]);
     const [formData, setFormData] = useState(initialFormState);
     const [generatedReply, setGeneratedReply] = useState("");
     const [loading, setLoading] = useState(false);
@@ -96,6 +103,10 @@ const AIReplyGenerator = ({ onUseReply }) => {
             onUseReply(generatedReply);
         }
     };
+
+    if (permissionsLoading || !canGenerateReply) {
+        return null;
+    }
 
     return (
         <div className="card border-0 shadow-sm rounded-4 mb-4">

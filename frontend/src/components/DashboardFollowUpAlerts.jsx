@@ -8,6 +8,8 @@ import {
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
+import PermissionGuard from "./PermissionGuard";
+import { usePermissions } from "../context/PermissionContext";
 
 const priorityOrder = {
     Urgent: 1,
@@ -94,6 +96,9 @@ const SmallSummaryCard = ({ title, value, subtitle, icon, variant }) => {
 
 const DashboardFollowUpAlerts = () => {
     const navigate = useNavigate();
+    const { loading: permissionsLoading, hasPermission } = usePermissions();
+
+    const canViewFollowUps = hasPermission("followUp.view");
 
     const [summary, setSummary] = useState({
         totalPending: 0,
@@ -193,8 +198,11 @@ const DashboardFollowUpAlerts = () => {
     };
 
     useEffect(() => {
-        fetchFollowUpAlerts();
-    }, []);
+        if (!permissionsLoading && canViewFollowUps) {
+            fetchFollowUpAlerts();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [permissionsLoading, canViewFollowUps]);
 
     const handleComplete = async (followUp) => {
         const confirmComplete = window.confirm(
@@ -224,6 +232,10 @@ const DashboardFollowUpAlerts = () => {
             setCompleteLoadingId("");
         }
     };
+
+    if (permissionsLoading || !canViewFollowUps) {
+        return null;
+    }
 
     return (
         <div className="card border-0 shadow-sm rounded-4 mb-4">
@@ -375,14 +387,19 @@ const DashboardFollowUpAlerts = () => {
                                         </td>
 
                                         <td className="text-end">
-                                            <button
-                                                className="btn btn-sm btn-outline-success"
-                                                onClick={() => handleComplete(followUp)}
-                                                disabled={completeLoadingId === followUp._id}
-                                                title="Mark completed"
-                                            >
-                                                <FaCheckCircle />
-                                            </button>
+                                            <PermissionGuard permission="followUp.manage">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-success"
+                                                    onClick={() => handleComplete(followUp)}
+                                                    disabled={
+                                                        completeLoadingId === followUp._id
+                                                    }
+                                                    title="Mark completed"
+                                                >
+                                                    <FaCheckCircle />
+                                                </button>
+                                            </PermissionGuard>
                                         </td>
                                     </tr>
                                 );

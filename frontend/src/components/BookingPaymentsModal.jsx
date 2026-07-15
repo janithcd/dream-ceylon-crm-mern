@@ -8,6 +8,8 @@ import {
     FaWallet,
 } from "react-icons/fa";
 import api from "../api/axios";
+import PermissionGuard from "./PermissionGuard";
+import { usePermissions } from "../context/PermissionContext";
 
 const initialPaymentForm = {
     amount: "",
@@ -84,6 +86,13 @@ const getStatusBadgeClass = (status) => {
 };
 
 const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
+    const { loading: permissionsLoading, hasPermission } = usePermissions();
+
+    const canViewPayments = hasPermission("payment.view");
+    const canCreatePayment = hasPermission("payment.create");
+    const canRefundPayment = hasPermission("payment.refund");
+    const canDeletePayment = hasPermission("payment.delete");
+    const canGeneratePdf = hasPermission("pdf.generate");
     const [payments, setPayments] = useState([]);
     const [currentBooking, setCurrentBooking] = useState(booking);
     const [formData, setFormData] = useState({
@@ -102,6 +111,21 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
 
     const bookingId = booking?._id;
 
+    const availablePaymentTypeOptions = canRefundPayment
+        ? paymentTypeOptions
+        : paymentTypeOptions.filter((item) => item !== "Refund");
+
+    const availableStatusOptions = canRefundPayment
+        ? statusOptions
+        : statusOptions.filter((item) => item !== "Refunded");
+
+    const selectedPaymentNeedsRefundPermission =
+        formData.paymentType === "Refund" || formData.status === "Refunded";
+
+    const canSubmitSelectedPayment = selectedPaymentNeedsRefundPermission
+        ? canRefundPayment
+        : canCreatePayment;
+
     const financialSummary = useMemo(() => {
         const totalPrice = Number(currentBooking?.totalPrice || 0);
         const paidAmount = Number(currentBooking?.advancePayment || 0);
@@ -115,7 +139,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
     }, [currentBooking]);
 
     const fetchPaymentHistory = async () => {
-        if (!bookingId) {
+        if (!bookingId || !canViewPayments) {
             return;
         }
 
@@ -139,9 +163,11 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
     };
 
     useEffect(() => {
-        fetchPaymentHistory();
+        if (!permissionsLoading && canViewPayments) {
+            fetchPaymentHistory();
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [bookingId]);
+    }, [bookingId, permissionsLoading, canViewPayments]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -164,6 +190,25 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
         });
     };
 
+    const openPaymentForm = () => {
+        if (!canCreatePayment && !canRefundPayment) {
+            return;
+        }
+
+        if (showForm) {
+            resetForm();
+            return;
+        }
+
+        setFormData({
+            ...initialPaymentForm,
+            currency: currentBooking?.currency || booking?.currency || "USD",
+            paymentType: canCreatePayment ? "Partial Payment" : "Refund",
+            status: canCreatePayment ? "Received" : "Refunded",
+        });
+        setShowForm(true);
+    };
+
     const resetForm = () => {
         setFormData({
             ...initialPaymentForm,
@@ -174,6 +219,15 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (!canSubmitSelectedPayment) {
+            setError(
+                selectedPaymentNeedsRefundPermission
+                    ? "You do not have permission to record refunds."
+                    : "You do not have permission to create payments."
+            );
+            return;
+        }
 
         try {
             setFormLoading(true);
@@ -313,6 +367,43 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
         return null;
     }
 
+    if (permissionsLoading) {
+        return null;
+    }
+
+    if (!canViewPayments) {
+        return (
+            <div
+                className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3"
+                style={{
+                    background: "rgba(15, 23, 42, 0.45)",
+                    zIndex: 1050,
+                }}
+            >
+                <div
+                    className="card border-0 shadow-lg rounded-4"
+                    style={{ width: "100%", maxWidth: "520px" }}
+                >
+                    <div className="card-body p-4 text-center">
+                        <FaWallet className="text-muted mb-3" size={36} />
+                        <h5 className="fw-bold">Payment Access Restricted</h5>
+                        <p className="text-muted">
+                            Your account does not have permission to view booking
+                            payments.
+                        </p>
+                        <button
+                            type="button"
+                            className="btn btn-secondary"
+                            onClick={onClose}
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div
             className="position-fixed top-0 start-0 w-100 h-100"
@@ -340,6 +431,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
 
                                     <div className="d-flex gap-2">
                                         <button
+                                            type="button"
                                             className="btn btn-outline-success"
                                             onClick={fetchPaymentHistory}
                                             disabled={loading}
@@ -349,6 +441,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                         </button>
 
                                         <button
+                                            type="button"
                                             className="btn btn-outline-secondary"
                                             onClick={onClose}
                                         >
@@ -406,13 +499,18 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                         </small>
                                     </div>
 
-                                    <button
-                                        className="btn btn-primary"
-                                        onClick={() => setShowForm((prev) => !prev)}
+                                    <PermissionGuard
+                                        any={["payment.create", "payment.refund"]}
                                     >
-                                        <FaPlus className="me-2" />
-                                        Add Payment
-                                    </button>
+                                        <button
+                                            type="button"
+                                            className="btn btn-primary"
+                                            onClick={openPaymentForm}
+                                        >
+                                            <FaPlus className="me-2" />
+                                            {showForm ? "Close Form" : "Add Payment"}
+                                        </button>
+                                    </PermissionGuard>
                                 </div>
 
                                 {showForm && (
@@ -479,7 +577,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                             value={formData.paymentType}
                                                             onChange={handleChange}
                                                         >
-                                                            {paymentTypeOptions.map((type) => (
+                                                            {availablePaymentTypeOptions.map((type) => (
                                                                 <option key={type} value={type}>
                                                                     {type}
                                                                 </option>
@@ -515,7 +613,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                             value={formData.status}
                                                             onChange={handleChange}
                                                         >
-                                                            {statusOptions.map((status) => (
+                                                            {availableStatusOptions.map((status) => (
                                                                 <option key={status} value={status}>
                                                                     {status}
                                                                 </option>
@@ -552,13 +650,24 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                     </div>
                                                 </div>
 
+                                                {!canSubmitSelectedPayment && (
+                                                    <div className="alert alert-warning mt-3 mb-0">
+                                                        You do not have permission to save this
+                                                        payment type.
+                                                    </div>
+                                                )}
+
                                                 <div className="d-flex gap-2 mt-4">
                                                     <button
                                                         type="submit"
                                                         className="btn btn-primary"
-                                                        disabled={formLoading}
+                                                        disabled={formLoading || !canSubmitSelectedPayment}
                                                     >
-                                                        {formLoading ? "Saving..." : "Save Payment"}
+                                                        {formLoading
+                                                            ? "Saving..."
+                                                            : selectedPaymentNeedsRefundPermission
+                                                                ? "Save Refund"
+                                                                : "Save Payment"}
                                                     </button>
 
                                                     <button
@@ -640,23 +749,48 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
 
                                                     <td className="text-end">
                                                         <div className="d-flex justify-content-end gap-2">
-                                                            <button
-                                                                className="btn btn-sm btn-outline-success"
-                                                                onClick={() => handleDownloadPaymentReceipt(payment)}
-                                                                disabled={receiptLoadingId === payment._id}
-                                                                title="Download payment receipt"
+                                                            <PermissionGuard
+                                                                all={[
+                                                                    "payment.view",
+                                                                    "pdf.generate",
+                                                                ]}
                                                             >
-                                                                <FaReceipt />
-                                                            </button>
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-sm btn-outline-success"
+                                                                    onClick={() =>
+                                                                        handleDownloadPaymentReceipt(
+                                                                            payment
+                                                                        )
+                                                                    }
+                                                                    disabled={
+                                                                        receiptLoadingId ===
+                                                                        payment._id
+                                                                    }
+                                                                    title="Download payment receipt"
+                                                                >
+                                                                    <FaReceipt />
+                                                                </button>
+                                                            </PermissionGuard>
 
-                                                            <button
-                                                                className="btn btn-sm btn-outline-danger"
-                                                                onClick={() => handleDeletePayment(payment._id)}
-                                                                disabled={deleteLoadingId === payment._id}
-                                                                title="Delete payment"
-                                                            >
-                                                                <FaTrash />
-                                                            </button>
+                                                            <PermissionGuard permission="payment.delete">
+                                                                <button
+                                                                    type="button"
+                                                                    className="btn btn-sm btn-outline-danger"
+                                                                    onClick={() =>
+                                                                        handleDeletePayment(
+                                                                            payment._id
+                                                                        )
+                                                                    }
+                                                                    disabled={
+                                                                        deleteLoadingId ===
+                                                                        payment._id
+                                                                    }
+                                                                    title="Delete payment"
+                                                                >
+                                                                    <FaTrash />
+                                                                </button>
+                                                            </PermissionGuard>
                                                         </div>
                                                     </td>
                                                 </tr>

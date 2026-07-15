@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { FaCopy, FaFilePdf, FaMapMarkedAlt, FaMagic } from "react-icons/fa";
 import api from "../api/axios";
+import PermissionGuard from "./PermissionGuard";
+import { usePermissions } from "../context/PermissionContext";
 
 const initialFormState = {
     clientName: "",
@@ -18,6 +20,12 @@ const initialFormState = {
 };
 
 const AIItineraryGenerator = ({ onUseItinerary }) => {
+    const { loading: permissionsLoading, hasAnyPermission } = usePermissions();
+
+    const canGenerateItinerary = hasAnyPermission([
+        "quotation.create",
+        "pdf.generate",
+    ]);
     const [formData, setFormData] = useState(initialFormState);
     const [generatedItinerary, setGeneratedItinerary] = useState("");
     const [loading, setLoading] = useState(false);
@@ -166,6 +174,10 @@ const AIItineraryGenerator = ({ onUseItinerary }) => {
             onUseItinerary(generatedItinerary);
         }
     };
+
+    if (permissionsLoading || !canGenerateItinerary) {
+        return null;
+    }
 
     return (
         <div className="card border-0 shadow-sm rounded-4 mb-4">
@@ -389,15 +401,19 @@ const AIItineraryGenerator = ({ onUseItinerary }) => {
                                 Use in Translator / WhatsApp Tool
                             </button>
 
-                            <button
-                                type="button"
-                                className="btn btn-danger"
-                                onClick={handleGeneratePdf}
-                                disabled={pdfLoading}
-                            >
-                                <FaFilePdf className="me-2" />
-                                {pdfLoading ? "Generating PDF..." : "Download Client PDF"}
-                            </button>
+                            <PermissionGuard permission="pdf.generate">
+                                <button
+                                    type="button"
+                                    className="btn btn-danger"
+                                    onClick={handleGeneratePdf}
+                                    disabled={pdfLoading}
+                                >
+                                    <FaFilePdf className="me-2" />
+                                    {pdfLoading
+                                        ? "Generating PDF..."
+                                        : "Download Client PDF"}
+                                </button>
+                            </PermissionGuard>
                         </div>
 
                         <div className="alert alert-success mt-3 mb-0">

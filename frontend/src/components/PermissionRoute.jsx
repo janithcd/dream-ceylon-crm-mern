@@ -22,11 +22,11 @@ const LoadingScreen = () => {
 };
 
 const PermissionRoute = ({
-    permission,
-    any = [],
-    all = [],
-    children,
-}) => {
+                             permission,
+                             any = [],
+                             all = [],
+                             children,
+                         }) => {
     const location = useLocation();
 
     const {

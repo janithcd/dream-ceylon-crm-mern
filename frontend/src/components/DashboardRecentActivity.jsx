@@ -9,6 +9,7 @@ import {
     FaUserShield,
 } from "react-icons/fa";
 import api from "../api/axios";
+import { usePermissions } from "../context/PermissionContext";
 
 const formatDateTime = (value) => {
     if (!value) {
@@ -103,6 +104,8 @@ const getModuleBadgeClass = (moduleName) => {
 };
 
 const DashboardRecentActivity = () => {
+    const { loading: permissionsLoading, hasPermission } = usePermissions();
+    const canViewActivityLogs = hasPermission("activityLog.view");
     const [activities, setActivities] = useState([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -134,8 +137,15 @@ const DashboardRecentActivity = () => {
     };
 
     useEffect(() => {
-        fetchRecentActivities();
-    }, []);
+        if (!permissionsLoading && canViewActivityLogs) {
+            fetchRecentActivities();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [permissionsLoading, canViewActivityLogs]);
+
+    if (permissionsLoading || !canViewActivityLogs) {
+        return null;
+    }
 
     return (
         <div className="card border-0 shadow-sm rounded-4 mb-4">
