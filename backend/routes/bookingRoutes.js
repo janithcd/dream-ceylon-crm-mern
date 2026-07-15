@@ -9,15 +9,46 @@ const {
 } = require("../controllers/bookingController");
 
 const { protect } = require("../middleware/authMiddleware");
+const {
+    authorizePermissions,
+} = require("../middleware/permissionMiddleware");
+const { PERMISSIONS } = require("../config/permissions");
 
 const router = express.Router();
 
-router.route("/").post(protect, createBooking).get(protect, getBookings);
+router.post(
+    "/",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_CREATE),
+    createBooking
+);
 
-router
-    .route("/:id")
-    .get(protect, getBookingById)
-    .put(protect, updateBooking)
-    .delete(protect, deleteBooking);
+router.get(
+    "/",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW),
+    getBookings
+);
+
+router.get(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW),
+    getBookingById
+);
+
+router.put(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
+    updateBooking
+);
+
+router.delete(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_DELETE),
+    deleteBooking
+);
 
 module.exports = router;

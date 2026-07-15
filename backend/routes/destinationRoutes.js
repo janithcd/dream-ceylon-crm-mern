@@ -9,18 +9,46 @@ const {
 } = require("../controllers/destinationController");
 
 const { protect } = require("../middleware/authMiddleware");
+const {
+    authorizePermissions,
+} = require("../middleware/permissionMiddleware");
+const { PERMISSIONS } = require("../config/permissions");
 
 const router = express.Router();
 
-router
-    .route("/")
-    .post(protect, createDestination)
-    .get(protect, getDestinations);
+router.post(
+    "/",
+    protect,
+    authorizePermissions(PERMISSIONS.DESTINATION_MANAGE),
+    createDestination
+);
 
-router
-    .route("/:id")
-    .get(protect, getDestinationById)
-    .put(protect, updateDestination)
-    .delete(protect, deleteDestination);
+router.get(
+    "/",
+    protect,
+    authorizePermissions(PERMISSIONS.DESTINATION_VIEW),
+    getDestinations
+);
+
+router.get(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.DESTINATION_VIEW),
+    getDestinationById
+);
+
+router.put(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.DESTINATION_MANAGE),
+    updateDestination
+);
+
+router.delete(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.DESTINATION_MANAGE),
+    deleteDestination
+);
 
 module.exports = router;

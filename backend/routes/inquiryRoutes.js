@@ -9,15 +9,46 @@ const {
 } = require("../controllers/inquiryController");
 
 const { protect } = require("../middleware/authMiddleware");
+const {
+    authorizePermissions,
+} = require("../middleware/permissionMiddleware");
+const { PERMISSIONS } = require("../config/permissions");
 
 const router = express.Router();
 
-router.route("/").post(createInquiry).get(protect, getInquiries);
+router.post(
+    "/",
+    protect,
+    authorizePermissions(PERMISSIONS.INQUIRY_CREATE),
+    createInquiry
+);
 
-router
-    .route("/:id")
-    .get(protect, getInquiryById)
-    .put(protect, updateInquiry)
-    .delete(protect, deleteInquiry);
+router.get(
+    "/",
+    protect,
+    authorizePermissions(PERMISSIONS.INQUIRY_VIEW),
+    getInquiries
+);
+
+router.get(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.INQUIRY_VIEW),
+    getInquiryById
+);
+
+router.put(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.INQUIRY_UPDATE),
+    updateInquiry
+);
+
+router.delete(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.INQUIRY_DELETE),
+    deleteInquiry
+);
 
 module.exports = router;

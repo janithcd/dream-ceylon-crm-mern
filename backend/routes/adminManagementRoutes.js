@@ -10,17 +10,11 @@ const {
     deleteAdmin,
 } = require("../controllers/adminManagementController");
 
-const {
-    protect,
-} = require("../middleware/authMiddleware");
-
+const { protect } = require("../middleware/authMiddleware");
 const {
     authorizePermissions,
 } = require("../middleware/permissionMiddleware");
-
-const {
-    PERMISSIONS,
-} = require("../config/permissions");
+const { PERMISSIONS } = require("../config/permissions");
 
 const router = express.Router();
 

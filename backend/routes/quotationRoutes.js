@@ -1,6 +1,8 @@
 const express = require("express");
 
-const { generateQuotationPdf } = require("../controllers/quotationController");
+const {
+    generateQuotationPdf,
+} = require("../controllers/quotationController");
 
 const {
     createQuotation,
@@ -15,19 +17,63 @@ const {
 } = require("../controllers/quotationConversionController");
 
 const { protect } = require("../middleware/authMiddleware");
-
+const {
+    authorizePermissions,
+} = require("../middleware/permissionMiddleware");
+const { PERMISSIONS } = require("../config/permissions");
 
 const router = express.Router();
 
-router.post("/pdf", protect, generateQuotationPdf);
+router.post(
+    "/pdf",
+    protect,
+    authorizePermissions(
+        PERMISSIONS.QUOTATION_VIEW,
+        PERMISSIONS.PDF_GENERATE
+    ),
+    generateQuotationPdf
+);
 
-router.post("/", protect, createQuotation);
-router.get("/", protect, getQuotations);
+router.post(
+    "/",
+    protect,
+    authorizePermissions(PERMISSIONS.QUOTATION_CREATE),
+    createQuotation
+);
 
-router.get("/:id", protect, getQuotationById);
-router.put("/:id", protect, updateQuotation);
-router.delete("/:id", protect, deleteQuotation);
+router.get(
+    "/",
+    protect,
+    authorizePermissions(PERMISSIONS.QUOTATION_VIEW),
+    getQuotations
+);
 
-router.post("/:id/convert-to-booking", protect, convertQuotationToBooking);
+router.post(
+    "/:id/convert-to-booking",
+    protect,
+    authorizePermissions(PERMISSIONS.QUOTATION_CONVERT),
+    convertQuotationToBooking
+);
+
+router.get(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.QUOTATION_VIEW),
+    getQuotationById
+);
+
+router.put(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.QUOTATION_UPDATE),
+    updateQuotation
+);
+
+router.delete(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.QUOTATION_DELETE),
+    deleteQuotation
+);
 
 module.exports = router;

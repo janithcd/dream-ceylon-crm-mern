@@ -9,15 +9,46 @@ const {
 } = require("../controllers/packageController");
 
 const { protect } = require("../middleware/authMiddleware");
+const {
+    authorizePermissions,
+} = require("../middleware/permissionMiddleware");
+const { PERMISSIONS } = require("../config/permissions");
 
 const router = express.Router();
 
-router.route("/").post(protect, createPackage).get(protect, getPackages);
+router.post(
+    "/",
+    protect,
+    authorizePermissions(PERMISSIONS.PACKAGE_MANAGE),
+    createPackage
+);
 
-router
-    .route("/:id")
-    .get(protect, getPackageById)
-    .put(protect, updatePackage)
-    .delete(protect, deletePackage);
+router.get(
+    "/",
+    protect,
+    authorizePermissions(PERMISSIONS.PACKAGE_VIEW),
+    getPackages
+);
+
+router.get(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.PACKAGE_VIEW),
+    getPackageById
+);
+
+router.put(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.PACKAGE_MANAGE),
+    updatePackage
+);
+
+router.delete(
+    "/:id",
+    protect,
+    authorizePermissions(PERMISSIONS.PACKAGE_MANAGE),
+    deletePackage
+);
 
 module.exports = router;
