@@ -11,6 +11,7 @@ import {
 } from "react-icons/fa";
 import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
+import PermissionGuard from "../components/PermissionGuard";
 const initialFormState = {
     fullName: "",
     email: "",
@@ -326,26 +327,30 @@ const Inquiries = () => {
                 </div>
 
                 <div className="d-flex gap-2">
-                    <button
-                        className="btn btn-success"
-                        onClick={handleExportCsv}
-                        disabled={exportLoading}
-                    >
-                        <FaFileCsv className="me-2" />
-                        {exportLoading ? "Exporting..." : "Export CSV"}
-                    </button>
+                    <PermissionGuard permission="report.export">
+                        <button
+                            className="btn btn-success"
+                            onClick={handleExportCsv}
+                            disabled={exportLoading}
+                        >
+                            <FaFileCsv className="me-2" />
+                            {exportLoading ? "Exporting..." : "Export CSV"}
+                        </button>
+                    </PermissionGuard>
 
-                    <button
-                        className="btn btn-primary"
-                        onClick={() => {
-                            setShowForm((prev) => !prev);
-                            setEditingId(null);
-                            setFormData(initialFormState);
-                        }}
-                    >
-                        <FaPlus className="me-2" />
-                        Add Inquiry
-                    </button>
+                    <PermissionGuard permission="inquiry.create">
+                        <button
+                            className="btn btn-primary"
+                            onClick={() => {
+                                setShowForm((prev) => !prev);
+                                setEditingId(null);
+                                setFormData(initialFormState);
+                            }}
+                        >
+                            <FaPlus className="me-2" />
+                            Add Inquiry
+                        </button>
+                    </PermissionGuard>
                 </div>
             </div>
 
@@ -541,17 +546,19 @@ const Inquiries = () => {
                             </div>
 
                             <div className="d-flex gap-2 mt-4">
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={formLoading}
-                                >
-                                    {formLoading
-                                        ? "Saving..."
-                                        : editingId
-                                            ? "Update Inquiry"
-                                            : "Save Inquiry"}
-                                </button>
+                                <PermissionGuard permission={editingId ? "inquiry.update" : "inquiry.create"}>
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary"
+                                        disabled={formLoading}
+                                    >
+                                        {formLoading
+                                            ? "Saving..."
+                                            : editingId
+                                                ? "Update Inquiry"
+                                                : "Save Inquiry"}
+                                    </button>
+                                </PermissionGuard>
 
                                 <button
                                     type="button"
@@ -714,41 +721,49 @@ const Inquiries = () => {
 
                                         <td className="text-end">
                                             <div className="d-flex justify-content-end gap-2">
-                                                <button
-                                                    className="btn btn-sm btn-outline-warning"
-                                                    onClick={() =>
-                                                        navigate(`/follow-ups?inquiry=${inquiry._id}`)
-                                                    }
-                                                    title="Create follow-up"
-                                                >
-                                                    <FaBell />
-                                                </button>
+                                                <PermissionGuard permission="followUp.manage">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-warning"
+                                                        onClick={() =>
+                                                            navigate(`/follow-ups?inquiry=${inquiry._id}`)
+                                                        }
+                                                        title="Create follow-up"
+                                                    >
+                                                        <FaBell />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-success"
-                                                    onClick={() =>
-                                                        navigate(`/quotations?inquiry=${inquiry._id}`)
-                                                    }
-                                                    title="Create quotation"
-                                                >
-                                                    <FaFileInvoiceDollar />
-                                                </button>
+                                                <PermissionGuard permission="quotation.create">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-success"
+                                                        onClick={() =>
+                                                            navigate(`/quotations?inquiry=${inquiry._id}`)
+                                                        }
+                                                        title="Create quotation"
+                                                    >
+                                                        <FaFileInvoiceDollar />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-primary"
-                                                    onClick={() => handleEdit(inquiry)}
-                                                    title="Edit inquiry"
-                                                >
-                                                    <FaEdit />
-                                                </button>
+                                                <PermissionGuard permission="inquiry.update">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-primary"
+                                                        onClick={() => handleEdit(inquiry)}
+                                                        title="Edit inquiry"
+                                                    >
+                                                        <FaEdit />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-danger"
-                                                    onClick={() => handleDelete(inquiry._id)}
-                                                    title="Delete inquiry"
-                                                >
-                                                    <FaTrash />
-                                                </button>
+                                                <PermissionGuard permission="inquiry.delete">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        onClick={() => handleDelete(inquiry._id)}
+                                                        title="Delete inquiry"
+                                                    >
+                                                        <FaTrash />
+                                                    </button>
+                                                </PermissionGuard>
                                             </div>
                                         </td>
                                     </tr>

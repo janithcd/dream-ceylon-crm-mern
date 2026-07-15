@@ -14,6 +14,7 @@ import {
 } from "react-icons/fa";
 import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
+import PermissionGuard from "../components/PermissionGuard";
 const formatDate = (value) => {
     if (!value) {
         return "-";
@@ -359,13 +360,15 @@ const Customers = () => {
                     </p>
                 </div>
 
-                <button
-                    className="btn btn-outline-success"
-                    onClick={() => navigate("/follow-ups")}
-                >
-                    <FaBell className="me-2" />
-                    Manage Follow-Ups
-                </button>
+                <PermissionGuard permission="followUp.view">
+                    <button
+                        className="btn btn-outline-success"
+                        onClick={() => navigate("/follow-ups")}
+                    >
+                        <FaBell className="me-2" />
+                        Manage Follow-Ups
+                    </button>
+                </PermissionGuard>
 
             </div>
 
@@ -729,25 +732,29 @@ const Customers = () => {
 
                                             <td className="text-end">
                                                 <div className="d-flex justify-content-end gap-2">
-                                                    <button
-                                                        className="btn btn-sm btn-outline-warning"
-                                                        onClick={() =>
-                                                            navigate(
-                                                                `/follow-ups?quotation=${quotation._id}`
-                                                            )
-                                                        }
-                                                    >
-                                                        <FaBell />
-                                                    </button>
+                                                    <PermissionGuard permission="followUp.manage">
+                                                        <button
+                                                            className="btn btn-sm btn-outline-warning"
+                                                            onClick={() =>
+                                                                navigate(
+                                                                    `/follow-ups?quotation=${quotation._id}`
+                                                                )
+                                                            }
+                                                        >
+                                                            <FaBell />
+                                                        </button>
+                                                    </PermissionGuard>
 
-                                                    <button
-                                                        className="btn btn-sm btn-outline-primary"
-                                                        onClick={() =>
-                                                            navigate(`/quotations?edit=${quotation._id}`)
-                                                        }
-                                                    >
-                                                        Edit
-                                                    </button>
+                                                    <PermissionGuard permission="quotation.update">
+                                                        <button
+                                                            className="btn btn-sm btn-outline-primary"
+                                                            onClick={() =>
+                                                                navigate(`/quotations?edit=${quotation._id}`)
+                                                            }
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                    </PermissionGuard>
                                                 </div>
                                             </td>
                                         </tr>
@@ -959,10 +966,12 @@ const Customers = () => {
                             <FaUsers className="text-success" />
                             <h5 className="fw-bold mb-0">Search Results</h5>
                         </div>
-                        <button className="btn btn-success mb-1" onClick={handleExportProfileCsv}>
-                            <FaFileCsv className="me-2" />
-                            Export Profile CSV
-                        </button>
+                        <PermissionGuard permission="report.export">
+                            <button className="btn btn-success mb-1" onClick={handleExportProfileCsv}>
+                                <FaFileCsv className="me-2" />
+                                Export Profile CSV
+                            </button>
+                        </PermissionGuard>
                         <div className="table-responsive">
                             <table className="table align-middle mb-0">
                                 <thead>

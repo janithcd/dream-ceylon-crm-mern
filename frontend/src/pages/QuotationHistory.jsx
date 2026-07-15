@@ -12,6 +12,7 @@ import {
 } from "react-icons/fa";
 import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
+import PermissionGuard from "../components/PermissionGuard";
 const statusOptions = ["Draft", "Sent", "Accepted", "Rejected", "Expired"];
 const currencyOptions = ["USD", "LKR", "EUR", "GBP"];
 
@@ -473,23 +474,25 @@ const QuotationHistory = () => {
                         bookings.
                     </p>
                 </div>
-<div>
-    <div className="badge bg-success-subtle text-success px-3 py-2 rounded-pill">
-    {pagination.totalQuotations} quotations
+                <div>
+                    <div className="badge bg-success-subtle text-success px-3 py-2 rounded-pill">
+                        {pagination.totalQuotations} quotations
 
 
-</div>
-    <div className="mb-2 mt-2">
-    <button
-        className="btn btn-success"
-        onClick={handleExportCsv}
-        disabled={exportLoading}
-    >
-        <FaFileCsv className="me-2" />
-        {exportLoading ? "Exporting..." : "Export CSV"}
-    </button>
-</div>
-</div>
+                    </div>
+                    <div className="mb-2 mt-2">
+                        <PermissionGuard permission="report.export">
+                            <button
+                                className="btn btn-success"
+                                onClick={handleExportCsv}
+                                disabled={exportLoading}
+                            >
+                                <FaFileCsv className="me-2" />
+                                {exportLoading ? "Exporting..." : "Export CSV"}
+                            </button>
+                        </PermissionGuard>
+                    </div>
+                </div>
 
 
 
@@ -666,20 +669,22 @@ const QuotationHistory = () => {
                           {quotation.status}
                         </span>
 
-                                            <select
-                                                className="form-select form-select-sm"
-                                                value={quotation.status}
-                                                disabled={statusLoadingId === quotation._id}
-                                                onChange={(e) =>
-                                                    handleStatusChange(quotation, e.target.value)
-                                                }
-                                            >
-                                                {statusOptions.map((item) => (
-                                                    <option key={item} value={item}>
-                                                        {item}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                            <PermissionGuard permission="quotation.update">
+                                                <select
+                                                    className="form-select form-select-sm"
+                                                    value={quotation.status}
+                                                    disabled={statusLoadingId === quotation._id}
+                                                    onChange={(e) =>
+                                                        handleStatusChange(quotation, e.target.value)
+                                                    }
+                                                >
+                                                    {statusOptions.map((item) => (
+                                                        <option key={item} value={item}>
+                                                            {item}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </PermissionGuard>
                                         </td>
 
                                         <td>
@@ -691,57 +696,67 @@ const QuotationHistory = () => {
 
                                         <td>
                                             <div className="d-flex justify-content-end gap-2">
-                                                <button
-                                                    className="btn btn-sm btn-outline-warning"
-                                                    onClick={() => navigate(`/follow-ups?quotation=${quotation._id}`)}
-                                                    title="Create follow-up"
-                                                >
-                                                    <FaBell />
-                                                </button>
+                                                <PermissionGuard permission="followUp.manage">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-warning"
+                                                        onClick={() => navigate(`/follow-ups?quotation=${quotation._id}`)}
+                                                        title="Create follow-up"
+                                                    >
+                                                        <FaBell />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-success"
-                                                    onClick={() => handleDownloadPdf(quotation)}
-                                                    disabled={pdfLoadingId === quotation._id}
-                                                    title="Download PDF"
-                                                >
-                                                    <FaDownload />
-                                                </button>
+                                                <PermissionGuard permission="pdf.generate">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-success"
+                                                        onClick={() => handleDownloadPdf(quotation)}
+                                                        disabled={pdfLoadingId === quotation._id}
+                                                        title="Download PDF"
+                                                    >
+                                                        <FaDownload />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-primary"
-                                                    onClick={() =>
-                                                        navigate(`/quotations?edit=${quotation._id}`)
-                                                    }
-                                                    title="Edit quotation"
-                                                >
-                                                    <FaEdit />
-                                                </button>
+                                                <PermissionGuard permission="quotation.update">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-primary"
+                                                        onClick={() =>
+                                                            navigate(`/quotations?edit=${quotation._id}`)
+                                                        }
+                                                        title="Edit quotation"
+                                                    >
+                                                        <FaEdit />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-dark"
-                                                    onClick={() => handleConvertToBooking(quotation)}
-                                                    disabled={
-                                                        convertLoadingId === quotation._id ||
-                                                        Boolean(quotation.booking)
-                                                    }
-                                                    title={
-                                                        quotation.booking
-                                                            ? "Already converted"
-                                                            : "Convert to booking"
-                                                    }
-                                                >
-                                                    <FaCalendarCheck />
-                                                </button>
+                                                <PermissionGuard permission="quotation.convert">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-dark"
+                                                        onClick={() => handleConvertToBooking(quotation)}
+                                                        disabled={
+                                                            convertLoadingId === quotation._id ||
+                                                            Boolean(quotation.booking)
+                                                        }
+                                                        title={
+                                                            quotation.booking
+                                                                ? "Already converted"
+                                                                : "Convert to booking"
+                                                        }
+                                                    >
+                                                        <FaCalendarCheck />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-danger"
-                                                    onClick={() => handleDelete(quotation._id)}
-                                                    disabled={deleteLoadingId === quotation._id}
-                                                    title="Delete"
-                                                >
-                                                    <FaTrash />
-                                                </button>
+                                                <PermissionGuard permission="quotation.delete">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        onClick={() => handleDelete(quotation._id)}
+                                                        disabled={deleteLoadingId === quotation._id}
+                                                        title="Delete"
+                                                    >
+                                                        <FaTrash />
+                                                    </button>
+                                                </PermissionGuard>
                                             </div>
                                         </td>
                                     </tr>

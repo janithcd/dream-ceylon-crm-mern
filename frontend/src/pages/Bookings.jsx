@@ -14,6 +14,7 @@ import {
 import api from "../api/axios";
 import BookingPaymentsModal from "../components/BookingPaymentsModal";
 import { exportToCsv } from "../utils/csvExport";
+import PermissionGuard from "../components/PermissionGuard";
 
 const initialFormState = {
     inquiry: "",
@@ -497,26 +498,30 @@ const Bookings = () => {
                 </div>
 
                 <div className="d-flex gap-2">
-                    <button
-                        className="btn btn-success"
-                        onClick={handleExportCsv}
-                        disabled={exportLoading}
-                    >
-                        <FaFileCsv className="me-2" />
-                        {exportLoading ? "Exporting..." : "Export CSV"}
-                    </button>
+                    <PermissionGuard permission="report.export">
+                        <button
+                            className="btn btn-success"
+                            onClick={handleExportCsv}
+                            disabled={exportLoading}
+                        >
+                            <FaFileCsv className="me-2" />
+                            {exportLoading ? "Exporting..." : "Export CSV"}
+                        </button>
+                    </PermissionGuard>
 
-                    <button
-                        className="btn btn-primary"
-                        onClick={() => {
-                            setShowForm((prev) => !prev);
-                            setEditingId(null);
-                            setFormData(initialFormState);
-                        }}
-                    >
-                        <FaPlus className="me-2" />
-                        Add Booking
-                    </button>
+                    <PermissionGuard permission="booking.create">
+                        <button
+                            className="btn btn-primary"
+                            onClick={() => {
+                                setShowForm((prev) => !prev);
+                                setEditingId(null);
+                                setFormData(initialFormState);
+                            }}
+                        >
+                            <FaPlus className="me-2" />
+                            Add Booking
+                        </button>
+                    </PermissionGuard>
                 </div>
             </div>
 
@@ -809,17 +814,19 @@ const Bookings = () => {
                             </div>
 
                             <div className="d-flex gap-2 mt-4">
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={formLoading}
-                                >
-                                    {formLoading
-                                        ? "Saving..."
-                                        : editingId
-                                            ? "Update Booking"
-                                            : "Save Booking"}
-                                </button>
+                                <PermissionGuard permission={editingId ? "booking.update" : "booking.create"}>
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary"
+                                        disabled={formLoading}
+                                    >
+                                        {formLoading
+                                            ? "Saving..."
+                                            : editingId
+                                                ? "Update Booking"
+                                                : "Save Booking"}
+                                    </button>
+                                </PermissionGuard>
 
                                 <button
                                     type="button"
@@ -999,65 +1006,77 @@ const Bookings = () => {
 
                                         <td className="text-end">
                                             <div className="d-flex justify-content-end gap-2">
-                                                <button
-                                                    className="btn btn-sm btn-outline-warning"
-                                                    onClick={() =>
-                                                        navigate(`/follow-ups?booking=${booking._id}`)
-                                                    }
-                                                    title="Create follow-up"
-                                                >
-                                                    <FaBell />
-                                                </button>
+                                                <PermissionGuard permission="followUp.manage">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-warning"
+                                                        onClick={() =>
+                                                            navigate(`/follow-ups?booking=${booking._id}`)
+                                                        }
+                                                        title="Create follow-up"
+                                                    >
+                                                        <FaBell />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-warning"
-                                                    onClick={() => setSelectedPaymentBooking(booking)}
-                                                    title="Payment history"
-                                                >
-                                                    <FaWallet />
-                                                </button>
+                                                <PermissionGuard permission="payment.view">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-warning"
+                                                        onClick={() => setSelectedPaymentBooking(booking)}
+                                                        title="Payment history"
+                                                    >
+                                                        <FaWallet />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-success"
-                                                    onClick={() =>
-                                                        handleDownloadBookingPdf(booking, "invoice")
-                                                    }
-                                                    disabled={
-                                                        pdfLoadingKey === `invoice-${booking._id}`
-                                                    }
-                                                    title="Download invoice PDF"
-                                                >
-                                                    <FaFileInvoiceDollar />
-                                                </button>
+                                                <PermissionGuard permission="pdf.generate">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-success"
+                                                        onClick={() =>
+                                                            handleDownloadBookingPdf(booking, "invoice")
+                                                        }
+                                                        disabled={
+                                                            pdfLoadingKey === `invoice-${booking._id}`
+                                                        }
+                                                        title="Download invoice PDF"
+                                                    >
+                                                        <FaFileInvoiceDollar />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-dark"
-                                                    onClick={() =>
-                                                        handleDownloadBookingPdf(booking, "receipt")
-                                                    }
-                                                    disabled={
-                                                        pdfLoadingKey === `receipt-${booking._id}`
-                                                    }
-                                                    title="Download receipt PDF"
-                                                >
-                                                    <FaReceipt />
-                                                </button>
+                                                <PermissionGuard permission="pdf.generate">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-dark"
+                                                        onClick={() =>
+                                                            handleDownloadBookingPdf(booking, "receipt")
+                                                        }
+                                                        disabled={
+                                                            pdfLoadingKey === `receipt-${booking._id}`
+                                                        }
+                                                        title="Download receipt PDF"
+                                                    >
+                                                        <FaReceipt />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-primary"
-                                                    onClick={() => handleEdit(booking)}
-                                                    title="Edit booking"
-                                                >
-                                                    <FaEdit />
-                                                </button>
+                                                <PermissionGuard permission="booking.update">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-primary"
+                                                        onClick={() => handleEdit(booking)}
+                                                        title="Edit booking"
+                                                    >
+                                                        <FaEdit />
+                                                    </button>
+                                                </PermissionGuard>
 
-                                                <button
-                                                    className="btn btn-sm btn-outline-danger"
-                                                    onClick={() => handleDelete(booking._id)}
-                                                    title="Delete booking"
-                                                >
-                                                    <FaTrash />
-                                                </button>
+                                                <PermissionGuard permission="booking.delete">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        onClick={() => handleDelete(booking._id)}
+                                                        title="Delete booking"
+                                                    >
+                                                        <FaTrash />
+                                                    </button>
+                                                </PermissionGuard>
                                             </div>
                                         </td>
                                     </tr>
@@ -1091,13 +1110,15 @@ const Bookings = () => {
                 </div>
             </div>
 
-            {selectedPaymentBooking && (
-                <BookingPaymentsModal
-                    booking={selectedPaymentBooking}
-                    onClose={() => setSelectedPaymentBooking(null)}
-                    onPaymentChanged={fetchBookings}
-                />
-            )}
+            <PermissionGuard permission="payment.view">
+                {selectedPaymentBooking && (
+                    <BookingPaymentsModal
+                        booking={selectedPaymentBooking}
+                        onClose={() => setSelectedPaymentBooking(null)}
+                        onPaymentChanged={fetchBookings}
+                    />
+                )}
+            </PermissionGuard>
         </div>
     );
 };

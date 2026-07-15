@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FaEdit, FaPlus, FaSearch, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
+import PermissionGuard from "../components/PermissionGuard";
 
 const initialFormState = {
     name: "",
@@ -182,17 +183,19 @@ const Destinations = () => {
                     </p>
                 </div>
 
-                <button
-                    className="btn btn-primary"
-                    onClick={() => {
-                        setShowForm((prev) => !prev);
-                        setEditingId(null);
-                        setFormData(initialFormState);
-                    }}
-                >
-                    <FaPlus className="me-2" />
-                    Add Destination
-                </button>
+                <PermissionGuard permission="destination.manage">
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => {
+                            setShowForm((prev) => !prev);
+                            setEditingId(null);
+                            setFormData(initialFormState);
+                        }}
+                    >
+                        <FaPlus className="me-2" />
+                        Add Destination
+                    </button>
+                </PermissionGuard>
             </div>
 
             {error && <div className="alert alert-danger">{error}</div>}
@@ -333,17 +336,19 @@ const Destinations = () => {
                             </div>
 
                             <div className="d-flex gap-2 mt-4">
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={formLoading}
-                                >
-                                    {formLoading
-                                        ? "Saving..."
-                                        : editingId
-                                            ? "Update Destination"
-                                            : "Save Destination"}
-                                </button>
+                                <PermissionGuard permission="destination.manage">
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary"
+                                        disabled={formLoading}
+                                    >
+                                        {formLoading
+                                            ? "Saving..."
+                                            : editingId
+                                                ? "Update Destination"
+                                                : "Save Destination"}
+                                    </button>
+                                </PermissionGuard>
 
                                 <button
                                     type="button"
@@ -499,19 +504,23 @@ const Destinations = () => {
                                         </td>
 
                                         <td className="text-end">
-                                            <button
-                                                className="btn btn-sm btn-outline-primary me-2"
-                                                onClick={() => handleEdit(destination)}
-                                            >
-                                                <FaEdit />
-                                            </button>
+                                            <PermissionGuard permission="destination.manage">
+                                                <button
+                                                    className="btn btn-sm btn-outline-primary me-2"
+                                                    onClick={() => handleEdit(destination)}
+                                                >
+                                                    <FaEdit />
+                                                </button>
+                                            </PermissionGuard>
 
-                                            <button
-                                                className="btn btn-sm btn-outline-danger"
-                                                onClick={() => handleDelete(destination._id)}
-                                            >
-                                                <FaTrash />
-                                            </button>
+                                            <PermissionGuard permission="destination.manage">
+                                                <button
+                                                    className="btn btn-sm btn-outline-danger"
+                                                    onClick={() => handleDelete(destination._id)}
+                                                >
+                                                    <FaTrash />
+                                                </button>
+                                            </PermissionGuard>
                                         </td>
                                     </tr>
                                 ))}

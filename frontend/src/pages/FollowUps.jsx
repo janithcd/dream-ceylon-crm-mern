@@ -11,6 +11,7 @@ import {
     FaTrash,
 } from "react-icons/fa";
 import api from "../api/axios";
+import PermissionGuard from "../components/PermissionGuard";
 
 const initialFormState = {
     title: "",
@@ -715,17 +716,19 @@ const FollowUps = () => {
                         Refresh
                     </button>
 
-                    <button
-                        className="btn btn-primary"
-                        onClick={() => {
-                            setShowForm((prev) => !prev);
-                            setEditingId(null);
-                            setFormData(initialFormState);
-                        }}
-                    >
-                        <FaPlus className="me-2" />
-                        Add Follow-Up
-                    </button>
+                    <PermissionGuard permission="followUp.manage">
+                        <button
+                            className="btn btn-primary"
+                            onClick={() => {
+                                setShowForm((prev) => !prev);
+                                setEditingId(null);
+                                setFormData(initialFormState);
+                            }}
+                        >
+                            <FaPlus className="me-2" />
+                            Add Follow-Up
+                        </button>
+                    </PermissionGuard>
                 </div>
             </div>
 
@@ -995,17 +998,19 @@ const FollowUps = () => {
                             </div>
 
                             <div className="d-flex gap-2 mt-4">
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={formLoading}
-                                >
-                                    {formLoading
-                                        ? "Saving..."
-                                        : editingId
-                                            ? "Update Follow-Up"
-                                            : "Save Follow-Up"}
-                                </button>
+                                <PermissionGuard permission="followUp.manage">
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary"
+                                        disabled={formLoading}
+                                    >
+                                        {formLoading
+                                            ? "Saving..."
+                                            : editingId
+                                                ? "Update Follow-Up"
+                                                : "Save Follow-Up"}
+                                    </button>
+                                </PermissionGuard>
 
                                 <button
                                     type="button"
@@ -1240,32 +1245,38 @@ const FollowUps = () => {
                                             <td className="text-end">
                                                 <div className="d-flex justify-content-end gap-2">
                                                     {followUp.status === "Pending" && (
-                                                        <button
-                                                            className="btn btn-sm btn-outline-success"
-                                                            onClick={() => handleComplete(followUp)}
-                                                            disabled={completeLoadingId === followUp._id}
-                                                            title="Mark completed"
-                                                        >
-                                                            <FaCheckCircle />
-                                                        </button>
+                                                        <PermissionGuard permission="followUp.manage">
+                                                            <button
+                                                                className="btn btn-sm btn-outline-success"
+                                                                onClick={() => handleComplete(followUp)}
+                                                                disabled={completeLoadingId === followUp._id}
+                                                                title="Mark completed"
+                                                            >
+                                                                <FaCheckCircle />
+                                                            </button>
+                                                        </PermissionGuard>
                                                     )}
 
-                                                    <button
-                                                        className="btn btn-sm btn-outline-primary"
-                                                        onClick={() => handleEdit(followUp)}
-                                                        title="Edit follow-up"
-                                                    >
-                                                        <FaEdit />
-                                                    </button>
+                                                    <PermissionGuard permission="followUp.manage">
+                                                        <button
+                                                            className="btn btn-sm btn-outline-primary"
+                                                            onClick={() => handleEdit(followUp)}
+                                                            title="Edit follow-up"
+                                                        >
+                                                            <FaEdit />
+                                                        </button>
+                                                    </PermissionGuard>
 
-                                                    <button
-                                                        className="btn btn-sm btn-outline-danger"
-                                                        onClick={() => handleDelete(followUp._id)}
-                                                        disabled={deleteLoadingId === followUp._id}
-                                                        title="Delete follow-up"
-                                                    >
-                                                        <FaTrash />
-                                                    </button>
+                                                    <PermissionGuard permission="followUp.manage">
+                                                        <button
+                                                            className="btn btn-sm btn-outline-danger"
+                                                            onClick={() => handleDelete(followUp._id)}
+                                                            disabled={deleteLoadingId === followUp._id}
+                                                            title="Delete follow-up"
+                                                        >
+                                                            <FaTrash />
+                                                        </button>
+                                                    </PermissionGuard>
                                                 </div>
                                             </td>
                                         </tr>

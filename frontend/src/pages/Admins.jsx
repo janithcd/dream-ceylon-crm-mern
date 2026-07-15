@@ -1,579 +1,504 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-    FaCheckCircle,
-    FaEdit,
-    FaExclamationTriangle,
-    FaKey,
-    FaSave,
-    FaSearch,
-    FaShieldAlt,
+    FaCalendarAlt,
+    FaChevronLeft,
+    FaChevronRight,
+    FaEye,
+    FaFilter,
     FaSyncAlt,
     FaTimes,
-    FaToggleOff,
-    FaToggleOn,
-    FaTrash,
-    FaUserPlus,
-    FaUsersCog,
 } from "react-icons/fa";
-
 import api from "../api/axios";
-import {
-    PERMISSION_GROUPS,
-    ROLE_OPTIONS,
-    STATUS_OPTIONS,
-} from "../config/permissions";
 
-const initialFilters = {
-    keyword: "",
-    role: "",
-    status: "",
-};
+const bookingStatusOptions = [
+    "Pending",
+    "Confirmed",
+    "In Progress",
+    "Completed",
+    "Cancelled",
+];
 
-const initialAdminForm = {
-    name: "",
-    email: "",
-    password: "",
-    role: "Viewer",
-    status: "Active",
-    customPermissions: [],
-};
+const vehicleTypeOptions = ["Car", "SUV", "Van", "Mini Bus", "Other"];
 
-const formatDateTime = (value) => {
+const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+
+const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+const formatDate = (value) => {
     if (!value) {
-        return "Never";
+        return "-";
     }
 
     const date = new Date(value);
 
     if (Number.isNaN(date.getTime())) {
-        return "Never";
+        return "-";
     }
 
-    return date.toLocaleString("en-US", {
+    return date.toLocaleDateString("en-US", {
         year: "numeric",
         month: "short",
         day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
     });
 };
 
-const getRoleBadgeClass = (role) => {
-    switch (role) {
-        case "Super Admin":
-            return "text-bg-danger";
-        case "Manager":
-            return "text-bg-primary";
-        case "Sales":
-            return "text-bg-success";
-        case "Finance":
-            return "text-bg-warning";
-        case "Viewer":
-            return "text-bg-secondary";
+const formatMoney = (amount, currency = "USD") => {
+    const number = Number(amount);
+
+    return `${currency} ${(Number.isFinite(number) ? number : 0).toLocaleString(
+        "en-US",
+        {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }
+    )}`;
+};
+
+const getDateKey = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+};
+
+const normalizeDateOnly = (value) => {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return null;
+    }
+
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+};
+
+const isDateBetween = (date, startDate, endDate) => {
+    const current = normalizeDateOnly(date);
+    const start = normalizeDateOnly(startDate);
+    const end = normalizeDateOnly(endDate || startDate);
+
+    if (!current || !start || !end) {
+        return false;
+    }
+
+    return current >= start && current <= end;
+};
+
+const getStatusBadgeClass = (status) => {
+    switch (status) {
+        case "Pending":
+            return "bg-secondary";
+        case "Confirmed":
+            return "bg-success";
+        case "In Progress":
+            return "bg-primary";
+        case "Completed":
+            return "bg-dark";
+        case "Cancelled":
+            return "bg-danger";
         default:
-            return "text-bg-dark";
+            return "bg-secondary";
     }
 };
 
-const Admins = () => {
-    const [admins, setAdmins] = useState([]);
-    const [currentAdmin, setCurrentAdmin] = useState(null);
-    const [availablePermissions, setAvailablePermissions] = useState([]);
+const getPaymentBadgeClass = (status) => {
+    switch (status) {
+        case "Paid":
+            return "bg-success";
+        case "Partially Paid":
+            return "bg-warning text-dark";
+        case "Refunded":
+            return "bg-info";
+        case "Pending":
+            return "bg-secondary";
+        default:
+            return "bg-secondary";
+    }
+};
 
-    const [filters, setFilters] = useState(initialFilters);
-    const [activeFilters, setActiveFilters] = useState(initialFilters);
+const buildCalendarDays = (selectedDate) => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
 
-    const [page, setPage] = useState(1);
-    const [totalPages, setTotalPages] = useState(1);
-    const [totalAdmins, setTotalAdmins] = useState(0);
+    const firstDayOfMonth = new Date(year, month, 1);
+    const lastDayOfMonth = new Date(year, month + 1, 0);
 
-    const [loading, setLoading] = useState(true);
-    const [saving, setSaving] = useState(false);
-    const [actionLoadingId, setActionLoadingId] = useState("");
+    const calendarStart = new Date(firstDayOfMonth);
+    calendarStart.setDate(calendarStart.getDate() - calendarStart.getDay());
 
-    const [error, setError] = useState("");
-    const [success, setSuccess] = useState("");
+    const calendarEnd = new Date(lastDayOfMonth);
+    calendarEnd.setDate(calendarEnd.getDate() + (6 - calendarEnd.getDay()));
 
-    const [showAdminModal, setShowAdminModal] = useState(false);
-    const [adminModalMode, setAdminModalMode] = useState("create");
-    const [selectedAdminId, setSelectedAdminId] = useState("");
-    const [adminForm, setAdminForm] = useState(initialAdminForm);
+    const days = [];
+    const currentDate = new Date(calendarStart);
 
-    const [showPasswordModal, setShowPasswordModal] = useState(false);
-    const [passwordAdmin, setPasswordAdmin] = useState(null);
-    const [newPassword, setNewPassword] = useState("");
-    const [confirmPassword, setConfirmPassword] = useState("");
+    while (currentDate <= calendarEnd) {
+        days.push(new Date(currentDate));
+        currentDate.setDate(currentDate.getDate() + 1);
+    }
 
-    const permissionSet = useMemo(
-        () => new Set(availablePermissions),
-        [availablePermissions]
+    return days;
+};
+
+const BookingDetailsPanel = ({ booking, onClose }) => {
+    if (!booking) {
+        return null;
+    }
+
+    const balance =
+        Number(booking.totalPrice || 0) - Number(booking.advancePayment || 0);
+
+    return (
+        <div
+            className="position-fixed top-0 start-0 w-100 h-100"
+            style={{
+                background: "rgba(15, 23, 42, 0.45)",
+                zIndex: 1050,
+                overflowY: "auto",
+            }}
+        >
+            <div className="container py-5">
+                <div className="row justify-content-center">
+                    <div className="col-lg-7">
+                        <div className="card border-0 shadow-lg rounded-4">
+                            <div className="card-body p-4">
+                                <div className="d-flex justify-content-between align-items-start gap-3 mb-4">
+                                    <div>
+                                        <h4 className="fw-bold mb-1">{booking.bookingCode}</h4>
+                                        <p className="text-muted mb-0">
+                                            {booking.customer?.fullName || "Client name not available"}
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        className="btn btn-sm btn-outline-secondary"
+                                        onClick={onClose}
+                                    >
+                                        <FaTimes />
+                                    </button>
+                                </div>
+
+                                <div className="row g-3 mb-4">
+                                    <div className="col-md-6">
+                                        <div className="border rounded-4 p-3 h-100">
+                                            <small className="text-muted">Client</small>
+                                            <h6 className="fw-bold mb-1">
+                                                {booking.customer?.fullName || "-"}
+                                            </h6>
+                                            <div className="text-muted small">
+                                                {booking.customer?.email || "-"}
+                                            </div>
+                                            <div className="text-muted small">
+                                                {booking.customer?.whatsappNumber || "-"}
+                                            </div>
+                                            <div className="text-muted small">
+                                                {booking.customer?.country || "-"}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="col-md-6">
+                                        <div className="border rounded-4 p-3 h-100">
+                                            <small className="text-muted">Travel Dates</small>
+                                            <h6 className="fw-bold mb-1">
+                                                {formatDate(booking.travelStartDate)}
+                                            </h6>
+                                            <div className="text-muted small">
+                                                to {formatDate(booking.travelEndDate)}
+                                            </div>
+                                            <div className="text-muted small">
+                                                {booking.numberOfTravelers || 0} travelers ·{" "}
+                                                {booking.vehicleType || "-"}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="row g-3 mb-4">
+                                    <div className="col-md-4">
+                                        <div className="border rounded-4 p-3 text-center">
+                                            <small className="text-muted">Total Price</small>
+                                            <h6 className="fw-bold text-success mb-0">
+                                                {formatMoney(booking.totalPrice, booking.currency)}
+                                            </h6>
+                                        </div>
+                                    </div>
+
+                                    <div className="col-md-4">
+                                        <div className="border rounded-4 p-3 text-center">
+                                            <small className="text-muted">Advance</small>
+                                            <h6 className="fw-bold mb-0">
+                                                {formatMoney(booking.advancePayment, booking.currency)}
+                                            </h6>
+                                        </div>
+                                    </div>
+
+                                    <div className="col-md-4">
+                                        <div className="border rounded-4 p-3 text-center">
+                                            <small className="text-muted">Balance</small>
+                                            <h6 className="fw-bold text-danger mb-0">
+                                                {formatMoney(balance, booking.currency)}
+                                            </h6>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="d-flex gap-2 flex-wrap mb-4">
+                  <span
+                      className={`badge ${getStatusBadgeClass(
+                          booking.bookingStatus
+                      )}`}
+                  >
+                    {booking.bookingStatus}
+                  </span>
+
+                                    <span
+                                        className={`badge ${getPaymentBadgeClass(
+                                            booking.paymentStatus
+                                        )}`}
+                                    >
+                    {booking.paymentStatus}
+                  </span>
+                                </div>
+
+                                {booking.selectedPackage && (
+                                    <div className="border rounded-4 p-3 mb-3">
+                                        <small className="text-muted">Selected Package</small>
+                                        <h6 className="fw-bold mb-0">
+                                            {booking.selectedPackage?.title}
+                                        </h6>
+                                    </div>
+                                )}
+
+                                {booking.specialRequests && (
+                                    <div className="border rounded-4 p-3 mb-3">
+                                        <small className="text-muted">Special Requests</small>
+                                        <p className="mb-0">{booking.specialRequests}</p>
+                                    </div>
+                                )}
+
+                                {booking.adminNotes && (
+                                    <div className="border rounded-4 p-3">
+                                        <small className="text-muted">Admin Notes</small>
+                                        <p className="mb-0">{booking.adminNotes}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     );
+};
 
-    const visiblePermissionGroups = useMemo(() => {
-        if (permissionSet.size === 0) {
-            return PERMISSION_GROUPS;
-        }
+const BookingCalendar = () => {
+    const [bookings, setBookings] = useState([]);
+    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [bookingStatus, setBookingStatus] = useState("");
+    const [vehicleType, setVehicleType] = useState("");
+    const [selectedBooking, setSelectedBooking] = useState(null);
 
-        return PERMISSION_GROUPS.map((group) => ({
-            ...group,
-            permissions: group.permissions.filter(([permission]) =>
-                permissionSet.has(permission)
-            ),
-        })).filter((group) => group.permissions.length > 0);
-    }, [permissionSet]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    const fetchCurrentAdmin = useCallback(async () => {
-        try {
-            const response = await api.get("/auth/profile");
-            setCurrentAdmin(response.data?.admin || response.data);
-        } catch {
-            setCurrentAdmin(null);
-        }
-    }, []);
-
-    const fetchAdmins = useCallback(async () => {
+    const fetchBookings = async () => {
         try {
             setLoading(true);
             setError("");
 
             const params = {
-                page,
-                limit: 12,
+                page: 1,
+                limit: 500,
             };
 
-            Object.entries(activeFilters).forEach(([key, value]) => {
-                if (value) {
-                    params[key] = value;
-                }
-            });
+            if (bookingStatus) {
+                params.bookingStatus = bookingStatus;
+            }
 
-            const response = await api.get("/admins", { params });
+            if (vehicleType) {
+                params.vehicleType = vehicleType;
+            }
 
-            setAdmins(response.data?.admins || []);
-            setAvailablePermissions(
-                response.data?.availablePermissions || []
-            );
-            setTotalAdmins(response.data?.totalAdmins || 0);
-            setTotalPages(response.data?.totalPages || 1);
+            const response = await api.get("/bookings", { params });
+
+            setBookings(response.data.bookings || []);
         } catch (err) {
             setError(
                 err.response?.data?.message ||
-                "Failed to load admin accounts."
+                err.response?.data?.error ||
+                "Failed to load bookings."
             );
         } finally {
             setLoading(false);
         }
-    }, [page, activeFilters]);
+    };
 
     useEffect(() => {
-        fetchCurrentAdmin();
-    }, [fetchCurrentAdmin]);
+        fetchBookings();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [bookingStatus, vehicleType]);
 
-    useEffect(() => {
-        fetchAdmins();
-    }, [fetchAdmins]);
+    const calendarDays = useMemo(() => {
+        return buildCalendarDays(selectedDate);
+    }, [selectedDate]);
 
-    useEffect(() => {
-        const shouldLockBodyScroll =
-            showAdminModal || showPasswordModal;
+    const currentMonth = selectedDate.getMonth();
+    const currentYear = selectedDate.getFullYear();
 
-        if (!shouldLockBodyScroll) {
-            return undefined;
-        }
+    const calendarSummary = useMemo(() => {
+        const monthBookings = bookings.filter((booking) => {
+            const startDate = normalizeDateOnly(booking.travelStartDate);
+            const endDate = normalizeDateOnly(booking.travelEndDate);
 
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
+            if (!startDate) {
+                return false;
+            }
 
-        return () => {
-            document.body.style.overflow = previousOverflow;
+            const monthStart = new Date(currentYear, currentMonth, 1);
+            const monthEnd = new Date(currentYear, currentMonth + 1, 0);
+
+            return startDate <= monthEnd && (endDate || startDate) >= monthStart;
+        });
+
+        const confirmed = monthBookings.filter(
+            (booking) => booking.bookingStatus === "Confirmed"
+        ).length;
+
+        const inProgress = monthBookings.filter(
+            (booking) => booking.bookingStatus === "In Progress"
+        ).length;
+
+        const completed = monthBookings.filter(
+            (booking) => booking.bookingStatus === "Completed"
+        ).length;
+
+        const cancelled = monthBookings.filter(
+            (booking) => booking.bookingStatus === "Cancelled"
+        ).length;
+
+        return {
+            total: monthBookings.length,
+            confirmed,
+            inProgress,
+            completed,
+            cancelled,
         };
-    }, [showAdminModal, showPasswordModal]);
+    }, [bookings, currentMonth, currentYear]);
 
-    const clearMessages = () => {
-        setError("");
-        setSuccess("");
-    };
-
-    const handleFilterChange = (event) => {
-        const { name, value } = event.target;
-
-        setFilters((previous) => ({
-            ...previous,
-            [name]: value,
-        }));
-    };
-
-    const applyFilters = (event) => {
-        event.preventDefault();
-        setPage(1);
-        setActiveFilters(filters);
-    };
-
-    const resetFilters = () => {
-        setFilters(initialFilters);
-        setActiveFilters(initialFilters);
-        setPage(1);
-    };
-
-    const openCreateModal = () => {
-        clearMessages();
-        setAdminModalMode("create");
-        setSelectedAdminId("");
-        setAdminForm(initialAdminForm);
-        setShowAdminModal(true);
-    };
-
-    const openEditModal = (admin) => {
-        clearMessages();
-        setAdminModalMode("edit");
-        setSelectedAdminId(admin._id);
-        setAdminForm({
-            name: admin.name || "",
-            email: admin.email || "",
-            password: "",
-            role: admin.role || "Viewer",
-            status: admin.status || "Active",
-            customPermissions: Array.isArray(admin.customPermissions)
-                ? admin.customPermissions
-                : [],
-        });
-        setShowAdminModal(true);
-    };
-
-    const closeAdminModal = () => {
-        if (saving) {
-            return;
-        }
-
-        setShowAdminModal(false);
-        setSelectedAdminId("");
-        setAdminForm(initialAdminForm);
-    };
-
-    const handleAdminFormChange = (event) => {
-        const { name, value } = event.target;
-
-        setAdminForm((previous) => ({
-            ...previous,
-            [name]: value,
-        }));
-    };
-
-    const toggleCustomPermission = (permission) => {
-        setAdminForm((previous) => {
-            const exists = previous.customPermissions.includes(permission);
-
-            return {
-                ...previous,
-                customPermissions: exists
-                    ? previous.customPermissions.filter(
-                        (item) => item !== permission
-                    )
-                    : [...previous.customPermissions, permission],
-            };
-        });
-    };
-
-    const selectAllCustomPermissions = () => {
-        const permissions =
-            availablePermissions.length > 0
-                ? availablePermissions
-                : PERMISSION_GROUPS.flatMap((group) =>
-                    group.permissions.map(([permission]) => permission)
-                );
-
-        setAdminForm((previous) => ({
-            ...previous,
-            customPermissions: [...new Set(permissions)],
-        }));
-    };
-
-    const clearCustomPermissions = () => {
-        setAdminForm((previous) => ({
-            ...previous,
-            customPermissions: [],
-        }));
-    };
-
-    const saveAdmin = async (event) => {
-        event.preventDefault();
-        clearMessages();
-
-        if (!adminForm.name.trim()) {
-            setError("Admin name is required.");
-            return;
-        }
-
-        if (!adminForm.email.trim()) {
-            setError("Admin email is required.");
-            return;
-        }
-
-        if (
-            adminModalMode === "create" &&
-            adminForm.password.length < 8
-        ) {
-            setError("Password must contain at least 8 characters.");
-            return;
-        }
-
-        try {
-            setSaving(true);
-
-            const payload = {
-                name: adminForm.name.trim(),
-                email: adminForm.email.trim().toLowerCase(),
-                role: adminForm.role,
-                status: adminForm.status,
-                customPermissions: adminForm.customPermissions,
-            };
-
-            if (adminModalMode === "create") {
-                payload.password = adminForm.password;
-                await api.post("/admins", payload);
-                setSuccess("Admin account created successfully.");
-            } else {
-                await api.put(`/admins/${selectedAdminId}`, payload);
-                setSuccess("Admin account updated successfully.");
-            }
-
-            setShowAdminModal(false);
-            setSelectedAdminId("");
-            setAdminForm(initialAdminForm);
-            await fetchAdmins();
-        } catch (err) {
-            setError(
-                err.response?.data?.message ||
-                `Failed to ${
-                    adminModalMode === "create" ? "create" : "update"
-                } admin account.`
-            );
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const toggleAdminStatus = async (admin) => {
-        clearMessages();
-
-        const nextStatus =
-            admin.status === "Active" ? "Inactive" : "Active";
-
-        const confirmed = window.confirm(
-            `Set ${admin.name}'s account to ${nextStatus}?`
+    const getBookingsForDay = (date) => {
+        return bookings.filter((booking) =>
+            isDateBetween(date, booking.travelStartDate, booking.travelEndDate)
         );
-
-        if (!confirmed) {
-            return;
-        }
-
-        try {
-            setActionLoadingId(admin._id);
-
-            await api.patch(`/admins/${admin._id}/status`, {
-                status: nextStatus,
-            });
-
-            setSuccess(
-                `${admin.name}'s account is now ${nextStatus}.`
-            );
-
-            await fetchAdmins();
-        } catch (err) {
-            setError(
-                err.response?.data?.message ||
-                "Failed to update admin status."
-            );
-        } finally {
-            setActionLoadingId("");
-        }
     };
 
-    const openPasswordResetModal = (admin) => {
-        clearMessages();
-        setPasswordAdmin(admin);
-        setNewPassword("");
-        setConfirmPassword("");
-        setShowPasswordModal(true);
-    };
-
-    const closePasswordModal = () => {
-        if (saving) {
-            return;
-        }
-
-        setShowPasswordModal(false);
-        setPasswordAdmin(null);
-        setNewPassword("");
-        setConfirmPassword("");
-    };
-
-    const resetAdminPassword = async (event) => {
-        event.preventDefault();
-        clearMessages();
-
-        if (newPassword.length < 8) {
-            setError("Password must contain at least 8 characters.");
-            return;
-        }
-
-        if (newPassword !== confirmPassword) {
-            setError("Password confirmation does not match.");
-            return;
-        }
-
-        try {
-            setSaving(true);
-
-            await api.patch(`/admins/${passwordAdmin._id}/password`, {
-                password: newPassword,
-            });
-
-            setSuccess(
-                `Password reset successfully for ${passwordAdmin.name}.`
-            );
-
-            setShowPasswordModal(false);
-            setPasswordAdmin(null);
-            setNewPassword("");
-            setConfirmPassword("");
-        } catch (err) {
-            setError(
-                err.response?.data?.message ||
-                "Failed to reset admin password."
-            );
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const deleteAdmin = async (admin) => {
-        clearMessages();
-
-        const confirmed = window.confirm(
-            `Delete ${admin.name}'s admin account permanently? This cannot be undone.`
+    const goToPreviousMonth = () => {
+        setSelectedDate(
+            new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1)
         );
-
-        if (!confirmed) {
-            return;
-        }
-
-        try {
-            setActionLoadingId(admin._id);
-
-            await api.delete(`/admins/${admin._id}`);
-
-            setSuccess("Admin account deleted successfully.");
-
-            if (admins.length === 1 && page > 1) {
-                setPage((previous) => previous - 1);
-            } else {
-                await fetchAdmins();
-            }
-        } catch (err) {
-            setError(
-                err.response?.data?.message ||
-                "Failed to delete admin account."
-            );
-        } finally {
-            setActionLoadingId("");
-        }
     };
 
-    const refreshPage = async () => {
-        clearMessages();
-        await Promise.all([fetchCurrentAdmin(), fetchAdmins()]);
+    const goToNextMonth = () => {
+        setSelectedDate(
+            new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1)
+        );
     };
 
-    const currentAdminId = String(currentAdmin?._id || "");
+    const goToToday = () => {
+        setSelectedDate(new Date());
+    };
+
+    const handleResetFilters = () => {
+        setBookingStatus("");
+        setVehicleType("");
+    };
 
     return (
         <div>
-            <div className="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3 mb-4">
+            <div className="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
                 <div>
-                    <h2 className="fw-bold mb-1">Admin Management</h2>
+                    <h3 className="fw-bold mb-1">Booking Calendar</h3>
                     <p className="text-muted mb-0">
-                        Create accounts, assign roles and control access to the CRM.
+                        View bookings by travel date and manage monthly tour schedules.
                     </p>
                 </div>
 
                 <div className="d-flex gap-2">
-                    <button
-                        type="button"
-                        className="btn btn-outline-success"
-                        onClick={refreshPage}
-                        disabled={loading}
-                    >
+                    <button className="btn btn-outline-success" onClick={fetchBookings}>
                         <FaSyncAlt className="me-2" />
                         Refresh
                     </button>
 
-                    <button
-                        type="button"
-                        className="btn btn-success"
-                        onClick={openCreateModal}
-                    >
-                        <FaUserPlus className="me-2" />
-                        Add Admin
+                    <button className="btn btn-success" onClick={goToToday}>
+                        Today
                     </button>
                 </div>
             </div>
 
-            {error && (
-                <div className="alert alert-danger d-flex align-items-center gap-2">
-                    <FaExclamationTriangle />
-                    <span>{error}</span>
-                </div>
-            )}
-
-            {success && (
-                <div className="alert alert-success d-flex align-items-center gap-2">
-                    <FaCheckCircle />
-                    <span>{success}</span>
-                </div>
-            )}
+            {error && <div className="alert alert-danger">{error}</div>}
 
             <div className="row g-4 mb-4">
-                <div className="col-md-4">
+                <div className="col-xl-3 col-md-6">
                     <div className="stat-card h-100">
                         <div>
-                            <p className="text-muted mb-1">Total Admins</p>
-                            <h3 className="fw-bold mb-0">{totalAdmins}</h3>
+                            <p className="text-muted mb-1">This Month</p>
+                            <h3 className="fw-bold mb-1">{calendarSummary.total}</h3>
+                            <small className="text-muted">total bookings</small>
                         </div>
                         <div className="stat-icon">
-                            <FaUsersCog />
+                            <FaCalendarAlt />
                         </div>
                     </div>
                 </div>
 
-                <div className="col-md-4">
+                <div className="col-xl-3 col-md-6">
                     <div className="stat-card h-100">
                         <div>
-                            <p className="text-muted mb-1">Active on This Page</p>
-                            <h3 className="fw-bold text-success mb-0">
-                                {
-                                    admins.filter(
-                                        (admin) => admin.status === "Active"
-                                    ).length
-                                }
-                            </h3>
+                            <p className="text-muted mb-1">Confirmed</p>
+                            <h3 className="fw-bold mb-1">{calendarSummary.confirmed}</h3>
+                            <small className="text-muted">confirmed tours</small>
                         </div>
                         <div className="stat-icon">
-                            <FaToggleOn />
+                            <FaCalendarAlt />
                         </div>
                     </div>
                 </div>
 
-                <div className="col-md-4">
+                <div className="col-xl-3 col-md-6">
                     <div className="stat-card h-100">
                         <div>
-                            <p className="text-muted mb-1">Your Role</p>
-                            <h5 className="fw-bold mb-0">
-                                {currentAdmin?.role || "Loading..."}
-                            </h5>
+                            <p className="text-muted mb-1">In Progress</p>
+                            <h3 className="fw-bold mb-1">{calendarSummary.inProgress}</h3>
+                            <small className="text-muted">ongoing tours</small>
                         </div>
                         <div className="stat-icon">
-                            <FaShieldAlt />
+                            <FaCalendarAlt />
+                        </div>
+                    </div>
+                </div>
+
+                <div className="col-xl-3 col-md-6">
+                    <div className="stat-card h-100">
+                        <div>
+                            <p className="text-muted mb-1">Completed</p>
+                            <h3 className="fw-bold mb-1">{calendarSummary.completed}</h3>
+                            <small className="text-muted">completed tours</small>
+                        </div>
+                        <div className="stat-icon">
+                            <FaCalendarAlt />
                         </div>
                     </div>
                 </div>
@@ -581,703 +506,196 @@ const Admins = () => {
 
             <div className="card border-0 shadow-sm rounded-4 mb-4">
                 <div className="card-body p-4">
-                    <form onSubmit={applyFilters}>
-                        <div className="row g-3 align-items-end">
-                            <div className="col-lg-5">
-                                <label className="form-label fw-semibold">
-                                    Search
-                                </label>
+                    <div className="d-flex align-items-center gap-2 mb-3">
+                        <FaFilter className="text-success" />
+                        <h5 className="fw-bold mb-0">Calendar Filters</h5>
+                    </div>
 
-                                <div className="input-group">
-                                    <span className="input-group-text">
-                                        <FaSearch />
-                                    </span>
-                                    <input
-                                        type="text"
-                                        name="keyword"
-                                        className="form-control"
-                                        value={filters.keyword}
-                                        onChange={handleFilterChange}
-                                        placeholder="Search by name or email"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="col-md-4 col-lg-2">
-                                <label className="form-label fw-semibold">
-                                    Role
-                                </label>
-                                <select
-                                    name="role"
-                                    className="form-select"
-                                    value={filters.role}
-                                    onChange={handleFilterChange}
-                                >
-                                    <option value="">All Roles</option>
-                                    {ROLE_OPTIONS.map((role) => (
-                                        <option key={role} value={role}>
-                                            {role}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="col-md-4 col-lg-2">
-                                <label className="form-label fw-semibold">
-                                    Status
-                                </label>
-                                <select
-                                    name="status"
-                                    className="form-select"
-                                    value={filters.status}
-                                    onChange={handleFilterChange}
-                                >
-                                    <option value="">All Statuses</option>
-                                    {STATUS_OPTIONS.map((status) => (
-                                        <option key={status} value={status}>
-                                            {status}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div className="col-md-4 col-lg-3 d-flex gap-2">
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary flex-grow-1"
-                                >
-                                    Apply
-                                </button>
-                                <button
-                                    type="button"
-                                    className="btn btn-outline-secondary"
-                                    onClick={resetFilters}
-                                >
-                                    Reset
-                                </button>
-                            </div>
+                    <div className="row g-3 align-items-end">
+                        <div className="col-lg-4 col-md-6">
+                            <label className="form-label">Booking Status</label>
+                            <select
+                                className="form-select"
+                                value={bookingStatus}
+                                onChange={(e) => setBookingStatus(e.target.value)}
+                            >
+                                <option value="">All Status</option>
+                                {bookingStatusOptions.map((statusOption) => (
+                                    <option key={statusOption} value={statusOption}>
+                                        {statusOption}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
-                    </form>
+
+                        <div className="col-lg-4 col-md-6">
+                            <label className="form-label">Vehicle Type</label>
+                            <select
+                                className="form-select"
+                                value={vehicleType}
+                                onChange={(e) => setVehicleType(e.target.value)}
+                            >
+                                <option value="">All Vehicles</option>
+                                {vehicleTypeOptions.map((vehicleOption) => (
+                                    <option key={vehicleOption} value={vehicleOption}>
+                                        {vehicleOption}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="col-lg-4">
+                            <button
+                                className="btn btn-outline-secondary w-100"
+                                onClick={handleResetFilters}
+                            >
+                                Reset Filters
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <div className="card border-0 shadow-sm rounded-4">
                 <div className="card-body p-4">
-                    <div className="d-flex justify-content-between align-items-center mb-3">
-                        <div>
-                            <h5 className="fw-bold mb-1">Admin Accounts</h5>
-                            <p className="text-muted small mb-0">
-                                {totalAdmins} account{totalAdmins === 1 ? "" : "s"} found
-                            </p>
-                        </div>
-                    </div>
-
-                    {loading ? (
-                        <div className="text-center py-5 text-muted">
-                            Loading admin accounts...
-                        </div>
-                    ) : admins.length === 0 ? (
-                        <div className="text-center py-5 border rounded-4">
-                            <FaUsersCog
-                                size={34}
-                                className="text-muted mb-3"
-                            />
-                            <h6 className="fw-bold">No admin accounts found</h6>
-                            <p className="text-muted mb-0">
-                                Change the filters or create a new account.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="table-responsive">
-                            <table className="table align-middle">
-                                <thead>
-                                <tr>
-                                    <th>Admin</th>
-                                    <th>Role</th>
-                                    <th>Status</th>
-                                    <th>Permissions</th>
-                                    <th>Last Login</th>
-                                    <th className="text-end">Actions</th>
-                                </tr>
-                                </thead>
-
-                                <tbody>
-                                {admins.map((admin) => {
-                                    const isCurrentAdmin =
-                                        String(admin._id) === currentAdminId;
-                                    const isBusy =
-                                        actionLoadingId === admin._id;
-
-                                    return (
-                                        <tr key={admin._id}>
-                                            <td style={{ minWidth: "220px" }}>
-                                                <div className="fw-semibold">
-                                                    {admin.name}
-                                                    {isCurrentAdmin && (
-                                                        <span className="badge text-bg-info ms-2">
-                                                                You
-                                                            </span>
-                                                    )}
-                                                </div>
-                                                <small className="text-muted">
-                                                    {admin.email}
-                                                </small>
-                                            </td>
-
-                                            <td>
-                                                    <span
-                                                        className={`badge ${getRoleBadgeClass(
-                                                            admin.role
-                                                        )}`}
-                                                    >
-                                                        {admin.role}
-                                                    </span>
-                                            </td>
-
-                                            <td>
-                                                    <span
-                                                        className={`badge ${
-                                                            admin.status === "Active"
-                                                                ? "text-bg-success"
-                                                                : "text-bg-secondary"
-                                                        }`}
-                                                    >
-                                                        {admin.status}
-                                                    </span>
-                                            </td>
-
-                                            <td>
-                                                <strong>
-                                                    {admin.permissions?.length || 0}
-                                                </strong>
-                                                <small className="text-muted d-block">
-                                                    {admin.customPermissions?.length || 0} custom
-                                                </small>
-                                            </td>
-
-                                            <td style={{ minWidth: "165px" }}>
-                                                <small>
-                                                    {formatDateTime(
-                                                        admin.lastLoginAt
-                                                    )}
-                                                </small>
-                                            </td>
-
-                                            <td className="text-end">
-                                                <div className="d-inline-flex flex-wrap justify-content-end gap-2">
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-primary"
-                                                        onClick={() =>
-                                                            openEditModal(admin)
-                                                        }
-                                                        disabled={isBusy}
-                                                        title="Edit admin"
-                                                    >
-                                                        <FaEdit />
-                                                    </button>
-
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-warning"
-                                                        onClick={() =>
-                                                            openPasswordResetModal(
-                                                                admin
-                                                            )
-                                                        }
-                                                        disabled={isBusy}
-                                                        title="Reset password"
-                                                    >
-                                                        <FaKey />
-                                                    </button>
-
-                                                    <button
-                                                        type="button"
-                                                        className={`btn btn-sm ${
-                                                            admin.status === "Active"
-                                                                ? "btn-outline-secondary"
-                                                                : "btn-outline-success"
-                                                        }`}
-                                                        onClick={() =>
-                                                            toggleAdminStatus(
-                                                                admin
-                                                            )
-                                                        }
-                                                        disabled={
-                                                            isBusy ||
-                                                            (isCurrentAdmin &&
-                                                                admin.status ===
-                                                                "Active")
-                                                        }
-                                                        title={
-                                                            isCurrentAdmin
-                                                                ? "You cannot disable your own account"
-                                                                : admin.status ===
-                                                                "Active"
-                                                                    ? "Disable admin"
-                                                                    : "Activate admin"
-                                                        }
-                                                    >
-                                                        {admin.status ===
-                                                        "Active" ? (
-                                                            <FaToggleOff />
-                                                        ) : (
-                                                            <FaToggleOn />
-                                                        )}
-                                                    </button>
-
-                                                    <button
-                                                        type="button"
-                                                        className="btn btn-sm btn-outline-danger"
-                                                        onClick={() =>
-                                                            deleteAdmin(admin)
-                                                        }
-                                                        disabled={
-                                                            isBusy ||
-                                                            isCurrentAdmin
-                                                        }
-                                                        title={
-                                                            isCurrentAdmin
-                                                                ? "You cannot delete your own account"
-                                                                : "Delete admin"
-                                                        }
-                                                    >
-                                                        <FaTrash />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-
-                    <div className="d-flex justify-content-between align-items-center mt-4">
+                    <div className="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-4">
                         <button
-                            type="button"
-                            className="btn btn-sm btn-outline-secondary"
-                            disabled={page <= 1 || loading}
-                            onClick={() =>
-                                setPage((previous) => previous - 1)
-                            }
+                            className="btn btn-outline-secondary"
+                            onClick={goToPreviousMonth}
                         >
+                            <FaChevronLeft className="me-2" />
                             Previous
                         </button>
 
-                        <small className="text-muted">
-                            Page {page} of {totalPages}
-                        </small>
+                        <div className="text-center">
+                            <h4 className="fw-bold mb-0">
+                                {monthNames[currentMonth]} {currentYear}
+                            </h4>
+                            <small className="text-muted">
+                                {loading ? "Loading bookings..." : `${bookings.length} bookings loaded`}
+                            </small>
+                        </div>
 
-                        <button
-                            type="button"
-                            className="btn btn-sm btn-outline-secondary"
-                            disabled={page >= totalPages || loading}
-                            onClick={() =>
-                                setPage((previous) => previous + 1)
-                            }
-                        >
+                        <button className="btn btn-outline-secondary" onClick={goToNextMonth}>
                             Next
+                            <FaChevronRight className="ms-2" />
                         </button>
+                    </div>
+
+                    <div className="table-responsive">
+                        <table className="table table-bordered align-top calendar-table mb-0">
+                            <thead className="table-light">
+                            <tr>
+                                {weekDays.map((day) => (
+                                    <th key={day} className="text-center">
+                                        {day}
+                                    </th>
+                                ))}
+                            </tr>
+                            </thead>
+
+                            <tbody>
+                            {Array.from({ length: Math.ceil(calendarDays.length / 7) }).map(
+                                (_, weekIndex) => (
+                                    <tr key={weekIndex}>
+                                        {calendarDays
+                                            .slice(weekIndex * 7, weekIndex * 7 + 7)
+                                            .map((date) => {
+                                                const dayBookings = getBookingsForDay(date);
+                                                const isCurrentMonth =
+                                                    date.getMonth() === currentMonth;
+                                                const isToday =
+                                                    getDateKey(date) === getDateKey(new Date());
+
+                                                return (
+                                                    <td
+                                                        key={getDateKey(date)}
+                                                        style={{
+                                                            minWidth: "150px",
+                                                            height: "145px",
+                                                            background: isCurrentMonth
+                                                                ? "#ffffff"
+                                                                : "#f8fafc",
+                                                        }}
+                                                    >
+                                                        <div className="d-flex justify-content-between align-items-center mb-2">
+                                <span
+                                    className={`fw-bold ${
+                                        isCurrentMonth
+                                            ? "text-dark"
+                                            : "text-muted opacity-50"
+                                    }`}
+                                >
+                                  {date.getDate()}
+                                </span>
+
+                                                            {isToday && (
+                                                                <span className="badge bg-success">Today</span>
+                                                            )}
+                                                        </div>
+
+                                                        <div className="d-flex flex-column gap-1">
+                                                            {dayBookings.slice(0, 3).map((booking) => (
+                                                                <button
+                                                                    key={booking._id}
+                                                                    className="btn btn-sm text-start p-2 border rounded-3 bg-light"
+                                                                    onClick={() => setSelectedBooking(booking)}
+                                                                    title="View booking details"
+                                                                >
+                                                                    <div className="d-flex justify-content-between align-items-center gap-2">
+                                      <span className="fw-semibold small text-truncate">
+                                        {booking.customer?.fullName || "Client"}
+                                      </span>
+                                                                        <FaEye className="text-muted" size={11} />
+                                                                    </div>
+
+                                                                    <div className="d-flex align-items-center gap-1 mt-1">
+                                      <span
+                                          className={`badge ${getStatusBadgeClass(
+                                              booking.bookingStatus
+                                          )}`}
+                                          style={{ fontSize: "0.65rem" }}
+                                      >
+                                        {booking.bookingStatus}
+                                      </span>
+                                                                    </div>
+
+                                                                    <small className="text-muted d-block mt-1">
+                                                                        {booking.vehicleType} ·{" "}
+                                                                        {booking.numberOfTravelers} pax
+                                                                    </small>
+                                                                </button>
+                                                            ))}
+
+                                                            {dayBookings.length > 3 && (
+                                                                <button
+                                                                    className="btn btn-sm btn-outline-secondary"
+                                                                    onClick={() =>
+                                                                        setSelectedBooking(dayBookings[3])
+                                                                    }
+                                                                >
+                                                                    +{dayBookings.length - 3} more
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                );
+                                            })}
+                                    </tr>
+                                )
+                            )}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
-            {showAdminModal && (
-                <>
-                    <div
-                        className="modal fade show d-block"
-                        tabIndex="-1"
-                        role="dialog"
-                        aria-modal="true"
-                        style={{
-                            position: "fixed",
-                            inset: 0,
-                            zIndex: 1055,
-                            overflow: "hidden",
-                            padding: "12px",
-                        }}
-                    >
-                        <div
-                            className="modal-dialog modal-xl"
-                            style={{
-                                width: "100%",
-                                maxWidth: "1200px",
-                                height: "calc(100dvh - 24px)",
-                                maxHeight: "calc(100dvh - 24px)",
-                                margin: "0 auto",
-                            }}
-                        >
-                            <div
-                                className="modal-content border-0 shadow rounded-4"
-                                style={{
-                                    height: "100%",
-                                    maxHeight: "100%",
-                                    overflow: "hidden",
-                                }}
-                            >
-                                <form
-                                    onSubmit={saveAdmin}
-                                    style={{
-                                        height: "100%",
-                                        minHeight: 0,
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        overflow: "hidden",
-                                    }}
-                                >
-                                    <div
-                                        className="modal-header"
-                                        style={{
-                                            flex: "0 0 auto",
-                                        }}
-                                    >
-                                        <div>
-                                            <h5 className="modal-title fw-bold">
-                                                {adminModalMode === "create"
-                                                    ? "Create Admin Account"
-                                                    : "Edit Admin Account"}
-                                            </h5>
-                                            <small className="text-muted">
-                                                Role permissions are granted automatically.
-                                                Custom permissions add extra access.
-                                            </small>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            className="btn btn-sm btn-outline-secondary"
-                                            onClick={closeAdminModal}
-                                            disabled={saving}
-                                        >
-                                            <FaTimes />
-                                        </button>
-                                    </div>
-
-                                    <div
-                                        className="modal-body p-4"
-                                        style={{
-                                            flex: "1 1 auto",
-                                            minHeight: 0,
-                                            overflowY: "auto",
-                                            overflowX: "hidden",
-                                            overscrollBehavior: "contain",
-                                            WebkitOverflowScrolling: "touch",
-                                        }}
-                                    >
-                                        <div className="row g-3 mb-4">
-                                            <div className="col-md-6">
-                                                <label className="form-label fw-semibold">
-                                                    Full Name
-                                                </label>
-                                                <input
-                                                    type="text"
-                                                    name="name"
-                                                    className="form-control"
-                                                    value={adminForm.name}
-                                                    onChange={handleAdminFormChange}
-                                                    required
-                                                />
-                                            </div>
-
-                                            <div className="col-md-6">
-                                                <label className="form-label fw-semibold">
-                                                    Email
-                                                </label>
-                                                <input
-                                                    type="email"
-                                                    name="email"
-                                                    className="form-control"
-                                                    value={adminForm.email}
-                                                    onChange={handleAdminFormChange}
-                                                    required
-                                                />
-                                            </div>
-
-                                            {adminModalMode === "create" && (
-                                                <div className="col-md-6">
-                                                    <label className="form-label fw-semibold">
-                                                        Temporary Password
-                                                    </label>
-                                                    <input
-                                                        type="password"
-                                                        name="password"
-                                                        className="form-control"
-                                                        value={adminForm.password}
-                                                        onChange={handleAdminFormChange}
-                                                        minLength={8}
-                                                        required
-                                                    />
-                                                    <small className="text-muted">
-                                                        Minimum 8 characters.
-                                                    </small>
-                                                </div>
-                                            )}
-
-                                            <div className="col-md-3">
-                                                <label className="form-label fw-semibold">
-                                                    Role
-                                                </label>
-                                                <select
-                                                    name="role"
-                                                    className="form-select"
-                                                    value={adminForm.role}
-                                                    onChange={handleAdminFormChange}
-                                                >
-                                                    {ROLE_OPTIONS.map((role) => (
-                                                        <option
-                                                            key={role}
-                                                            value={role}
-                                                        >
-                                                            {role}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
-
-                                            <div className="col-md-3">
-                                                <label className="form-label fw-semibold">
-                                                    Status
-                                                </label>
-                                                <select
-                                                    name="status"
-                                                    className="form-select"
-                                                    value={adminForm.status}
-                                                    onChange={handleAdminFormChange}
-                                                >
-                                                    {STATUS_OPTIONS.map(
-                                                        (status) => (
-                                                            <option
-                                                                key={status}
-                                                                value={status}
-                                                            >
-                                                                {status}
-                                                            </option>
-                                                        )
-                                                    )}
-                                                </select>
-                                            </div>
-                                        </div>
-
-                                        <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-3">
-                                            <div>
-                                                <h6 className="fw-bold mb-1">
-                                                    Additional Custom Permissions
-                                                </h6>
-                                                <p className="text-muted small mb-0">
-                                                    These permissions are added on top of
-                                                    the selected role.
-                                                </p>
-                                            </div>
-
-                                            <div className="d-flex gap-2">
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-sm btn-outline-primary"
-                                                    onClick={
-                                                        selectAllCustomPermissions
-                                                    }
-                                                >
-                                                    Select All
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="btn btn-sm btn-outline-secondary"
-                                                    onClick={clearCustomPermissions}
-                                                >
-                                                    Clear
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        <div className="row g-3">
-                                            {visiblePermissionGroups.map(
-                                                (group) => (
-                                                    <div
-                                                        className="col-lg-4 col-md-6"
-                                                        key={group.title}
-                                                    >
-                                                        <div className="border rounded-4 p-3 h-100">
-                                                            <h6 className="fw-bold mb-3">
-                                                                {group.title}
-                                                            </h6>
-
-                                                            <div className="d-flex flex-column gap-2">
-                                                                {group.permissions.map(
-                                                                    ([permission, label]) => (
-                                                                        <label
-                                                                            className="form-check d-flex align-items-start gap-2 mb-0"
-                                                                            key={permission}
-                                                                        >
-                                                                            <input
-                                                                                type="checkbox"
-                                                                                className="form-check-input mt-1"
-                                                                                checked={adminForm.customPermissions.includes(
-                                                                                    permission
-                                                                                )}
-                                                                                onChange={() =>
-                                                                                    toggleCustomPermission(
-                                                                                        permission
-                                                                                    )
-                                                                                }
-                                                                            />
-                                                                            <span>
-                                                                                <span className="small fw-semibold d-block">
-                                                                                    {label}
-                                                                                </span>
-                                                                                <code className="small">
-                                                                                    {permission}
-                                                                                </code>
-                                                                            </span>
-                                                                        </label>
-                                                                    )
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        className="modal-footer"
-                                        style={{
-                                            flex: "0 0 auto",
-                                            background: "#ffffff",
-                                        }}
-                                    >
-                                        <button
-                                            type="button"
-                                            className="btn btn-outline-secondary"
-                                            onClick={closeAdminModal}
-                                            disabled={saving}
-                                        >
-                                            Cancel
-                                        </button>
-
-                                        <button
-                                            type="submit"
-                                            className="btn btn-success"
-                                            disabled={saving}
-                                        >
-                                            <FaSave className="me-2" />
-                                            {saving
-                                                ? "Saving..."
-                                                : adminModalMode === "create"
-                                                    ? "Create Admin"
-                                                    : "Save Changes"}
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="modal-backdrop fade show" />
-                </>
-            )}
-
-            {showPasswordModal && passwordAdmin && (
-                <>
-                    <div
-                        className="modal fade show d-block"
-                        tabIndex="-1"
-                        role="dialog"
-                    >
-                        <div className="modal-dialog modal-dialog-centered">
-                            <div className="modal-content border-0 shadow rounded-4">
-                                <form onSubmit={resetAdminPassword}>
-                                    <div className="modal-header">
-                                        <div>
-                                            <h5 className="modal-title fw-bold">
-                                                Reset Password
-                                            </h5>
-                                            <small className="text-muted">
-                                                {passwordAdmin.name} · {passwordAdmin.email}
-                                            </small>
-                                        </div>
-
-                                        <button
-                                            type="button"
-                                            className="btn btn-sm btn-outline-secondary"
-                                            onClick={closePasswordModal}
-                                            disabled={saving}
-                                        >
-                                            <FaTimes />
-                                        </button>
-                                    </div>
-
-                                    <div className="modal-body p-4">
-                                        <div className="mb-3">
-                                            <label className="form-label fw-semibold">
-                                                New Password
-                                            </label>
-                                            <input
-                                                type="password"
-                                                className="form-control"
-                                                value={newPassword}
-                                                onChange={(event) =>
-                                                    setNewPassword(
-                                                        event.target.value
-                                                    )
-                                                }
-                                                minLength={8}
-                                                required
-                                            />
-                                        </div>
-
-                                        <div>
-                                            <label className="form-label fw-semibold">
-                                                Confirm New Password
-                                            </label>
-                                            <input
-                                                type="password"
-                                                className="form-control"
-                                                value={confirmPassword}
-                                                onChange={(event) =>
-                                                    setConfirmPassword(
-                                                        event.target.value
-                                                    )
-                                                }
-                                                minLength={8}
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="modal-footer">
-                                        <button
-                                            type="button"
-                                            className="btn btn-outline-secondary"
-                                            onClick={closePasswordModal}
-                                            disabled={saving}
-                                        >
-                                            Cancel
-                                        </button>
-
-                                        <button
-                                            type="submit"
-                                            className="btn btn-warning"
-                                            disabled={saving}
-                                        >
-                                            <FaKey className="me-2" />
-                                            {saving
-                                                ? "Resetting..."
-                                                : "Reset Password"}
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="modal-backdrop fade show" />
-                </>
-            )}
+            <BookingDetailsPanel
+                booking={selectedBooking}
+                onClose={() => setSelectedBooking(null)}
+            />
         </div>
     );
 };
 
-export default Admins;
+export default BookingCalendar;

@@ -25,6 +25,7 @@ import {
 } from "recharts";
 import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
+import PermissionGuard from "../components/PermissionGuard";
 
 const COLORS = ["#0f766e", "#2563eb", "#f59e0b", "#dc2626", "#7c3aed"];
 
@@ -379,14 +380,16 @@ const PaymentReports = () => {
                         Refresh
                     </button>
 
-                    <button
-                        className="btn btn-success"
-                        onClick={handleExportCsv}
-                        disabled={exportLoading}
-                    >
-                        <FaFileCsv className="me-2" />
-                        {exportLoading ? "Exporting..." : "Export CSV"}
-                    </button>
+                    <PermissionGuard permission="report.export">
+                        <button
+                            className="btn btn-success"
+                            onClick={handleExportCsv}
+                            disabled={exportLoading}
+                        >
+                            <FaFileCsv className="me-2" />
+                            {exportLoading ? "Exporting..." : "Export CSV"}
+                        </button>
+                    </PermissionGuard>
                 </div>
             </div>
 
@@ -769,14 +772,16 @@ const PaymentReports = () => {
                                         </td>
 
                                         <td className="text-end">
-                                            <button
-                                                className="btn btn-sm btn-outline-success"
-                                                onClick={() => handleDownloadPaymentReceipt(payment)}
-                                                disabled={receiptLoadingId === payment._id}
-                                                title="Download payment receipt"
-                                            >
-                                                <FaDownload />
-                                            </button>
+                                            <PermissionGuard permission="pdf.generate">
+                                                <button
+                                                    className="btn btn-sm btn-outline-success"
+                                                    onClick={() => handleDownloadPaymentReceipt(payment)}
+                                                    disabled={receiptLoadingId === payment._id}
+                                                    title="Download payment receipt"
+                                                >
+                                                    <FaDownload />
+                                                </button>
+                                            </PermissionGuard>
                                         </td>
                                     </tr>
                                 ))}

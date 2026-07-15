@@ -8,6 +8,7 @@ import {
     FaSave,
 } from "react-icons/fa";
 import api from "../api/axios";
+import PermissionGuard from "../components/PermissionGuard";
 
 const fallbackVehicleRates = {
     Car: 80,
@@ -882,32 +883,36 @@ const Quotations = () => {
 
                         <div className="row g-3 mb-4">
                             <div className="col-md-6">
-                                <button
-                                    type="button"
-                                    className="btn btn-outline-success btn-lg w-100"
-                                    disabled={saveLoading}
-                                    onClick={handleSaveQuotation}
-                                >
-                                    <FaSave className="me-2" />
-                                    {saveLoading
-                                        ? isEditMode
-                                            ? "Updating..."
-                                            : "Saving..."
-                                        : isEditMode
-                                            ? "Update Quotation"
-                                            : "Save Quotation"}
-                                </button>
+                                <PermissionGuard permission={isEditMode ? "quotation.update" : "quotation.create"}>
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline-success btn-lg w-100"
+                                        disabled={saveLoading}
+                                        onClick={handleSaveQuotation}
+                                    >
+                                        <FaSave className="me-2" />
+                                        {saveLoading
+                                            ? isEditMode
+                                                ? "Updating..."
+                                                : "Saving..."
+                                            : isEditMode
+                                                ? "Update Quotation"
+                                                : "Save Quotation"}
+                                    </button>
+                                </PermissionGuard>
                             </div>
 
                             <div className="col-md-6">
-                                <button
-                                    type="submit"
-                                    className="btn btn-success btn-lg w-100"
-                                    disabled={pdfLoading}
-                                >
-                                    <FaDownload className="me-2" />
-                                    {pdfLoading ? "Generating PDF..." : "Download PDF"}
-                                </button>
+                                <PermissionGuard permission="pdf.generate">
+                                    <button
+                                        type="submit"
+                                        className="btn btn-success btn-lg w-100"
+                                        disabled={pdfLoading}
+                                    >
+                                        <FaDownload className="me-2" />
+                                        {pdfLoading ? "Generating PDF..." : "Download PDF"}
+                                    </button>
+                                </PermissionGuard>
                             </div>
                         </div>
                     </form>

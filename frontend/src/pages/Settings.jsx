@@ -10,6 +10,7 @@ import {
     FaShareAlt,
 } from "react-icons/fa";
 import api from "../api/axios";
+import PermissionGuard from "../components/PermissionGuard";
 
 const initialFormState = {
     companyName: "",
@@ -337,14 +338,16 @@ const Settings = () => {
                         Refresh
                     </button>
 
-                    <button
-                        className="btn btn-outline-danger"
-                        onClick={handleResetSettings}
-                        disabled={resetLoading}
-                    >
-                        <FaRedo className="me-2" />
-                        {resetLoading ? "Resetting..." : "Reset Defaults"}
-                    </button>
+                    <PermissionGuard permission="settings.update">
+                        <button
+                            className="btn btn-outline-danger"
+                            onClick={handleResetSettings}
+                            disabled={resetLoading}
+                        >
+                            <FaRedo className="me-2" />
+                            {resetLoading ? "Resetting..." : "Reset Defaults"}
+                        </button>
+                    </PermissionGuard>
                 </div>
             </div>
 
@@ -682,14 +685,16 @@ const Settings = () => {
                             </p>
                         </div>
 
-                        <button
-                            type="submit"
-                            className="btn btn-success btn-lg"
-                            disabled={saveLoading}
-                        >
-                            <FaSave className="me-2" />
-                            {saveLoading ? "Saving..." : "Save Settings"}
-                        </button>
+                        <PermissionGuard permission="settings.update">
+                            <button
+                                type="submit"
+                                className="btn btn-success btn-lg"
+                                disabled={saveLoading}
+                            >
+                                <FaSave className="me-2" />
+                                {saveLoading ? "Saving..." : "Save Settings"}
+                            </button>
+                        </PermissionGuard>
                     </div>
                 </div>
             </form>

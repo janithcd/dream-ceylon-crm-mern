@@ -10,6 +10,7 @@ import {
 import AIReplyGenerator from "../components/AIReplyGenerator";
 
 import AIItineraryGenerator from "../components/AIItineraryGenerator";
+import PermissionGuard from "../components/PermissionGuard";
 
 const countries = [
     {
@@ -263,19 +264,23 @@ const ClientTools = () => {
                 </div>
             </div>
 
-            <AIReplyGenerator
-                onUseReply={(text) => {
-                    setReplyText(text);
-                    setCopied(false);
-                }}
-            />
+            <PermissionGuard any={["inquiry.update", "quotation.create"]}>
+                <AIReplyGenerator
+                    onUseReply={(text) => {
+                        setReplyText(text);
+                        setCopied(false);
+                    }}
+                />
+            </PermissionGuard>
 
-            <AIItineraryGenerator
-                onUseItinerary={(text) => {
-                    setReplyText(text);
-                    setCopied(false);
-                }}
-            />
+            <PermissionGuard any={["quotation.create", "pdf.generate"]}>
+                <AIItineraryGenerator
+                    onUseItinerary={(text) => {
+                        setReplyText(text);
+                        setCopied(false);
+                    }}
+                />
+            </PermissionGuard>
 
             <div className="card border-0 shadow-sm rounded-4 mb-4">
                 <div className="card-body">

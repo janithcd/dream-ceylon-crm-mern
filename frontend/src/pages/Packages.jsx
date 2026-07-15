@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FaEdit, FaPlus, FaSearch, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
+import PermissionGuard from "../components/PermissionGuard";
 
 const initialFormState = {
     title: "",
@@ -297,17 +298,19 @@ const Packages = () => {
                     </p>
                 </div>
 
-                <button
-                    className="btn btn-primary"
-                    onClick={() => {
-                        setShowForm((prev) => !prev);
-                        setEditingId(null);
-                        setFormData(initialFormState);
-                    }}
-                >
-                    <FaPlus className="me-2" />
-                    Add Package
-                </button>
+                <PermissionGuard permission="package.manage">
+                    <button
+                        className="btn btn-primary"
+                        onClick={() => {
+                            setShowForm((prev) => !prev);
+                            setEditingId(null);
+                            setFormData(initialFormState);
+                        }}
+                    >
+                        <FaPlus className="me-2" />
+                        Add Package
+                    </button>
+                </PermissionGuard>
             </div>
 
             {error && <div className="alert alert-danger">{error}</div>}
@@ -575,17 +578,19 @@ const Packages = () => {
                             </div>
 
                             <div className="d-flex gap-2 mt-4">
-                                <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={formLoading}
-                                >
-                                    {formLoading
-                                        ? "Saving..."
-                                        : editingId
-                                            ? "Update Package"
-                                            : "Save Package"}
-                                </button>
+                                <PermissionGuard permission="package.manage">
+                                    <button
+                                        type="submit"
+                                        className="btn btn-primary"
+                                        disabled={formLoading}
+                                    >
+                                        {formLoading
+                                            ? "Saving..."
+                                            : editingId
+                                                ? "Update Package"
+                                                : "Save Package"}
+                                    </button>
+                                </PermissionGuard>
 
                                 <button
                                     type="button"
@@ -743,19 +748,23 @@ const Packages = () => {
                                         </td>
 
                                         <td className="text-end">
-                                            <button
-                                                className="btn btn-sm btn-outline-primary me-2"
-                                                onClick={() => handleEdit(tourPackage)}
-                                            >
-                                                <FaEdit />
-                                            </button>
+                                            <PermissionGuard permission="package.manage">
+                                                <button
+                                                    className="btn btn-sm btn-outline-primary me-2"
+                                                    onClick={() => handleEdit(tourPackage)}
+                                                >
+                                                    <FaEdit />
+                                                </button>
+                                            </PermissionGuard>
 
-                                            <button
-                                                className="btn btn-sm btn-outline-danger"
-                                                onClick={() => handleDelete(tourPackage._id)}
-                                            >
-                                                <FaTrash />
-                                            </button>
+                                            <PermissionGuard permission="package.manage">
+                                                <button
+                                                    className="btn btn-sm btn-outline-danger"
+                                                    onClick={() => handleDelete(tourPackage._id)}
+                                                >
+                                                    <FaTrash />
+                                                </button>
+                                            </PermissionGuard>
                                         </td>
                                     </tr>
                                 ))}

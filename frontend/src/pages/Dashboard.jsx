@@ -31,6 +31,7 @@ import {
 import api from "../api/axios";
 import DashboardFollowUpAlerts from "../components/DashboardFollowUpAlerts";
 import DashboardRecentActivity from "../components/DashboardRecentActivity";
+import PermissionGuard from "../components/PermissionGuard";
 const COLORS = [
     "#0f766e",
     "#2563eb",
@@ -358,73 +359,87 @@ const Dashboard = () => {
 
                     <div className="row g-3">
                         <div className="col-xl-2 col-md-4 col-sm-6">
-                            <button
-                                className="btn btn-success w-100 py-3"
-                                onClick={() => navigate("/quotations")}
-                            >
-                                <FaFileInvoiceDollar className="me-2" />
-                                New Quotation
-                            </button>
+                            <PermissionGuard permission="quotation.create">
+                                <button
+                                    className="btn btn-success w-100 py-3"
+                                    onClick={() => navigate("/quotations")}
+                                >
+                                    <FaFileInvoiceDollar className="me-2" />
+                                    New Quotation
+                                </button>
+                            </PermissionGuard>
                         </div>
 
                         <div className="col-xl-2 col-md-4 col-sm-6">
-                            <button
-                                className="btn btn-outline-success w-100 py-3"
-                                onClick={() => navigate("/quotation-history")}
-                            >
-                                <FaChartLine className="me-2" />
-                                Quote History
-                            </button>
+                            <PermissionGuard permission="quotation.view">
+                                <button
+                                    className="btn btn-outline-success w-100 py-3"
+                                    onClick={() => navigate("/quotation-history")}
+                                >
+                                    <FaChartLine className="me-2" />
+                                    Quote History
+                                </button>
+                            </PermissionGuard>
                         </div>
 
                         <div className="col-xl-2 col-md-4 col-sm-6">
-                            <button
-                                className="btn btn-outline-primary w-100 py-3"
-                                onClick={() => navigate("/inquiries")}
-                            >
-                                <FaClipboardList className="me-2" />
-                                Inquiries
-                            </button>
+                            <PermissionGuard permission="inquiry.view">
+                                <button
+                                    className="btn btn-outline-primary w-100 py-3"
+                                    onClick={() => navigate("/inquiries")}
+                                >
+                                    <FaClipboardList className="me-2" />
+                                    Inquiries
+                                </button>
+                            </PermissionGuard>
                         </div>
 
                         <div className="col-xl-2 col-md-4 col-sm-6">
-                            <button
-                                className="btn btn-outline-dark w-100 py-3"
-                                onClick={() => navigate("/bookings")}
-                            >
-                                <FaCalendarCheck className="me-2" />
-                                Bookings
-                            </button>
+                            <PermissionGuard permission="booking.view">
+                                <button
+                                    className="btn btn-outline-dark w-100 py-3"
+                                    onClick={() => navigate("/bookings")}
+                                >
+                                    <FaCalendarCheck className="me-2" />
+                                    Bookings
+                                </button>
+                            </PermissionGuard>
                         </div>
 
                         <div className="col-xl-2 col-md-4 col-sm-6">
-                            <button
-                                className="btn btn-outline-danger w-100 py-3"
-                                onClick={() => navigate("/follow-ups")}
-                            >
-                                <FaBell className="me-2" />
-                                Follow-Ups
-                            </button>
+                            <PermissionGuard permission="followUp.view">
+                                <button
+                                    className="btn btn-outline-danger w-100 py-3"
+                                    onClick={() => navigate("/follow-ups")}
+                                >
+                                    <FaBell className="me-2" />
+                                    Follow-Ups
+                                </button>
+                            </PermissionGuard>
                         </div>
 
                         <div className="col-xl-2 col-md-4 col-sm-6">
-                            <button
-                                className="btn btn-outline-secondary w-100 py-3"
-                                onClick={() => navigate("/client-tools")}
-                            >
-                                <FaGlobeAsia className="me-2" />
-                                Client Tools
-                            </button>
+                            <PermissionGuard any={["inquiry.update", "quotation.create", "pdf.generate"]}>
+                                <button
+                                    className="btn btn-outline-secondary w-100 py-3"
+                                    onClick={() => navigate("/client-tools")}
+                                >
+                                    <FaGlobeAsia className="me-2" />
+                                    Client Tools
+                                </button>
+                            </PermissionGuard>
                         </div>
 
                         <div className="col-xl-2 col-md-4 col-sm-6">
-                            <button
-                                className="btn btn-outline-warning w-100 py-3"
-                                onClick={() => navigate("/packages")}
-                            >
-                                <FaBoxOpen className="me-2" />
-                                Packages
-                            </button>
+                            <PermissionGuard permission="package.view">
+                                <button
+                                    className="btn btn-outline-warning w-100 py-3"
+                                    onClick={() => navigate("/packages")}
+                                >
+                                    <FaBoxOpen className="me-2" />
+                                    Packages
+                                </button>
+                            </PermissionGuard>
                         </div>
                     </div>
                 </div>
@@ -515,9 +530,13 @@ const Dashboard = () => {
                 </div>
             </div>
 
-            <DashboardFollowUpAlerts />
+            <PermissionGuard permission="followUp.view">
+                <DashboardFollowUpAlerts />
+            </PermissionGuard>
 
-            <DashboardRecentActivity />
+            <PermissionGuard permission="activityLog.view">
+                <DashboardRecentActivity />
+            </PermissionGuard>
 
             <div className="row g-4 mb-4">
                 <div className="col-xl-6">
