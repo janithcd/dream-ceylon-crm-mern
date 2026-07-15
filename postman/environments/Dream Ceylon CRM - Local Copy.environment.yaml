@@ -1,0 +1,34 @@
+name: Dream Ceylon CRM - Local Copy
+values:
+  - key: baseUrl
+    value: 'http://localhost:5000'
+  - key: superAdminEmail
+    value: admin@dreamceylon.com
+  - key: superAdminPassword
+    value: ''
+  - key: superAdminToken
+    value: ''
+  - key: managerEmail
+    value: ''
+  - key: managerPassword
+    value: ''
+  - key: managerToken
+    value: ''
+  - key: salesEmail
+    value: ''
+  - key: salesPassword
+    value: ''
+  - key: salesToken
+    value: ''
+  - key: financeEmail
+    value: ''
+  - key: financePassword
+    value: ''
+  - key: financeToken
+    value: ''
+  - key: viewerEmail
+    value: ''
+  - key: viewerPassword
+    value: ''
+  - key: viewerToken
+    value: ''

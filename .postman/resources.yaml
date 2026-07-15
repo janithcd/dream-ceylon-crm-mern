@@ -2,6 +2,14 @@
 workspace:
   id: 92d45969-9919-475b-86f2-86bdb53e4a87
 
+# Each entry here maps a local resource to one or more corresponding objects in Postman Cloud
+
+cloudResources:
+  collections:
+    ../postman/collections/Dream Ceylon CRM - Final Testing Copy: 8d2bedbb-4a29-4a07-b643-3662db8ece29
+    ../postman/collections/Dream Ceylon CRM - Final Testing Copy 2: ed5cb589-f4bd-4e6a-957c-e8779163e182
+    ../postman/collections/Dream Ceylon CRM - Final Testing: fdc33192-47d4-4082-ad85-0d82cc57387c
+
 # All resources in the `postman/` folder are automatically registered in Local View.
 # Point to additional files outside the `postman/` folder to register them individually. Example:
 #localResources:
