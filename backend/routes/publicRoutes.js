@@ -13,6 +13,10 @@ const {
     createInquiry,
 } = require("../controllers/inquiryController");
 
+const {
+    publicInquiryLimiter,
+} = require("../config/security");
+
 const router = express.Router();
 
 router.get("/home", getPublicHomeData);
@@ -25,8 +29,10 @@ router.get("/packages/:id", getPublicPackageById);
 
 router.get("/vehicles", getPublicVehicles);
 
-// Public website inquiry submission.
-// Add rate limiting and CAPTCHA before production launch.
-router.post("/inquiries", createInquiry);
+router.post(
+    "/inquiries",
+    publicInquiryLimiter,
+    createInquiry
+);
 
 module.exports = router;

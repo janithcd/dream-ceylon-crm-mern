@@ -6,12 +6,12 @@ const {
 } = require("../controllers/authController");
 
 const { protect } = require("../middleware/authMiddleware");
+const { authLimiter } = require("../config/security");
 
 const router = express.Router();
 
-// Public login
-router.post("/login", loginAdmin);
-
+router.post("/login", authLimiter, loginAdmin);
 router.get("/profile", protect, getAdminProfile);
 
 module.exports = router;
+
