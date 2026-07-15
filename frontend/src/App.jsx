@@ -19,6 +19,10 @@ import PaymentReports from "./pages/PaymentReports";
 import Settings from "./pages/Settings";
 import ActivityLogs from "./pages/ActivityLogs";
 import Admins from "./pages/Admins";
+import { PermissionProvider } from "./context/PermissionContext";
+import PermissionRoute from "./components/PermissionRoute";
+import AccessDenied from "./pages/AccessDenied";
+import { ROUTE_PERMISSIONS } from "./config/routePermissions";
 
 const App = () => {
     return (
@@ -28,29 +32,149 @@ const App = () => {
                     <Route path="/login" element={<Login />} />
 
                     <Route
-                        path="/"
                         element={
                             <ProtectedRoute>
-                                <AdminLayout />
+                                <PermissionProvider>
+                                    <AdminLayout />
+                                </PermissionProvider>
                             </ProtectedRoute>
                         }
                     >
-                        <Route index element={<Dashboard />} />
-                        <Route path="destinations" element={<Destinations />} />
-                        <Route path="packages" element={<Packages />} />
-                        <Route path="inquiries" element={<Inquiries />} />
-                        <Route path="customers" element={<Customers />} />
-                        <Route path="activity-logs" element={<ActivityLogs />} />
-                        <Route path="admins" element={<Admins />} />
-                        <Route path="settings" element={<Settings />} />
-                        <Route path="bookings" element={<Bookings />} />
-                        <Route path="bookings-calendar" element={<BookingCalendar />} />
-                        <Route path="payment-reports" element={<PaymentReports />} />
-                        <Route path="follow-ups" element={<FollowUps />} />
-                        <Route path="vehicles" element={<Vehicles />} />
-                        <Route path="client-tools" element={<ClientTools />} />
-                        <Route path="quotations" element={<Quotations />} />
-                        <Route path="quotation-history" element={<QuotationHistory />} />
+                        <Route
+                            index
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.dashboard}>
+                                    <Dashboard />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="destinations"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.destinations}>
+                                    <Destinations />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="packages"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.packages}>
+                                    <Packages />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="inquiries"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.inquiries}>
+                                    <Inquiries />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="customers"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.customers}>
+                                    <Customers />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="activity-logs"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.activityLogs}>
+                                    <ActivityLogs />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="admins"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.admins}>
+                                    <Admins />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="settings"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.settings}>
+                                    <Settings />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="bookings"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.bookings}>
+                                    <Bookings />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="booking-calendar"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.bookingCalendar}>
+                                    <BookingCalendar />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="payment-reports"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.paymentReports}>
+                                    <PaymentReports />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="follow-ups"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.followUps}>
+                                    <FollowUps />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="vehicles"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.vehicles}>
+                                    <Vehicles />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="client-tools"
+                            element={
+                                <PermissionRoute
+                                    any={[
+                                        "inquiry.update",
+                                        "quotation.create",
+                                        "pdf.generate",
+                                    ]}
+                                >
+                                    <ClientTools />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="quotations"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.quotations}>
+                                    <Quotations />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="quotation-history"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.quotations}>
+                                    <QuotationHistory />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route path="access-denied" element={<AccessDenied />} />
 
                     </Route>
 
