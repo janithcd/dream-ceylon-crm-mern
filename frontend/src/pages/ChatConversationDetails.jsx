@@ -30,12 +30,14 @@ import {
     FaTrash,
     FaUnlink,
     FaUser,
+    FaWhatsapp,
 } from "react-icons/fa";
 
 import api from "../api/axios";
 import { useAuth } from "../context/AuthContext";
 
 import ConversationStatusBadge from "../components/chat/ConversationStatusBadge";
+import WhatsAppHandoverModal from "../components/chat/WhatsAppHandoverModal";
 
 import "../styles/chat-conversation-details.css";
 
@@ -284,6 +286,11 @@ const ChatConversationDetails =
             setInquiryDetails,
         ] = useState(null);
 
+        const [
+            showHandoverModal,
+            setShowHandoverModal,
+        ] = useState(false);
+
         const messages =
             useMemo(() => {
                 if (
@@ -294,15 +301,13 @@ const ChatConversationDetails =
                     return [];
                 }
 
-                return conversation
-                    .messages;
+                return conversation.messages;
             }, [
                 conversation,
             ]);
 
         const linkedInquiry =
-            conversation
-                ?.linkedInquiry ||
+            conversation?.linkedInquiry ||
             null;
 
         const linkedInquiryId =
@@ -320,10 +325,7 @@ const ChatConversationDetails =
                         !canView ||
                         !id
                     ) {
-                        setLoading(
-                            false
-                        );
-
+                        setLoading(false);
                         return;
                     }
 
@@ -428,7 +430,7 @@ const ChatConversationDetails =
             if (
                 !showInquiryModal
             ) {
-                return;
+                return undefined;
             }
 
             const previousOverflow =
@@ -572,13 +574,6 @@ const ChatConversationDetails =
                 }
             };
 
-        const markHumanHandover =
-            () => {
-                void updateStatus(
-                    "Human Handover"
-                );
-            };
-
         const closeConversation =
             () => {
                 void updateStatus(
@@ -713,6 +708,39 @@ const ChatConversationDetails =
                 );
             };
 
+        const handleHandoverComplete =
+            (
+                updatedConversation,
+                successMessage
+            ) => {
+                if (
+                    updatedConversation
+                ) {
+                    setConversation(
+                        updatedConversation
+                    );
+                } else {
+                    setConversation(
+                        (previous) => ({
+                            ...previous,
+                            status:
+                                "Human Handover",
+                        })
+                    );
+                }
+
+                setShowHandoverModal(
+                    false
+                );
+
+                setError("");
+
+                setSuccess(
+                    successMessage ||
+                    "WhatsApp human handover prepared successfully."
+                );
+            };
+
         if (!admin) {
             return (
                 <div className="chat-details-loading-page">
@@ -741,8 +769,7 @@ const ChatConversationDetails =
                         <p className="mb-0">
                             Your account
                             cannot view AI
-                            chat
-                            conversations.
+                            chat conversations.
                         </p>
                     </div>
                 </div>
@@ -782,10 +809,10 @@ const ChatConversationDetails =
                     </h3>
 
                     <p className="text-muted">
-                        This conversation
-                        may have expired,
-                        been deleted or no
-                        longer be available.
+                        This conversation may
+                        have expired, been
+                        deleted or no longer be
+                        available.
                     </p>
 
                     <button
@@ -799,20 +826,17 @@ const ChatConversationDetails =
                     >
                         <FaArrowLeft className="me-2" />
 
-                        Back to
-                        Conversations
+                        Back to Conversations
                     </button>
                 </div>
             );
         }
 
-        if (
-            !conversation
-        ) {
+        if (!conversation) {
             return (
                 <div className="alert alert-danger">
-                    Conversation data
-                    could not be loaded.
+                    Conversation data could
+                    not be loaded.
                 </div>
             );
         }
@@ -840,8 +864,7 @@ const ChatConversationDetails =
                         <div className="chat-details-eyebrow">
                             <FaRobot />
 
-                            Website AI
-                            Assistant
+                            Website AI Assistant
                         </div>
 
                         <div className="d-flex flex-column flex-lg-row align-items-lg-center gap-2">
@@ -891,26 +914,37 @@ const ChatConversationDetails =
                                 : "Refresh"}
                         </button>
 
-                        {canUpdate &&
-                            conversation.status !==
-                            "Human Handover" && (
-                                <button
-                                    type="button"
-                                    className="btn btn-warning"
-                                    onClick={
-                                        markHumanHandover
-                                    }
-                                    disabled={
-                                        statusLoading ||
-                                        deleteLoading
-                                    }
-                                >
-                                    <FaUser className="me-2" />
+                        {canUpdate && (
+                            <button
+                                type="button"
+                                className="btn btn-success"
+                                onClick={() => {
+                                    clearMessages();
 
-                                    Human
-                                    Handover
-                                </button>
-                            )}
+                                    setShowHandoverModal(
+                                        true
+                                    );
+                                }}
+                                disabled={
+                                    statusLoading ||
+                                    deleteLoading ||
+                                    !conversation
+                                        .visitor
+                                        ?.whatsappNumber
+                                }
+                                title={
+                                    conversation
+                                        .visitor
+                                        ?.whatsappNumber
+                                        ? "Prepare a WhatsApp human handover"
+                                        : "The visitor has not provided a WhatsApp number"
+                                }
+                            >
+                                <FaWhatsapp className="me-2" />
+
+                                WhatsApp Handover
+                            </button>
+                        )}
 
                         {canUpdate &&
                             conversation.status !==
@@ -967,16 +1001,13 @@ const ChatConversationDetails =
                         <div className="chat-transcript-header">
                             <div>
                                 <h5 className="mb-1">
-                                    Full
-                                    Conversation
+                                    Full Conversation
                                 </h5>
 
                                 <p className="text-muted mb-0">
-                                    Complete
-                                    traveller and
-                                    assistant
-                                    message
-                                    history.
+                                    Complete traveller
+                                    and assistant
+                                    message history.
                                 </p>
                             </div>
 
@@ -1009,8 +1040,7 @@ const ChatConversationDetails =
                                         This
                                         conversation
                                         does not
-                                        contain any
-                                        saved
+                                        contain saved
                                         messages.
                                     </p>
                                 </div>
@@ -1066,8 +1096,8 @@ const ChatConversationDetails =
                                                         <span className="chat-blocked-message">
                                                             <FaShieldAlt />
 
-                                                            Blocked
-                                                            by safety
+                                                            Blocked by
+                                                            safety
                                                             moderation
                                                         </span>
                                                     )}
@@ -1087,8 +1117,7 @@ const ChatConversationDetails =
                             <div className="chat-side-card-title">
                                 <FaInfoCircle />
 
-                                Conversation
-                                Status
+                                Conversation Status
                             </div>
 
                             <ConversationStatusBadge
@@ -1103,8 +1132,7 @@ const ChatConversationDetails =
                                         htmlFor="conversation-status"
                                         className="form-label small fw-semibold"
                                     >
-                                        Change
-                                        status
+                                        Change status
                                     </label>
 
                                     <select
@@ -1161,9 +1189,8 @@ const ChatConversationDetails =
                                 </div>
                             ) : (
                                 <p className="text-muted small mt-3 mb-0">
-                                    Your account
-                                    has read-only
-                                    access.
+                                    Your account has
+                                    read-only access.
                                 </p>
                             )}
                         </section>
@@ -1173,8 +1200,7 @@ const ChatConversationDetails =
                             <div className="chat-side-card-title">
                                 <FaUser />
 
-                                Visitor
-                                Information
+                                Visitor Information
                             </div>
 
                             <div className="chat-visitor-profile">
@@ -1218,8 +1244,7 @@ const ChatConversationDetails =
                                         </a>
                                     ) : (
                                         <span>
-                                            Email
-                                            not
+                                            Email not
                                             provided
                                         </span>
                                     )}
@@ -1242,8 +1267,7 @@ const ChatConversationDetails =
                                         </a>
                                     ) : (
                                         <span>
-                                            Phone
-                                            not
+                                            Phone not
                                             provided
                                         </span>
                                     )}
@@ -1338,11 +1362,9 @@ const ChatConversationDetails =
                                     <FaUnlink />
 
                                     <p className="mb-0">
-                                        The visitor
-                                        has not
-                                        submitted an
-                                        inquiry from
-                                        this
+                                        The visitor has
+                                        not submitted an
+                                        inquiry from this
                                         conversation.
                                     </p>
                                 </div>
@@ -1379,8 +1401,7 @@ const ChatConversationDetails =
 
                                     <span>
                                         <small>
-                                            Last
-                                            activity
+                                            Last activity
                                         </small>
 
                                         <strong>
@@ -1396,8 +1417,7 @@ const ChatConversationDetails =
 
                                     <span>
                                         <small>
-                                            Stored
-                                            until
+                                            Stored until
                                         </small>
 
                                         <strong>
@@ -1449,6 +1469,23 @@ const ChatConversationDetails =
                     </aside>
                 </div>
 
+                {/* WhatsApp handover modal */}
+                {showHandoverModal && (
+                    <WhatsAppHandoverModal
+                        conversation={
+                            conversation
+                        }
+                        onClose={() =>
+                            setShowHandoverModal(
+                                false
+                            )
+                        }
+                        onComplete={
+                            handleHandoverComplete
+                        }
+                    />
+                )}
+
                 {/* Linked inquiry modal */}
                 {showInquiryModal && (
                     <div
@@ -1481,8 +1518,7 @@ const ChatConversationDetails =
                                         id="linked-inquiry-title"
                                         className="mb-0"
                                     >
-                                        Linked
-                                        Inquiry
+                                        Linked Inquiry
                                         Details
                                     </h4>
                                 </div>
@@ -1568,8 +1604,7 @@ const ChatConversationDetails =
 
                                             <div>
                                                 <span>
-                                                    Travel
-                                                    Date
+                                                    Travel Date
                                                 </span>
 
                                                 <strong>
@@ -1630,8 +1665,7 @@ const ChatConversationDetails =
                                         {inquiryDetails.adminNotes && (
                                             <div className="chat-inquiry-text-section">
                                                 <span>
-                                                    Admin
-                                                    Notes
+                                                    Admin Notes
                                                 </span>
 
                                                 <div>
@@ -1644,8 +1678,8 @@ const ChatConversationDetails =
                                     </>
                                 ) : (
                                     <div className="alert alert-warning mb-0">
-                                        Inquiry data
-                                        is unavailable.
+                                        Inquiry data is
+                                        unavailable.
                                     </div>
                                 )}
                             </div>

@@ -620,4 +620,181 @@
     .chat-inquiry-modal-footer .btn {
         width: 100%;
     }
+    .chat-handover-overlay {
+        position: fixed;
+        z-index: 1400;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem;
+        background: rgba(9, 24, 21, 0.64);
+        backdrop-filter: blur(6px);
+    }
+
+    .chat-handover-modal {
+        width: min(760px, 100%);
+        max-height: calc(100vh - 2rem);
+        overflow-y: auto;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        border-radius: 1.25rem;
+        background: #ffffff;
+        box-shadow:
+                0 28px 85px
+                rgba(8, 30, 26, 0.32);
+    }
+
+    .chat-handover-header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.25rem;
+        border-bottom: 1px solid
+        var(--chat-border);
+    }
+
+    .chat-handover-header p {
+        font-size: 0.82rem;
+    }
+
+    .chat-handover-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        margin-bottom: 0.45rem;
+        color: #198754;
+        font-size: 0.7rem;
+        font-weight: 800;
+        letter-spacing: 0.09em;
+        text-transform: uppercase;
+    }
+
+    .chat-handover-body {
+        padding: 1.25rem;
+    }
+
+    .chat-handover-recipient {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        padding: 1rem;
+        border: 1px solid
+        rgba(25, 135, 84, 0.18);
+        border-radius: 0.9rem;
+        background:
+                rgba(25, 135, 84, 0.055);
+    }
+
+    .chat-handover-recipient-icon {
+        display: flex;
+        width: 46px;
+        height: 46px;
+        flex-shrink: 0;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.9rem;
+        background: #198754;
+        color: #ffffff;
+        font-size: 1.35rem;
+    }
+
+    .chat-handover-recipient small,
+    .chat-handover-recipient strong,
+    .chat-handover-recipient span {
+        display: block;
+    }
+
+    .chat-handover-recipient small {
+        margin-bottom: 0.12rem;
+        color: #71807c;
+        font-size: 0.65rem;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .chat-handover-recipient strong {
+        color: #1e302c;
+    }
+
+    .chat-handover-recipient span {
+        margin-top: 0.15rem;
+        color: #62716d;
+        font-size: 0.8rem;
+    }
+
+    .chat-handover-textarea {
+        min-height: 330px;
+        resize: vertical;
+        font-size: 0.84rem;
+        line-height: 1.6;
+        white-space: pre-wrap;
+    }
+
+    .chat-handover-textarea:focus {
+        border-color: #198754;
+        box-shadow:
+                0 0 0 0.2rem
+                rgba(25, 135, 84, 0.12);
+    }
+
+    .chat-handover-notice {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        margin-top: 1rem;
+        padding: 0.85rem;
+        border-radius: 0.75rem;
+        background: #f4f7f6;
+        color: #64716e;
+        font-size: 0.76rem;
+        line-height: 1.5;
+    }
+
+    .chat-handover-notice svg {
+        margin-top: 0.12rem;
+        flex-shrink: 0;
+        color: #198754;
+    }
+
+    .chat-handover-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 0.65rem;
+        padding: 1rem 1.25rem;
+        border-top: 1px solid
+        var(--chat-border);
+    }
+
+    @media (max-width: 767.98px) {
+        .chat-handover-overlay {
+            padding: 0.65rem;
+        }
+
+        .chat-handover-modal {
+            max-height:
+                    calc(100vh - 1.3rem);
+        }
+
+        .chat-handover-header {
+            padding: 1rem;
+        }
+
+        .chat-handover-body {
+            padding: 1rem;
+        }
+
+        .chat-handover-textarea {
+            min-height: 290px;
+        }
+
+        .chat-handover-footer {
+            flex-direction: column-reverse;
+            padding: 1rem;
+        }
+
+        .chat-handover-footer .btn {
+            width: 100%;
+        }
+    }
 }

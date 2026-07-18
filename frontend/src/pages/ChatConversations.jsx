@@ -23,6 +23,7 @@ import {
     FaTimes,
     FaUnlink,
     FaUser,
+    FaChartBar,
 } from "react-icons/fa";
 import {
     // existing icons...
@@ -595,29 +596,45 @@ const ChatConversations = () => {
                     </p>
                 </div>
 
-                <button
-                    type="button"
-                    className="btn btn-outline-success"
-                    onClick={
-                        refreshConversations
-                    }
-                    disabled={
-                        loading ||
-                        refreshing
-                    }
-                >
-                    <FaSyncAlt
-                        className={`me-2 ${
-                            refreshing
-                                ? "fa-spin"
-                                : ""
-                        }`}
-                    />
+                <div className="d-flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        className="btn btn-success"
+                        onClick={() =>
+                            navigate(
+                                "/chat-conversations/analytics"
+                            )
+                        }
+                    >
+                        <FaChartBar className="me-2" />
 
-                    {refreshing
-                        ? "Refreshing..."
-                        : "Refresh"}
-                </button>
+                        View Analytics
+                    </button>
+
+                    <button
+                        type="button"
+                        className="btn btn-outline-success"
+                        onClick={
+                            refreshConversations
+                        }
+                        disabled={
+                            loading ||
+                            refreshing
+                        }
+                    >
+                        <FaSyncAlt
+                            className={`me-2 ${
+                                refreshing
+                                    ? "fa-spin"
+                                    : ""
+                            }`}
+                        />
+
+                        {refreshing
+                            ? "Refreshing..."
+                            : "Refresh"}
+                    </button>
+                </div>
             </div>
 
             {/* Alerts */}

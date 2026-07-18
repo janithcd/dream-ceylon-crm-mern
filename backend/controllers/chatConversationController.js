@@ -135,7 +135,136 @@ function createExpiryDate(status) {
         getRetentionDays(
             status
         );
+    function normalizeWhatsAppNumber(
+        value
+    ) {
+        let digits =
+            safeText(
+                value,
+                50
+            ).replace(/\D/g, "");
 
+        /*
+         * Convert international prefix
+         * 0044... into 44...
+         */
+        if (
+            digits.startsWith(
+                "00"
+            )
+        ) {
+            digits =
+                digits.slice(2);
+        }
+
+        /*
+         * A number beginning with zero
+         * normally lacks its country code.
+         */
+        if (
+            digits.startsWith(
+                "0"
+            )
+        ) {
+            return null;
+        }
+
+        if (
+            !/^\d{8,15}$/.test(
+                digits
+            )
+        ) {
+            return null;
+        }
+
+        return digits;
+    }
+
+    function buildTravellerRequestSummary(
+        messages = []
+    ) {
+        if (
+            !Array.isArray(
+                messages
+            )
+        ) {
+            return "";
+        }
+
+        const userMessages =
+            messages
+                .filter(
+                    (message) =>
+                        message.role ===
+                        "user" &&
+                        !message.blocked &&
+                        safeText(
+                            message.content,
+                            1000
+                        )
+                )
+                .slice(-4)
+                .map(
+                    (
+                        message,
+                        index
+                    ) => {
+                        const content =
+                            safeText(
+                                message.content,
+                                350
+                            );
+
+                        return `${index + 1}. ${content}`;
+                    }
+                );
+
+        return userMessages.join(
+            "\n"
+        );
+    }
+
+    function buildDefaultHandoverMessage(
+        conversation
+    ) {
+        const visitorName =
+            safeText(
+                conversation
+                    ?.visitor
+                    ?.fullName,
+                120
+            ) ||
+            "Traveller";
+
+        const requestSummary =
+            buildTravellerRequestSummary(
+                conversation?.messages
+            );
+
+        const summarySection =
+            requestSummary ||
+            "The traveller requested assistance with planning a Sri Lanka journey.";
+
+        return [
+            `Hello ${visitorName},`,
+            "",
+            "Thank you for contacting Dream Ceylon Journeys.",
+            "",
+            "I am a travel consultant from our team, and I am following up on your conversation with our Sri Lanka AI Travel Assistant.",
+            "",
+            "Your recent travel requests:",
+            summarySection,
+            "",
+            `Conversation reference: ${conversation.sessionId}`,
+            "",
+            "We can now personally assist you with the route, travel dates, hotels, activities, private transport and final pricing.",
+            "",
+            "Please share any additional preferences, and we will prepare a suitable travel plan for you.",
+            "",
+            "Kind regards,",
+            "Dream Ceylon Journeys",
+        ].join("\n");
+    }
     return new Date(
         Date.now() +
         days *
@@ -695,7 +824,169 @@ const updateChatConversationStatus =
                 });
         }
     };
+// @desc    Prepare a WhatsApp human handover
+// @route   POST /api/chat-conversations/:id/handover
+// @access  Private
+const prepareWhatsAppHandover =
+    async (req, res) => {
+        try {
+            const conversation =
+                await ChatConversation.findOne(
+                    buildConversationLookup(
+                        req.params.id
+                    )
+                );
 
+            if (!conversation) {
+                return res
+                    .status(404)
+                    .json({
+                        message:
+                            "Chat conversation not found.",
+                    });
+            }
+
+            const whatsappNumber =
+                normalizeWhatsAppNumber(
+                    conversation
+                        .visitor
+                        ?.whatsappNumber
+                );
+
+            if (
+                !whatsappNumber
+            ) {
+                return res
+                    .status(400)
+                    .json({
+                        message:
+                            "A valid international WhatsApp number is required. Include the country code and remove the first local zero.",
+                    });
+            }
+
+            const customMessage =
+                safeText(
+                    req.body
+                        ?.message,
+                    3000
+                );
+
+            const handoverMessage =
+                customMessage ||
+                buildDefaultHandoverMessage(
+                    conversation
+                );
+
+            const previousStatus =
+                conversation.status;
+
+            conversation.status =
+                "Human Handover";
+
+            conversation.lastActivityAt =
+                new Date();
+
+            conversation.expiresAt =
+                createExpiryDate(
+                    "Human Handover"
+                );
+
+            await conversation.save();
+
+            await writeActivityLog(
+                {
+                    req,
+
+                    action:
+                        "UPDATE",
+
+                    module:
+                        "AI Chat Conversation",
+
+                    description:
+                        `WhatsApp human handover was prepared for ${conversation.sessionId}`,
+
+                    relatedRecordId:
+                    conversation._id,
+
+                    relatedModel:
+                        "ChatConversation",
+
+                    referenceNo:
+                    conversation.sessionId,
+
+                    customerName:
+                        conversation
+                            .visitor
+                            ?.fullName ||
+                        "Website visitor",
+
+                    metadata: {
+                        previousStatus,
+
+                        newStatus:
+                            "Human Handover",
+
+                        whatsappNumber,
+
+                        messageLength:
+                        handoverMessage.length,
+
+                        linkedInquiry:
+                        conversation.linkedInquiry,
+
+                        preparedByRole:
+                            getAdminRole(
+                                req
+                            ),
+                    },
+                }
+            );
+
+            const updatedConversation =
+                await populateLinkedInquiry(
+                    ChatConversation.findById(
+                        conversation._id
+                    )
+                ).lean();
+
+            const whatsappUrl =
+                `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
+                    handoverMessage
+                )}`;
+
+            return res
+                .status(200)
+                .json({
+                    message:
+                        "WhatsApp human handover prepared successfully.",
+
+                    whatsappNumber,
+
+                    handoverMessage,
+
+                    whatsappUrl,
+
+                    conversation:
+                    updatedConversation,
+                });
+        } catch (error) {
+            console.error(
+                "[Prepare WhatsApp Handover]",
+                error
+            );
+
+            return res
+                .status(500)
+                .json({
+                    message:
+                        "Failed to prepare the WhatsApp human handover.",
+
+                    error:
+                    error.message,
+                });
+        }
+    };
 // @desc    Delete a chat conversation
 // @route   DELETE /api/chat-conversations/:id
 // @access  Private
@@ -814,5 +1105,6 @@ module.exports = {
     getChatConversations,
     getChatConversationById,
     updateChatConversationStatus,
+    prepareWhatsAppHandover,
     deleteChatConversation,
 };

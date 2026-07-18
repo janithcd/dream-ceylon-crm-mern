@@ -1,15 +1,22 @@
 const express =
     require("express");
 
+
 const {
     getChatConversations,
     getChatConversationById,
     updateChatConversationStatus,
+    prepareWhatsAppHandover,
     deleteChatConversation,
 } = require(
     "../controllers/chatConversationController"
 );
 
+const {
+    getChatAnalytics,
+} = require(
+    "../controllers/chatAnalyticsController"
+);
 const {
     protect,
 } = require(
@@ -77,7 +84,16 @@ router.get(
     ),
     getChatConversations
 );
-
+router.get(
+    "/analytics",
+    allowRoles(
+        "Super Admin",
+        "Manager",
+        "Sales",
+        "Viewer"
+    ),
+    getChatAnalytics
+);
 router.get(
     "/:id",
     allowRoles(
@@ -102,7 +118,19 @@ router.patch(
     ),
     updateChatConversationStatus
 );
-
+/*
+ * Sales, Manager and Super Admin
+ * may initiate a WhatsApp handover.
+ */
+router.post(
+    "/:id/handover",
+    allowRoles(
+        "Super Admin",
+        "Manager",
+        "Sales"
+    ),
+    prepareWhatsAppHandover
+);
 /*
  * Only Manager and Super Admin
  * may permanently delete a conversation.

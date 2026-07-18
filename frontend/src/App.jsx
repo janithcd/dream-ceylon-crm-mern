@@ -23,7 +23,7 @@ import { PermissionProvider } from "./context/PermissionContext";
 import PermissionRoute from "./components/PermissionRoute";
 import AccessDenied from "./pages/AccessDenied";
 import ChatConversationDetails from "./pages/ChatConversationDetails";
-
+import ChatAnalytics from "./pages/ChatAnalytics";
 
 import { ROUTE_PERMISSIONS } from "./config/routePermissions";
 
@@ -81,6 +81,12 @@ const App = () => {
                             path="chat-conversations"
                             element={
                                 <ChatConversations />
+                            }
+                        />
+                        <Route
+                            path="chat-conversations/analytics"
+                            element={
+                                <ChatAnalytics />
                             }
                         />
                         <Route
