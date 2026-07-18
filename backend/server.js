@@ -38,6 +38,19 @@ const financeReportRoutes = require("./routes/financeReportRoutes");
 const settingRoutes = require("./routes/settingRoutes");
 const activityLogRoutes = require("./routes/activityLogRoutes");
 const adminManagementRoutes = require("./routes/adminManagementRoutes");
+const tripadvisorRoutes = require(
+    "./routes/tripadvisorRoutes"
+);
+
+const chatConversationRoutes =
+    require(
+        "./routes/chatConversationRoutes"
+    );
+
+const publicChatRoutes =
+    require(
+        "./routes/publicChatRoutes"
+    );
 
 const app = express();
 
@@ -82,6 +95,13 @@ app.use("/api/activity-logs", activityLogRoutes);
 app.use("/api/destinations", destinationRoutes);
 app.use("/api/packages", packageRoutes);
 app.use("/api/inquiries", inquiryRoutes);
+
+app.use(
+    "/api/chat-conversations",
+    chatConversationRoutes
+);
+
+
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/vehicles", vehicleRoutes);
@@ -103,6 +123,14 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/pdf", pdfRoutes);
 
 
+app.use(
+    "/api/public/tripadvisor-reviews",
+    tripadvisorRoutes
+);
+app.use(
+    "/api/public/travel-assistant",
+    publicChatRoutes
+);
 app.use("/api/public", publicRoutes);
 
 

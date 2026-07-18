@@ -16,6 +16,7 @@ import {
     FaSignOutAlt,
     FaUsers,
     FaUsersCog,
+    FaRobot,
 } from "react-icons/fa";
 
 import { useAuth } from "../context/AuthContext";
@@ -82,7 +83,16 @@ const AdminLayout = () => {
                             Inquiries
                         </NavLink>
                     </PermissionGuard>
-
+                    <PermissionGuard
+                        permission={
+                            ROUTE_PERMISSIONS.inquiries
+                        }
+                    >
+                        <NavLink to="/chat-conversations">
+                            <FaRobot />
+                            AI Conversations
+                        </NavLink>
+                    </PermissionGuard>
                     <PermissionGuard
                         permission={ROUTE_PERMISSIONS.customers}
                     >

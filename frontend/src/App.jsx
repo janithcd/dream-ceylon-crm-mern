@@ -22,7 +22,12 @@ import Admins from "./pages/Admins";
 import { PermissionProvider } from "./context/PermissionContext";
 import PermissionRoute from "./components/PermissionRoute";
 import AccessDenied from "./pages/AccessDenied";
+import ChatConversationDetails from "./pages/ChatConversationDetails";
+
+
 import { ROUTE_PERMISSIONS } from "./config/routePermissions";
+
+import ChatConversations from "./pages/ChatConversations";
 
 const App = () => {
     return (
@@ -70,6 +75,18 @@ const App = () => {
                                 <PermissionRoute permission={ROUTE_PERMISSIONS.inquiries}>
                                     <Inquiries />
                                 </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="chat-conversations"
+                            element={
+                                <ChatConversations />
+                            }
+                        />
+                        <Route
+                            path="chat-conversations/:id"
+                            element={
+                                <ChatConversationDetails />
                             }
                         />
                         <Route

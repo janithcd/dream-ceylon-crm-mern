@@ -45,6 +45,7 @@ const Destinations = () => {
         "Adventure",
         "City",
         "Religious",
+        "Historical",
         "Other",
     ];
 

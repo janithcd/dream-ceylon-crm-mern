@@ -18,7 +18,11 @@ const buildRegex = (value) => ({
     $regex: escapeRegex(value),
     $options: "i",
 });
-
+const {
+    linkConversationToInquiry,
+} = require(
+    "../services/chatConversationService"
+);
 const parsePositiveInteger = (value, fallback) => {
     const number = Number.parseInt(value, 10);
 
@@ -103,9 +107,17 @@ const buildInquiryPayload = (body, existingInquiry = null) => {
 
     if (body.numberOfTravelers !== undefined) {
         const travelers = Number(body.numberOfTravelers);
-        payload.numberOfTravelers = Number.isFinite(travelers)
-            ? Math.max(travelers, 0)
-            : 0;
+
+        payload.numberOfTravelers =
+            Number.isFinite(travelers)
+                ? Math.max(
+                    Math.trunc(travelers),
+                    1
+                )
+                : 1;
+    } else if (existingInquiry) {
+        payload.numberOfTravelers =
+            existingInquiry.numberOfTravelers;
     } else if (existingInquiry) {
         payload.numberOfTravelers = existingInquiry.numberOfTravelers;
     }
@@ -136,50 +148,215 @@ const buildInquiryPayload = (body, existingInquiry = null) => {
 // @access  Public
 const createInquiry = async (req, res) => {
     try {
-        const payload = buildInquiryPayload(req.body);
+        const payload =
+            buildInquiryPayload(req.body);
 
-        if (!payload.fullName) {
-            return res.status(400).json({
-                message: "Customer name is required",
-            });
+        const requiredFields = [
+            {
+                key: "fullName",
+                message:
+                    "Full name is required",
+            },
+            {
+                key: "email",
+                message:
+                    "Email address is required",
+            },
+            {
+                key: "whatsappNumber",
+                message:
+                    "WhatsApp number is required",
+            },
+            {
+                key: "country",
+                message:
+                    "Country is required",
+            },
+            {
+                key: "message",
+                message:
+                    "Please tell us about your travel plans",
+            },
+        ];
+
+        const missingField =
+            requiredFields.find(
+                ({ key }) =>
+                    !payload[key]
+            );
+
+        if (missingField) {
+            return res
+                .status(400)
+                .json({
+                    message:
+                    missingField.message,
+                });
         }
 
-        const inquiry = await Inquiry.create(payload);
+        const emailPattern =
+            /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+        if (
+            !emailPattern.test(
+                payload.email
+            )
+        ) {
+            return res
+                .status(400)
+                .json({
+                    message:
+                        "Please enter a valid email address",
+                });
+        }
+
+        payload.numberOfTravelers =
+            Math.max(
+                Math.trunc(
+                    Number(
+                        payload.numberOfTravelers
+                    ) || 1
+                ),
+                1
+            );
+
+        payload.status = "New";
+        payload.priority = "Medium";
+        payload.source = "Website";
+        payload.adminNotes = "";
+
+        const inquiry =
+            await Inquiry.create(
+                payload
+            );
+        let chatConversationLinked =
+            false;
+
+        const chatConversationId =
+            safeText(
+                req.body
+                    ?.chatConversationId
+            );
+
+        if (chatConversationId) {
+            try {
+                const linkedConversation =
+                    await linkConversationToInquiry(
+                        {
+                            sessionId:
+                            chatConversationId,
+
+                            inquiryId:
+                            inquiry._id,
+
+                            visitor: {
+                                fullName:
+                                inquiry.fullName,
+
+                                email:
+                                inquiry.email,
+
+                                whatsappNumber:
+                                inquiry.whatsappNumber,
+
+                                country:
+                                inquiry.country,
+                            },
+                        }
+                    );
+
+                chatConversationLinked =
+                    Boolean(
+                        linkedConversation
+                    );
+            } catch (linkError) {
+                console.warn(
+                    "[Inquiry Chat Link]",
+                    linkError.message
+                );
+            }
+        }
         await createActivityLog({
             req,
             action: "CREATE",
             module: "Inquiry",
-            description: `Inquiry was created for ${inquiry.fullName}`,
-            relatedRecordId: inquiry._id,
-            relatedModel: "Inquiry",
-            referenceNo: inquiry._id.toString(),
-            customerName: inquiry.fullName,
+            description:
+                `Website inquiry was created for ${inquiry.fullName}`,
+            relatedRecordId:
+            inquiry._id,
+            relatedModel:
+                "Inquiry",
+            referenceNo:
+                inquiry._id.toString(),
+            customerName:
+            inquiry.fullName,
             metadata: {
-                email: inquiry.email,
-                whatsappNumber: inquiry.whatsappNumber,
-                country: inquiry.country,
-                status: inquiry.status,
-                priority: inquiry.priority,
-                source: inquiry.source,
-                travelDate: inquiry.travelDate,
-                numberOfTravelers: inquiry.numberOfTravelers,
+                email:
+                inquiry.email,
+                whatsappNumber:
+                inquiry.whatsappNumber,
+                country:
+                inquiry.country,
+                status:
+                inquiry.status,
+                priority:
+                inquiry.priority,
+                source:
+                inquiry.source,
+                travelDate:
+                inquiry.travelDate,
+                numberOfTravelers:
+                inquiry.numberOfTravelers,
             },
         });
 
-        const populatedInquiry = await populateInquiry(
-            Inquiry.findById(inquiry._id)
+        const populatedInquiry =
+            await populateInquiry(
+                Inquiry.findById(
+                    inquiry._id
+                )
+            );
+
+        return res
+            .status(201)
+            .json({
+                message:
+                    "Thank you. Your inquiry has been submitted successfully.",
+                inquiry:
+                populatedInquiry,
+
+                chatConversationLinked,
+            });
+    } catch (error) {
+        if (
+            error.name ===
+            "ValidationError"
+        ) {
+            const validationMessage =
+                Object.values(
+                    error.errors || {}
+                )[0]?.message;
+
+            return res
+                .status(400)
+                .json({
+                    message:
+                        validationMessage ||
+                        "Please check the information provided.",
+                });
+        }
+
+        console.error(
+            "[Create Inquiry]",
+            error
         );
 
-        return res.status(201).json({
-            message: "Inquiry created successfully",
-            inquiry: populatedInquiry,
-        });
-    } catch (error) {
-        return res.status(500).json({
-            message: "Failed to create inquiry",
-            error: error.message,
-        });
+        return res
+            .status(500)
+            .json({
+                message:
+                    "Failed to submit inquiry. Please try again.",
+            });
     }
 };
 

@@ -25,6 +25,7 @@ const destinationSchema = new mongoose.Schema(
                 "Adventure",
                 "City",
                 "Religious",
+                "Historical",
                 "Other",
             ],
             default: "Other",
