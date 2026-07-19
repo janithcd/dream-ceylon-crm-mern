@@ -41,7 +41,7 @@ const adminManagementRoutes = require("./routes/adminManagementRoutes");
 const tripadvisorRoutes = require(
     "./routes/tripadvisorRoutes"
 );
-
+const path = require("path");
 const chatConversationRoutes =
     require(
         "./routes/chatConversationRoutes"
@@ -70,7 +70,15 @@ app.use(
       limit: "2mb",
     })
 );
-
+app.use(
+    "/uploads",
+    express.static(
+        path.join(
+            __dirname,
+            "uploads"
+        )
+    )
+);
 
 app.get("/", (req, res) => {
   return res.status(200).json({
