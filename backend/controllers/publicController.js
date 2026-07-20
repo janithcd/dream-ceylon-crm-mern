@@ -1,54 +1,216 @@
-const Destination = require("../models/Destination");
-const TourPackage = require("../models/TourPackage");
-const Vehicle = require("../models/Vehicle");
+const Destination = require(
+    "../models/Destination"
+);
 
+const TourPackage = require(
+    "../models/TourPackage"
+);
 
-const getPublicHomeData = async (req, res) => {
+const Vehicle = require(
+    "../models/Vehicle"
+);
+
+const TOUR_TYPES = [
+    "Multi-Day Tour",
+    "Day Tour",
+];
+
+const PUBLIC_PACKAGE_FIELDS = [
+    "title",
+    "tourType",
+    "durationDays",
+    "durationHours",
+    "category",
+    "overview",
+    "highlights",
+    "destinations",
+    "startLocation",
+    "endLocation",
+    "pickupAvailable",
+    "pickupDetails",
+    "startTime",
+    "returnTime",
+    "priceFrom",
+    "currency",
+    "pricingBasis",
+    "minTravelers",
+    "maxTravelers",
+    "inclusions",
+    "exclusions",
+    "itinerary",
+    "imageUrl",
+    "isFeatured",
+    "createdAt",
+    "updatedAt",
+].join(" ");
+
+function applyTourTypeFilter(
+    query,
+    tourType
+) {
+    if (
+        tourType ===
+        "Multi-Day Tour"
+    ) {
+        query.$and = [
+            ...(query.$and || []),
+
+            {
+                $or: [
+                    {
+                        tourType:
+                            "Multi-Day Tour",
+                    },
+                    {
+                        tourType: {
+                            $exists: false,
+                        },
+                    },
+                    {
+                        tourType: null,
+                    },
+                ],
+            },
+        ];
+
+        return;
+    }
+
+    if (
+        tourType ===
+        "Day Tour"
+    ) {
+        query.tourType =
+            "Day Tour";
+    }
+}
+
+const getPublicHomeData = async (
+    req,
+    res
+) => {
     try {
-        const popularDestinations = await Destination.find({
-            status: "Active",
-            isPopular: true,
-        })
-            .select("name province category shortDescription imageUrl bestFor isPopular")
-            .sort({ createdAt: -1 })
-            .limit(6);
+        const [
+            popularDestinations,
+            featuredPackages,
+            featuredDayTours,
+            featuredVehicles,
+        ] =
+            await Promise.all([
+                Destination.find({
+                    status:
+                        "Active",
 
-        const featuredPackages = await TourPackage.find({
-            status: "Active",
-            isFeatured: true,
-        })
-            .select(
-                "title durationDays category overview destinations priceFrom currency imageUrl isFeatured"
-            )
-            .populate("destinations", "name province category imageUrl")
-            .sort({ createdAt: -1 })
-            .limit(6);
+                    isPopular:
+                        true,
+                })
+                    .select(
+                        "name province category shortDescription imageUrl bestFor isPopular"
+                    )
+                    .sort({
+                        createdAt:
+                            -1,
+                    })
+                    .limit(6),
 
-        const featuredVehicles = await Vehicle.find({
-            status: "Active",
-            isFeatured: true,
-        })
-            .select(
-                "name type capacity pricePerDay currency imageUrl description features isFeatured"
-            )
-            .sort({ pricePerDay: 1 })
-            .limit(6);
+                TourPackage.find({
+                    status:
+                        "Active",
+
+                    isFeatured:
+                        true,
+
+                    $or: [
+                        {
+                            tourType:
+                                "Multi-Day Tour",
+                        },
+                        {
+                            tourType: {
+                                $exists:
+                                    false,
+                            },
+                        },
+                        {
+                            tourType:
+                                null,
+                        },
+                    ],
+                })
+                    .select(
+                        PUBLIC_PACKAGE_FIELDS
+                    )
+                    .populate(
+                        "destinations",
+                        "name province category imageUrl shortDescription"
+                    )
+                    .sort({
+                        createdAt:
+                            -1,
+                    })
+                    .limit(6),
+
+                TourPackage.find({
+                    status:
+                        "Active",
+
+                    isFeatured:
+                        true,
+
+                    tourType:
+                        "Day Tour",
+                })
+                    .select(
+                        PUBLIC_PACKAGE_FIELDS
+                    )
+                    .populate(
+                        "destinations",
+                        "name province category imageUrl shortDescription"
+                    )
+                    .sort({
+                        createdAt:
+                            -1,
+                    })
+                    .limit(6),
+
+                Vehicle.find({
+                    status:
+                        "Active",
+
+                    isFeatured:
+                        true,
+                })
+                    .select(
+                        "name type capacity pricePerDay currency imageUrl description features isFeatured"
+                    )
+                    .sort({
+                        pricePerDay:
+                            1,
+                    })
+                    .limit(6),
+            ]);
 
         res.status(200).json({
             popularDestinations,
             featuredPackages,
+            featuredDayTours,
             featuredVehicles,
         });
     } catch (error) {
         res.status(500).json({
-            message: "Failed to fetch public homepage data",
-            error: error.message,
+            message:
+                "Failed to fetch public homepage data",
+
+            error:
+            error.message,
         });
     }
 };
 
-
-const getPublicDestinations = async (req, res) => {
+const getPublicDestinations = async (
+    req,
+    res
+) => {
     try {
         const {
             keyword,
@@ -64,84 +226,192 @@ const getPublicDestinations = async (req, res) => {
 
         if (keyword) {
             query.$or = [
-                { name: { $regex: keyword, $options: "i" } },
-                { province: { $regex: keyword, $options: "i" } },
-                { category: { $regex: keyword, $options: "i" } },
-                { shortDescription: { $regex: keyword, $options: "i" } },
+                {
+                    name: {
+                        $regex:
+                        keyword,
+
+                        $options:
+                            "i",
+                    },
+                },
+                {
+                    province: {
+                        $regex:
+                        keyword,
+
+                        $options:
+                            "i",
+                    },
+                },
+                {
+                    category: {
+                        $regex:
+                        keyword,
+
+                        $options:
+                            "i",
+                    },
+                },
+                {
+                    shortDescription: {
+                        $regex:
+                        keyword,
+
+                        $options:
+                            "i",
+                    },
+                },
             ];
         }
 
         if (category) {
-            query.category = category;
+            query.category =
+                category;
         }
 
-        if (isPopular !== undefined) {
-            query.isPopular = isPopular === "true";
+        if (
+            isPopular !== undefined
+        ) {
+            query.isPopular =
+                isPopular === "true";
         }
 
-        const currentPage = Number(page);
-        const pageLimit = Number(limit);
-        const skip = (currentPage - 1) * pageLimit;
+        const currentPage =
+            Math.max(
+                Number(page) || 1,
+                1
+            );
 
-        const totalDestinations = await Destination.countDocuments(query);
+        const pageLimit =
+            Math.min(
+                Math.max(
+                    Number(limit) ||
+                    12,
+                    1
+                ),
+                100
+            );
 
-        const destinations = await Destination.find(query)
-            .select(
-                "name province category shortDescription description imageUrl bestFor isPopular"
-            )
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(pageLimit);
+        const skip =
+            (
+                currentPage -
+                1
+            ) *
+            pageLimit;
+
+        const totalDestinations =
+            await Destination.countDocuments(
+                query
+            );
+
+        const destinations =
+            await Destination
+                .find(query)
+                .select(
+                    "name province category shortDescription description imageUrl bestFor isPopular"
+                )
+                .sort({
+                    createdAt:
+                        -1,
+                })
+                .skip(skip)
+                .limit(
+                    pageLimit
+                );
 
         res.status(200).json({
             destinations,
             currentPage,
-            totalPages: Math.ceil(totalDestinations / pageLimit),
+
+            totalPages:
+                Math.ceil(
+                    totalDestinations /
+                    pageLimit
+                ),
+
             totalDestinations,
         });
     } catch (error) {
         res.status(500).json({
-            message: "Failed to fetch public destinations",
-            error: error.message,
+            message:
+                "Failed to fetch public destinations",
+
+            error:
+            error.message,
         });
     }
 };
 
+const getPublicDestinationById =
+    async (
+        req,
+        res
+    ) => {
+        try {
+            const destination =
+                await Destination
+                    .findOne({
+                        _id:
+                        req.params.id,
 
-const getPublicDestinationById = async (req, res) => {
-    try {
-        const destination = await Destination.findOne({
-            _id: req.params.id,
-            status: "Active",
-        }).select(
-            "name province category shortDescription description imageUrl bestFor isPopular"
-        );
+                        status:
+                            "Active",
+                    })
+                    .select(
+                        "name province category shortDescription description imageUrl bestFor isPopular"
+                    );
 
-        if (!destination) {
-            return res.status(404).json({
-                message: "Destination not found",
+            if (!destination) {
+                return res
+                    .status(404)
+                    .json({
+                        message:
+                            "Destination not found",
+                    });
+            }
+
+            res.status(200).json(
+                destination
+            );
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to fetch public destination",
+
+                error:
+                error.message,
             });
         }
+    };
 
-        res.status(200).json(destination);
-    } catch (error) {
-        res.status(500).json({
-            message: "Failed to fetch public destination",
-            error: error.message,
-        });
-    }
-};
-
-
-const getPublicPackages = async (req, res) => {
+const getPublicPackages = async (
+    req,
+    res
+) => {
     try {
         const {
             keyword,
+            tourType,
             category,
             isFeatured,
             page = 1,
             limit = 12,
         } = req.query;
+
+        if (
+            tourType &&
+            !TOUR_TYPES.includes(
+                tourType
+            )
+        ) {
+            return res
+                .status(400)
+                .json({
+                    message:
+                        "Invalid tour type",
+                });
+        }
 
         const query = {
             status: "Active",
@@ -149,78 +419,182 @@ const getPublicPackages = async (req, res) => {
 
         if (keyword) {
             query.$or = [
-                { title: { $regex: keyword, $options: "i" } },
-                { category: { $regex: keyword, $options: "i" } },
-                { overview: { $regex: keyword, $options: "i" } },
+                {
+                    title: {
+                        $regex:
+                        keyword,
+
+                        $options:
+                            "i",
+                    },
+                },
+                {
+                    category: {
+                        $regex:
+                        keyword,
+
+                        $options:
+                            "i",
+                    },
+                },
+                {
+                    overview: {
+                        $regex:
+                        keyword,
+
+                        $options:
+                            "i",
+                    },
+                },
+                {
+                    startLocation: {
+                        $regex:
+                        keyword,
+
+                        $options:
+                            "i",
+                    },
+                },
             ];
         }
 
+        applyTourTypeFilter(
+            query,
+            tourType
+        );
+
         if (category) {
-            query.category = category;
+            query.category =
+                category;
         }
 
-        if (isFeatured !== undefined) {
-            query.isFeatured = isFeatured === "true";
+        if (
+            isFeatured !== undefined
+        ) {
+            query.isFeatured =
+                isFeatured === "true";
         }
 
-        const currentPage = Number(page);
-        const pageLimit = Number(limit);
-        const skip = (currentPage - 1) * pageLimit;
+        const currentPage =
+            Math.max(
+                Number(page) || 1,
+                1
+            );
 
-        const totalPackages = await TourPackage.countDocuments(query);
+        const pageLimit =
+            Math.min(
+                Math.max(
+                    Number(limit) ||
+                    12,
+                    1
+                ),
+                100
+            );
 
-        const packages = await TourPackage.find(query)
-            .select(
-                "title durationDays category overview destinations priceFrom currency inclusions exclusions itinerary imageUrl isFeatured"
-            )
-            .populate("destinations", "name province category imageUrl shortDescription")
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(pageLimit);
+        const skip =
+            (
+                currentPage -
+                1
+            ) *
+            pageLimit;
+
+        const totalPackages =
+            await TourPackage.countDocuments(
+                query
+            );
+
+        const packages =
+            await TourPackage
+                .find(query)
+                .select(
+                    PUBLIC_PACKAGE_FIELDS
+                )
+                .populate(
+                    "destinations",
+                    "name province category imageUrl shortDescription"
+                )
+                .sort({
+                    createdAt:
+                        -1,
+                })
+                .skip(skip)
+                .limit(
+                    pageLimit
+                );
 
         res.status(200).json({
             packages,
             currentPage,
-            totalPages: Math.ceil(totalPackages / pageLimit),
+
+            totalPages:
+                Math.ceil(
+                    totalPackages /
+                    pageLimit
+                ),
+
             totalPackages,
         });
     } catch (error) {
         res.status(500).json({
-            message: "Failed to fetch public packages",
-            error: error.message,
+            message:
+                "Failed to fetch public packages",
+
+            error:
+            error.message,
         });
     }
 };
 
+const getPublicPackageById =
+    async (
+        req,
+        res
+    ) => {
+        try {
+            const tourPackage =
+                await TourPackage
+                    .findOne({
+                        _id:
+                        req.params.id,
 
-const getPublicPackageById = async (req, res) => {
-    try {
-        const tourPackage = await TourPackage.findOne({
-            _id: req.params.id,
-            status: "Active",
-        })
-            .select(
-                "title durationDays category overview destinations priceFrom currency inclusions exclusions itinerary imageUrl isFeatured"
-            )
-            .populate("destinations", "name province category imageUrl shortDescription");
+                        status:
+                            "Active",
+                    })
+                    .select(
+                        PUBLIC_PACKAGE_FIELDS
+                    )
+                    .populate(
+                        "destinations",
+                        "name province category imageUrl shortDescription"
+                    );
 
-        if (!tourPackage) {
-            return res.status(404).json({
-                message: "Package not found",
+            if (!tourPackage) {
+                return res
+                    .status(404)
+                    .json({
+                        message:
+                            "Package not found",
+                    });
+            }
+
+            res.status(200).json(
+                tourPackage
+            );
+        } catch (error) {
+            res.status(500).json({
+                message:
+                    "Failed to fetch public package",
+
+                error:
+                error.message,
             });
         }
+    };
 
-        res.status(200).json(tourPackage);
-    } catch (error) {
-        res.status(500).json({
-            message: "Failed to fetch public package",
-            error: error.message,
-        });
-    }
-};
-
-
-const getPublicVehicles = async (req, res) => {
+const getPublicVehicles = async (
+    req,
+    res
+) => {
     try {
         const {
             type,
@@ -237,34 +611,75 @@ const getPublicVehicles = async (req, res) => {
             query.type = type;
         }
 
-        if (isFeatured !== undefined) {
-            query.isFeatured = isFeatured === "true";
+        if (
+            isFeatured !== undefined
+        ) {
+            query.isFeatured =
+                isFeatured === "true";
         }
 
-        const currentPage = Number(page);
-        const pageLimit = Number(limit);
-        const skip = (currentPage - 1) * pageLimit;
+        const currentPage =
+            Math.max(
+                Number(page) || 1,
+                1
+            );
 
-        const totalVehicles = await Vehicle.countDocuments(query);
+        const pageLimit =
+            Math.min(
+                Math.max(
+                    Number(limit) ||
+                    12,
+                    1
+                ),
+                100
+            );
 
-        const vehicles = await Vehicle.find(query)
-            .select(
-                "name type capacity pricePerDay currency imageUrl description features isFeatured"
-            )
-            .sort({ pricePerDay: 1 })
-            .skip(skip)
-            .limit(pageLimit);
+        const skip =
+            (
+                currentPage -
+                1
+            ) *
+            pageLimit;
+
+        const totalVehicles =
+            await Vehicle.countDocuments(
+                query
+            );
+
+        const vehicles =
+            await Vehicle
+                .find(query)
+                .select(
+                    "name type capacity pricePerDay currency imageUrl description features isFeatured"
+                )
+                .sort({
+                    pricePerDay:
+                        1,
+                })
+                .skip(skip)
+                .limit(
+                    pageLimit
+                );
 
         res.status(200).json({
             vehicles,
             currentPage,
-            totalPages: Math.ceil(totalVehicles / pageLimit),
+
+            totalPages:
+                Math.ceil(
+                    totalVehicles /
+                    pageLimit
+                ),
+
             totalVehicles,
         });
     } catch (error) {
         res.status(500).json({
-            message: "Failed to fetch public vehicles",
-            error: error.message,
+            message:
+                "Failed to fetch public vehicles",
+
+            error:
+            error.message,
         });
     }
 };
