@@ -1,3 +1,4 @@
+import { formatCalendarDate } from "../utils/calendarDate";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -84,24 +85,6 @@ const formatShortMoney = (amount) => {
     }
 
     return number.toFixed(0);
-};
-
-const formatDate = (value) => {
-    if (!value) {
-        return "-";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "-";
-    }
-
-    return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
 };
 
 const getStatusBadgeClass = (status) => {
@@ -765,7 +748,7 @@ const Dashboard = () => {
                             </span>
                                                 </td>
 
-                                                <td>{formatDate(quotation.createdAt)}</td>
+                                                <td>{formatCalendarDate(quotation.createdAt)}</td>
                                             </tr>
                                         ))}
                                         </tbody>

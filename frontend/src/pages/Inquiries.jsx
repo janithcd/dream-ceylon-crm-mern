@@ -1,3 +1,4 @@
+import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -119,37 +120,6 @@ const Inquiries = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, keyword, status, priority, source]);
 
-    const formatDateInput = (dateValue) => {
-        if (!dateValue) {
-            return "";
-        }
-
-        const date = new Date(dateValue);
-
-        if (Number.isNaN(date.getTime())) {
-            return "";
-        }
-
-        return date.toISOString().split("T")[0];
-    };
-
-    const formatDate = (dateValue) => {
-        if (!dateValue) {
-            return "-";
-        }
-
-        const date = new Date(dateValue);
-
-        if (Number.isNaN(date.getTime())) {
-            return "-";
-        }
-
-        return date.toLocaleDateString("en-US", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-        });
-    };
 
     const resetForm = () => {
         setFormData(initialFormState);
@@ -205,7 +175,7 @@ const Inquiries = () => {
             email: inquiry.email || "",
             whatsappNumber: inquiry.whatsappNumber || "",
             country: inquiry.country || "",
-            travelDate: formatDateInput(inquiry.travelDate),
+            travelDate: toCalendarDateInput(inquiry.travelDate),
             numberOfTravelers: inquiry.numberOfTravelers || 1,
             interestedPackage: inquiry.interestedPackage?._id || "",
             message: inquiry.message || "",
@@ -292,7 +262,7 @@ const Inquiries = () => {
                 Email: inquiry.email || "",
                 WhatsApp: inquiry.whatsappNumber || "",
                 Country: inquiry.country || "",
-                "Travel Date": formatDate(inquiry.travelDate),
+                "Travel Date": formatCalendarDate(inquiry.travelDate),
                 Travelers: inquiry.numberOfTravelers || 0,
                 "Interested Package": inquiry.interestedPackage?.title || "",
                 Source: inquiry.source || "",
@@ -300,10 +270,10 @@ const Inquiries = () => {
                 Status: inquiry.status || "",
                 Message: inquiry.message || "",
                 "Admin Notes": inquiry.adminNotes || "",
-                "Created Date": formatDate(inquiry.createdAt),
+                "Created Date": formatCalendarDate(inquiry.createdAt),
             }));
 
-            const today = new Date().toISOString().split("T")[0];
+            const today = todayCalendarDate();
             exportToCsv(rows, `dream-ceylon-inquiries-${today}.csv`);
         } catch (err) {
             setError(
@@ -697,7 +667,7 @@ const Inquiries = () => {
 
                                         <td>
                                             <small>
-                                                Date: {formatDate(inquiry.travelDate)}
+                                                Date: {formatCalendarDate(inquiry.travelDate)}
                                                 <br />
                                                 Travelers: {inquiry.numberOfTravelers || 0}
                                             </small>

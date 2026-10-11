@@ -1,3 +1,4 @@
+import { formatCalendarDate, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -28,23 +29,6 @@ const formatMoney = (amount, currency = "USD") => {
     )}`;
 };
 
-const formatDate = (value) => {
-    if (!value) {
-        return "-";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "-";
-    }
-
-    return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
 
 const getStatusBadgeClass = (status) => {
     switch (status) {
@@ -431,8 +415,8 @@ const QuotationHistory = () => {
                 "Client Name": quotation.clientName || "",
                 Country: quotation.country || "",
                 "Tour Title": quotation.tourTitle || "",
-                "Travel Start Date": formatDate(quotation.travelStartDate),
-                "Travel End Date": formatDate(quotation.travelEndDate),
+                "Travel Start Date": formatCalendarDate(quotation.travelStartDate),
+                "Travel End Date": formatCalendarDate(quotation.travelEndDate),
                 Travelers: quotation.travelers || 0,
                 "Duration Days": quotation.durationDays || 0,
                 "Vehicle Type": quotation.vehicleType || "",
@@ -448,10 +432,10 @@ const QuotationHistory = () => {
                 Currency: quotation.currency || "",
                 Status: quotation.status || "",
                 Converted: quotation.booking ? "Yes" : "No",
-                "Created Date": formatDate(quotation.createdAt),
+                "Created Date": formatCalendarDate(quotation.createdAt),
             }));
 
-            const today = new Date().toISOString().split("T")[0];
+            const today = todayCalendarDate();
             exportToCsv(rows, `dream-ceylon-quotations-${today}.csv`);
         } catch (err) {
             setError(
@@ -688,9 +672,9 @@ const QuotationHistory = () => {
                                         </td>
 
                                         <td>
-                                            <div>{formatDate(quotation.createdAt)}</div>
+                                            <div>{formatCalendarDate(quotation.createdAt)}</div>
                                             <small className="text-muted">
-                                                Travel: {formatDate(quotation.travelStartDate)}
+                                                Travel: {formatCalendarDate(quotation.travelStartDate)}
                                             </small>
                                         </td>
 

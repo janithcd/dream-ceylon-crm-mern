@@ -1,3 +1,4 @@
+import { toCalendarDateInput } from "../utils/calendarDate";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -68,19 +69,6 @@ const splitLines = (value) => {
         .filter(Boolean);
 };
 
-const formatDateForInput = (value) => {
-    if (!value) {
-        return "";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "";
-    }
-
-    return date.toISOString().split("T")[0];
-};
 
 const arrayToText = (value) => {
     if (Array.isArray(value)) {
@@ -107,8 +95,8 @@ const mapQuotationToForm = (quotation) => {
         clientName: quotation.clientName || "",
         country: quotation.country || "",
         tourTitle: quotation.tourTitle || "",
-        travelStartDate: formatDateForInput(quotation.travelStartDate),
-        travelEndDate: formatDateForInput(quotation.travelEndDate),
+        travelStartDate: toCalendarDateInput(quotation.travelStartDate),
+        travelEndDate: toCalendarDateInput(quotation.travelEndDate),
         travelers: quotation.travelers ?? "",
         durationDays: quotation.durationDays ?? "",
         vehicleType: quotation.vehicleType || "Car",
@@ -154,7 +142,7 @@ const mapInquiryToQuotationForm = (inquiry) => {
         country: inquiry.country || "",
         tourTitle: packageTitle,
 
-        travelStartDate: formatDateForInput(inquiry.travelDate),
+        travelStartDate: toCalendarDateInput(inquiry.travelDate),
         travelEndDate: "",
 
         travelers: inquiry.numberOfTravelers ?? "",

@@ -5,7 +5,7 @@
 Every push, pull request, or manual workflow run executes:
 
 1. Dependency security audits (high/critical issues fail CI), backend syntax checks and Node's built-in test suite with coverage on Node 22 and 24.
-2. A production frontend build on Node 24.
+2. Frontend calendar date regression tests and a production build on Node 24.
 3. Docker image builds and smoke tests of the React/Nginx frontend, Express API and disposable MongoDB database.
 
 The workflow has read-only repository permission and needs no AWS, OpenAI or production database credentials. Container images are built for verification; they are not published or deployed yet. See `.github/workflows/ci.yml` and the [Actions page](https://github.com/janithcd/dream-ceylon-crm-mern/actions).
@@ -23,6 +23,7 @@ npm run check
 npm run test:coverage
 cd ../frontend
 npm ci
+npm test
 npm run build
 npm run lint
 ```
@@ -68,9 +69,11 @@ AI features require a separately injected OpenAI key; they are not exercised by 
 
 PDF date formatting uses the explicit `Asia/Colombo` business timezone. Date-only form inputs and their MongoDB UTC serialization render on the same Sri Lankan calendar date regardless of host timezone. This does not migrate older records or recover dates already saved incorrectly. Timestamped documents use the Sri Lankan date at generation time.
 
+CRM forms, lists, CSV exports and the booking calendar now use the same calendar date, including records reopened in browsers outside Sri Lanka. New follow-ups and payment entries default to today's date in Colombo. Follow-up filters and the dashboard's monthly totals also use Colombo day and month boundaries. Tests cover transitions around midnight across four host timezones. Existing data is displayed consistently; stored historical values were not rewritten.
+
 ## Next milestones
 
-1. Add database-backed business-flow tests for successful login, inquiry → quotation → booking → payment, and PDF content. Resolve frontend lint and reduce bundle size. Complete the public-inquiry anti-spam requirement.
+1. Add database-backed business-flow tests for successful login, inquiry → quotation → booking → payment, and PDF content. Resolve the 39 existing frontend lint errors and reduce bundle size. Complete the public-inquiry anti-spam requirement.
 2. Set an AWS budget, region and target architecture; provision a staging environment and container registry with infrastructure as code. Keep the Namecheap domain registration and plan DNS/email migration separately.
 3. Add AWS deployment using short-lived GitHub OIDC credentials, a staging environment, health checks and a rollback path. Review database backups and upload persistence before cutover.
 4. Build a Jenkins pipeline using the same checks and containers. Run it on a dedicated learning agent; do not expose a Jenkins server to production traffic.

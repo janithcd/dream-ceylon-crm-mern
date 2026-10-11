@@ -4,6 +4,7 @@ const Inquiry = require("../models/Inquiry");
 const Quotation = require("../models/Quotation");
 const Booking = require("../models/Booking");
 const { createActivityLog } = require("../utils/createActivityLog");
+const { getBusinessDayBounds } = require("../utils/businessDate");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -36,18 +37,6 @@ const parsePositiveInteger = (value, fallback) => {
     }
 
     return number;
-};
-
-const getStartOfToday = () => {
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    return date;
-};
-
-const getEndOfToday = () => {
-    const date = new Date();
-    date.setHours(23, 59, 59, 999);
-    return date;
 };
 
 const getLinkedCustomerData = async ({ inquiry, quotation, booking }) => {
@@ -173,8 +162,7 @@ const buildFollowUpQuery = (queryParams) => {
         ];
     }
 
-    const todayStart = getStartOfToday();
-    const todayEnd = getEndOfToday();
+    const { start: todayStart, end: todayEnd } = getBusinessDayBounds();
 
     if (dateFilter === "today") {
         query.followUpDate = {
@@ -359,8 +347,7 @@ const getFollowUps = async (req, res) => {
 // @access  Private
 const getFollowUpSummary = async (req, res) => {
     try {
-        const todayStart = getStartOfToday();
-        const todayEnd = getEndOfToday();
+        const { start: todayStart, end: todayEnd } = getBusinessDayBounds();
 
         const [
             totalFollowUps,

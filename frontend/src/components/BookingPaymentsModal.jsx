@@ -1,3 +1,4 @@
+import { formatCalendarDate, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useMemo, useState } from "react";
 import {
     FaPlus,
@@ -11,16 +12,16 @@ import api from "../api/axios";
 import PermissionGuard from "./PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
 
-const initialPaymentForm = {
+const initialPaymentForm = () => ({
     amount: "",
     currency: "USD",
-    paymentDate: new Date().toISOString().split("T")[0],
+    paymentDate: todayCalendarDate(),
     paymentType: "Partial Payment",
     paymentMethod: "Bank Transfer",
     status: "Received",
     referenceNumber: "",
     notes: "",
-};
+});
 
 const paymentTypeOptions = [
     "Advance",
@@ -41,24 +42,6 @@ const paymentMethodOptions = [
 const statusOptions = ["Received", "Refunded", "Cancelled"];
 
 const currencyOptions = ["USD", "LKR", "EUR", "GBP"];
-
-const formatDate = (value) => {
-    if (!value) {
-        return "-";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "-";
-    }
-
-    return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
 
 const formatMoney = (amount, currency = "USD") => {
     const number = Number(amount);
@@ -96,7 +79,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
     const [payments, setPayments] = useState([]);
     const [currentBooking, setCurrentBooking] = useState(booking);
     const [formData, setFormData] = useState({
-        ...initialPaymentForm,
+        ...initialPaymentForm(),
         currency: booking?.currency || "USD",
     });
 
@@ -201,7 +184,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
         }
 
         setFormData({
-            ...initialPaymentForm,
+            ...initialPaymentForm(),
             currency: currentBooking?.currency || booking?.currency || "USD",
             paymentType: canCreatePayment ? "Partial Payment" : "Refund",
             status: canCreatePayment ? "Received" : "Refunded",
@@ -211,7 +194,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
 
     const resetForm = () => {
         setFormData({
-            ...initialPaymentForm,
+            ...initialPaymentForm(),
             currency: currentBooking?.currency || booking?.currency || "USD",
         });
         setShowForm(false);
@@ -721,7 +704,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                         )}
                                                     </td>
 
-                                                    <td>{formatDate(payment.paymentDate)}</td>
+                                                    <td>{formatCalendarDate(payment.paymentDate)}</td>
 
                                                     <td>{payment.paymentType}</td>
 

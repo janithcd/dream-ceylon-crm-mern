@@ -1,3 +1,4 @@
+import { formatCalendarDate, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useMemo, useState } from "react";
 import {
     FaDownload,
@@ -89,23 +90,6 @@ const formatShortMoney = (amount) => {
     return number.toFixed(0);
 };
 
-const formatDate = (value) => {
-    if (!value) {
-        return "-";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "-";
-    }
-
-    return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
 
 const getStatusBadgeClass = (status) => {
     switch (status) {
@@ -335,7 +319,7 @@ const PaymentReports = () => {
                 "Booking Code": payment.booking?.bookingCode || "",
                 "Client Name": payment.booking?.customer?.fullName || "",
                 Country: payment.booking?.customer?.country || "",
-                "Payment Date": formatDate(payment.paymentDate),
+                "Payment Date": formatCalendarDate(payment.paymentDate),
                 "Payment Type": payment.paymentType || "",
                 "Payment Method": payment.paymentMethod || "",
                 "Reference Number": payment.referenceNumber || "",
@@ -345,7 +329,7 @@ const PaymentReports = () => {
                 Notes: payment.notes || "",
             }));
 
-            const today = new Date().toISOString().split("T")[0];
+            const today = todayCalendarDate();
 
             exportToCsv(rows, `dream-ceylon-payment-report-${today}.csv`);
         } catch (err) {
@@ -749,7 +733,7 @@ const PaymentReports = () => {
                                             </small>
                                         </td>
 
-                                        <td>{formatDate(payment.paymentDate)}</td>
+                                        <td>{formatCalendarDate(payment.paymentDate)}</td>
 
                                         <td>{payment.paymentType}</td>
 

@@ -1,3 +1,4 @@
+import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useMemo, useState } from "react";
 import {
     FaArrowRight,
@@ -18,23 +19,6 @@ const priorityOrder = {
     Low: 4,
 };
 
-const formatDate = (value) => {
-    if (!value) {
-        return "-";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "-";
-    }
-
-    return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
 
 const getPriorityBadgeClass = (priority) => {
     switch (priority) {
@@ -52,20 +36,17 @@ const getPriorityBadgeClass = (priority) => {
 };
 
 const getDateStatus = (followUpDate) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = todayCalendarDate();
+    const date = toCalendarDateInput(followUpDate);
 
-    const date = new Date(followUpDate);
-    date.setHours(0, 0, 0, 0);
-
-    if (date < today) {
+    if (date && date < today) {
         return {
             label: "Overdue",
             className: "text-danger",
         };
     }
 
-    if (date.getTime() === today.getTime()) {
+    if (date === today) {
         return {
             label: "Today",
             className: "text-success",
@@ -367,7 +348,7 @@ const DashboardFollowUpAlerts = () => {
                                         </td>
 
                                         <td>
-                                            <strong>{formatDate(followUp.followUpDate)}</strong>
+                                            <strong>{formatCalendarDate(followUp.followUpDate)}</strong>
                                             <br />
                                             <small className={dateStatus.className}>
                                                 {dateStatus.label}

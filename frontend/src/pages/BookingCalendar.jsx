@@ -1,3 +1,4 @@
+import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useMemo, useState } from "react";
 import {
     FaCalendarAlt,
@@ -37,24 +38,6 @@ const monthNames = [
 
 const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-const formatDate = (value) => {
-    if (!value) {
-        return "-";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "-";
-    }
-
-    return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
-
 const formatMoney = (amount, currency = "USD") => {
     const number = Number(amount);
 
@@ -76,13 +59,15 @@ const getDateKey = (date) => {
 };
 
 const normalizeDateOnly = (value) => {
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return null;
+    if (value instanceof Date) {
+        return Number.isNaN(value.getTime())
+            ? null
+            : new Date(value.getFullYear(), value.getMonth(), value.getDate());
     }
-
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const key = toCalendarDateInput(value);
+    if (!key) return null;
+    const [year, month, day] = key.split("-").map(Number);
+    return new Date(year, month - 1, day);
 };
 
 const isDateBetween = (date, startDate, endDate) => {
@@ -214,10 +199,10 @@ const BookingDetailsPanel = ({ booking, onClose }) => {
                                         <div className="border rounded-4 p-3 h-100">
                                             <small className="text-muted">Travel Dates</small>
                                             <h6 className="fw-bold mb-1">
-                                                {formatDate(booking.travelStartDate)}
+                                                {formatCalendarDate(booking.travelStartDate)}
                                             </h6>
                                             <div className="text-muted small">
-                                                to {formatDate(booking.travelEndDate)}
+                                                to {formatCalendarDate(booking.travelEndDate)}
                                             </div>
                                             <div className="text-muted small">
                                                 {booking.numberOfTravelers || 0} travelers ·{" "}
@@ -307,7 +292,7 @@ const BookingDetailsPanel = ({ booking, onClose }) => {
 
 const BookingCalendar = () => {
     const [bookings, setBookings] = useState([]);
-    const [selectedDate, setSelectedDate] = useState(new Date());
+    const [selectedDate, setSelectedDate] = useState(() => normalizeDateOnly(todayCalendarDate()));
     const [bookingStatus, setBookingStatus] = useState("");
     const [vehicleType, setVehicleType] = useState("");
     const [selectedBooking, setSelectedBooking] = useState(null);
@@ -418,7 +403,7 @@ const BookingCalendar = () => {
     };
 
     const goToToday = () => {
-        setSelectedDate(new Date());
+        setSelectedDate(normalizeDateOnly(todayCalendarDate()));
     };
 
     const handleResetFilters = () => {
@@ -605,7 +590,7 @@ const BookingCalendar = () => {
                                                 const isCurrentMonth =
                                                     date.getMonth() === currentMonth;
                                                 const isToday =
-                                                    getDateKey(date) === getDateKey(new Date());
+                                                    getDateKey(date) === todayCalendarDate();
 
                                                 return (
                                                     <td

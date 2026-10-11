@@ -1,3 +1,4 @@
+import { formatCalendarDate } from "../utils/calendarDate";
 import {
     useCallback,
     useEffect,
@@ -147,29 +148,8 @@ const formatDateTime = (
 const formatDate = (
     value
 ) => {
-    if (!value) {
-        return "Not provided";
-    }
-
-    const date =
-        new Date(value);
-
-    if (
-        Number.isNaN(
-            date.getTime()
-        )
-    ) {
-        return "Not provided";
-    }
-
-    return date.toLocaleDateString(
-        "en-US",
-        {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-        }
-    );
+    const date = formatCalendarDate(value, { month: "long" });
+    return date === "-" ? "Not provided" : date;
 };
 
 const getLinkedInquiryId = (

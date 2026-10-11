@@ -1,3 +1,4 @@
+import { formatCalendarDate, todayCalendarDate } from "../utils/calendarDate";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -15,23 +16,6 @@ import {
 import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
-const formatDate = (value) => {
-    if (!value) {
-        return "-";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "-";
-    }
-
-    return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
 
 const formatMoney = (amount, currency = "USD") => {
     const number = Number(amount);
@@ -210,7 +194,7 @@ const Customers = () => {
             Balance: customer.totals?.balanceAmount || 0,
         }));
 
-        const today = new Date().toISOString().split("T")[0];
+        const today = todayCalendarDate();
         exportToCsv(rows, `dream-ceylon-customer-search-${today}.csv`);
     };
 
@@ -273,7 +257,7 @@ const Customers = () => {
                 Section: "Inquiry",
                 Reference: inquiry.fullName || "",
                 Description: inquiry.message || "",
-                Date: formatDate(inquiry.travelDate),
+                Date: formatCalendarDate(inquiry.travelDate),
                 Amount: "",
                 Currency: profile.summary?.currency || "USD",
                 Status: inquiry.status || "",
@@ -288,7 +272,7 @@ const Customers = () => {
                 Section: "Quotation",
                 Reference: quotation.quotationNo || "",
                 Description: quotation.tourTitle || "",
-                Date: formatDate(quotation.createdAt),
+                Date: formatCalendarDate(quotation.createdAt),
                 Amount: quotation.totals?.grandTotal || 0,
                 Currency: quotation.currency || profile.summary?.currency || "USD",
                 Status: quotation.status || "",
@@ -301,7 +285,7 @@ const Customers = () => {
                 Section: "Booking",
                 Reference: booking.bookingCode || "",
                 Description: booking.selectedPackage?.title || "",
-                Date: `${formatDate(booking.travelStartDate)} - ${formatDate(
+                Date: `${formatCalendarDate(booking.travelStartDate)} - ${formatCalendarDate(
                     booking.travelEndDate
                 )}`,
                 Amount: booking.totalPrice || 0,
@@ -318,7 +302,7 @@ const Customers = () => {
                 Section: "Payment",
                 Reference: payment.paymentNo || "",
                 Description: payment.paymentType || "",
-                Date: formatDate(payment.paymentDate),
+                Date: formatCalendarDate(payment.paymentDate),
                 Amount: payment.amount || 0,
                 Currency: payment.currency || profile.summary?.currency || "USD",
                 Status: payment.status || "",
@@ -333,7 +317,7 @@ const Customers = () => {
                 Section: "Follow-Up",
                 Reference: followUp.title || "",
                 Description: followUp.type || "",
-                Date: formatDate(followUp.followUpDate),
+                Date: formatCalendarDate(followUp.followUpDate),
                 Amount: "",
                 Currency: profile.summary?.currency || "USD",
                 Status: followUp.status || "",
@@ -341,7 +325,7 @@ const Customers = () => {
             });
         });
 
-        const today = new Date().toISOString().split("T")[0];
+        const today = todayCalendarDate();
         const cleanName =
             profile.customer?.customerName
                 ?.toLowerCase()
@@ -628,7 +612,7 @@ const Customers = () => {
                                                 </small>
                                             </td>
 
-                                            <td>{formatDate(inquiry.travelDate)}</td>
+                                            <td>{formatCalendarDate(inquiry.travelDate)}</td>
 
                                             <td>
                                                 {inquiry.interestedPackage?.title || "No package"}
@@ -728,7 +712,7 @@ const Customers = () => {
                           </span>
                                             </td>
 
-                                            <td>{formatDate(quotation.createdAt)}</td>
+                                            <td>{formatCalendarDate(quotation.createdAt)}</td>
 
                                             <td className="text-end">
                                                 <div className="d-flex justify-content-end gap-2">
@@ -795,8 +779,8 @@ const Customers = () => {
                                             </td>
 
                                             <td>
-                                                {formatDate(booking.travelStartDate)} -{" "}
-                                                {formatDate(booking.travelEndDate)}
+                                                {formatCalendarDate(booking.travelStartDate)} -{" "}
+                                                {formatCalendarDate(booking.travelEndDate)}
                                             </td>
 
                                             <td>{booking.vehicleType}</td>
@@ -874,7 +858,7 @@ const Customers = () => {
 
                                             <td>{payment.booking?.bookingCode || "-"}</td>
 
-                                            <td>{formatDate(payment.paymentDate)}</td>
+                                            <td>{formatCalendarDate(payment.paymentDate)}</td>
 
                                             <td>{payment.paymentType}</td>
 
@@ -926,7 +910,7 @@ const Customers = () => {
                                                 </small>
                                             </td>
 
-                                            <td>{formatDate(followUp.followUpDate)}</td>
+                                            <td>{formatCalendarDate(followUp.followUpDate)}</td>
 
                                             <td>{followUp.type}</td>
 

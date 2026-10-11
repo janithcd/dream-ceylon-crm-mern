@@ -1,3 +1,4 @@
+import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -13,7 +14,7 @@ import {
 import api from "../api/axios";
 import PermissionGuard from "../components/PermissionGuard";
 
-const initialFormState = {
+const initialFormState = () => ({
     title: "",
     type: "General",
     inquiry: "",
@@ -21,11 +22,11 @@ const initialFormState = {
     booking: "",
     customerName: "",
     customerContact: "",
-    followUpDate: new Date().toISOString().split("T")[0],
+    followUpDate: todayCalendarDate(),
     priority: "Medium",
     status: "Pending",
     notes: "",
-};
+});
 
 const typeOptions = [
     "General",
@@ -61,37 +62,6 @@ const dateFilterOptions = [
     },
 ];
 
-const formatDate = (value) => {
-    if (!value) {
-        return "-";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "-";
-    }
-
-    return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
-
-const formatDateInput = (value) => {
-    if (!value) {
-        return "";
-    }
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "";
-    }
-
-    return date.toISOString().split("T")[0];
-};
 
 const getIdValue = (value) => {
     if (!value) {
@@ -379,7 +349,7 @@ const FollowUps = () => {
             setShowForm(true);
 
             setFormData({
-                ...initialFormState,
+                ...initialFormState(),
                 title: selectedInquiry
                     ? `Follow up with ${selectedInquiry.fullName}`
                     : "Follow up inquiry",
@@ -390,7 +360,7 @@ const FollowUps = () => {
                 customerName: selectedInquiry?.fullName || "",
                 customerContact:
                     selectedInquiry?.whatsappNumber || selectedInquiry?.email || "",
-                followUpDate: new Date().toISOString().split("T")[0],
+                followUpDate: todayCalendarDate(),
                 priority: "Medium",
                 status: "Pending",
                 notes: selectedInquiry?.message
@@ -415,7 +385,7 @@ const FollowUps = () => {
             setShowForm(true);
 
             setFormData({
-                ...initialFormState,
+                ...initialFormState(),
                 title: selectedQuotation
                     ? `Follow up quotation ${selectedQuotation.quotationNo}`
                     : "Follow up quotation",
@@ -431,7 +401,7 @@ const FollowUps = () => {
                     selectedQuotation?.inquiry?.whatsappNumber ||
                     selectedQuotation?.inquiry?.email ||
                     "",
-                followUpDate: new Date().toISOString().split("T")[0],
+                followUpDate: todayCalendarDate(),
                 priority: "High",
                 status: "Pending",
                 notes: selectedQuotation?.tourTitle
@@ -454,7 +424,7 @@ const FollowUps = () => {
             setShowForm(true);
 
             setFormData({
-                ...initialFormState,
+                ...initialFormState(),
                 title: selectedBooking
                     ? `Follow up booking ${selectedBooking.bookingCode}`
                     : "Follow up booking",
@@ -467,7 +437,7 @@ const FollowUps = () => {
                     selectedBooking?.customer?.whatsappNumber ||
                     selectedBooking?.customer?.email ||
                     "",
-                followUpDate: new Date().toISOString().split("T")[0],
+                followUpDate: todayCalendarDate(),
                 priority: "High",
                 status: "Pending",
                 notes: selectedBooking
@@ -489,7 +459,7 @@ const FollowUps = () => {
     ]);
 
     const resetForm = () => {
-        setFormData(initialFormState);
+        setFormData(initialFormState());
         setEditingId(null);
         setShowForm(false);
     };
@@ -612,7 +582,7 @@ const FollowUps = () => {
             booking: getIdValue(followUp.booking),
             customerName: followUp.customerName || "",
             customerContact: followUp.customerContact || "",
-            followUpDate: formatDateInput(followUp.followUpDate),
+            followUpDate: toCalendarDateInput(followUp.followUpDate),
             priority: followUp.priority || "Medium",
             status: followUp.status || "Pending",
             notes: followUp.notes || "",
@@ -722,7 +692,7 @@ const FollowUps = () => {
                             onClick={() => {
                                 setShowForm((prev) => !prev);
                                 setEditingId(null);
-                                setFormData(initialFormState);
+                                setFormData(initialFormState());
                             }}
                         >
                             <FaPlus className="me-2" />
@@ -1187,7 +1157,7 @@ const FollowUps = () => {
                                             </td>
 
                                             <td>
-                                                <strong>{formatDate(followUp.followUpDate)}</strong>
+                                                <strong>{formatCalendarDate(followUp.followUpDate)}</strong>
                                                 <br />
                                                 <small className={dateStatus.className}>
                                                     {dateStatus.label}

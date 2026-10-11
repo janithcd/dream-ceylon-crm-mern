@@ -1,3 +1,4 @@
+import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -162,27 +163,6 @@ const Bookings = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page, keyword, bookingStatus, paymentStatus, vehicleType]);
 
-    const formatDateInput = (dateValue) => {
-        if (!dateValue) {
-            return "";
-        }
-
-        return new Date(dateValue).toISOString().split("T")[0];
-    };
-
-    const formatDate = (dateValue) => {
-        if (!dateValue) {
-            return "-";
-        }
-
-        const date = new Date(dateValue);
-
-        if (Number.isNaN(date.getTime())) {
-            return "-";
-        }
-
-        return date.toLocaleDateString();
-    };
 
     const formatMoney = (amount, currency = "USD") => {
         const number = Number(amount);
@@ -298,8 +278,8 @@ const Bookings = () => {
                 country: booking.customer?.country || "",
             },
             selectedPackage: booking.selectedPackage?._id || "",
-            travelStartDate: formatDateInput(booking.travelStartDate),
-            travelEndDate: formatDateInput(booking.travelEndDate),
+            travelStartDate: toCalendarDateInput(booking.travelStartDate),
+            travelEndDate: toCalendarDateInput(booking.travelEndDate),
             numberOfTravelers: booking.numberOfTravelers || 1,
             vehicleType: booking.vehicleType || "Car",
             totalPrice: booking.totalPrice || 0,
@@ -458,8 +438,8 @@ const Bookings = () => {
                 WhatsApp: booking.customer?.whatsappNumber || "",
                 Country: booking.customer?.country || "",
                 Package: booking.selectedPackage?.title || "",
-                "Start Date": formatDate(booking.travelStartDate),
-                "End Date": formatDate(booking.travelEndDate),
+                "Start Date": formatCalendarDate(booking.travelStartDate),
+                "End Date": formatCalendarDate(booking.travelEndDate),
                 Travelers: booking.numberOfTravelers || 0,
                 Vehicle: booking.vehicleType || "",
                 "Total Price": booking.totalPrice || 0,
@@ -473,7 +453,7 @@ const Bookings = () => {
                 "Admin Notes": booking.adminNotes || "",
             }));
 
-            const today = new Date().toISOString().split("T")[0];
+            const today = todayCalendarDate();
             exportToCsv(rows, `dream-ceylon-bookings-${today}.csv`);
         } catch (err) {
             setError(
@@ -977,8 +957,8 @@ const Bookings = () => {
 
                                         <td>
                                             <small>
-                                                {formatDate(booking.travelStartDate)} -{" "}
-                                                {formatDate(booking.travelEndDate)}
+                                                {formatCalendarDate(booking.travelStartDate)} -{" "}
+                                                {formatCalendarDate(booking.travelEndDate)}
                                             </small>
                                         </td>
 

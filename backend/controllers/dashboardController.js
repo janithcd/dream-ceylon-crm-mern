@@ -4,22 +4,14 @@ const Inquiry = require("../models/Inquiry");
 const Booking = require("../models/Booking");
 const Vehicle = require("../models/Vehicle");
 const Quotation = require("../models/Quotation");
-
-const getStartOfMonthDate = (monthsBack = 5) => {
-    const date = new Date();
-    date.setMonth(date.getMonth() - monthsBack);
-    date.setDate(1);
-    date.setHours(0, 0, 0, 0);
-
-    return date;
-};
+const { getBusinessMonthStart } = require("../utils/businessDate");
 
 // @desc    Get dashboard statistics
 // @route   GET /api/dashboard/stats
 // @access  Private
 const getDashboardStats = async (req, res) => {
     try {
-        const sixMonthsAgo = getStartOfMonthDate(5);
+        const sixMonthsAgo = getBusinessMonthStart(5);
 
         const [
             totalDestinations,
@@ -173,10 +165,10 @@ const getDashboardStats = async (req, res) => {
                 $group: {
                     _id: {
                         year: {
-                            $year: "$createdAt",
+                            $year: { date: "$createdAt", timezone: "Asia/Colombo" },
                         },
                         month: {
-                            $month: "$createdAt",
+                            $month: { date: "$createdAt", timezone: "Asia/Colombo" },
                         },
                     },
                     count: {
@@ -209,10 +201,10 @@ const getDashboardStats = async (req, res) => {
                 $group: {
                     _id: {
                         year: {
-                            $year: "$createdAt",
+                            $year: { date: "$createdAt", timezone: "Asia/Colombo" },
                         },
                         month: {
-                            $month: "$createdAt",
+                            $month: { date: "$createdAt", timezone: "Asia/Colombo" },
                         },
                     },
                     count: {
