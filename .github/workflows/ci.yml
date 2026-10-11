@@ -1,0 +1,75 @@
+name: CRM CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: crm-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    name: Backend tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        node: [22, 24]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --no-fund
+      - run: npm audit --audit-level=high
+      - run: npm run check
+      - run: npm run test:coverage
+  frontend:
+    name: Frontend production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-fund
+      - run: npm audit --audit-level=high
+      - run: npm run build
+        env:
+          VITE_API_BASE_URL: /api
+      - name: Report existing lint debt
+        continue-on-error: true
+        run: npm run lint
+  containers:
+    name: Container build and smoke tests
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      JWT_SECRET: synthetic-ci-secret-never-use-in-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: docker compose config --quiet
+      - run: docker compose up --build --wait --wait-timeout 180
+      - run: node scripts/smoke-test.mjs
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=100
+      - name: Remove disposable test containers and volumes
+        if: always()
+        run: docker compose down --volumes

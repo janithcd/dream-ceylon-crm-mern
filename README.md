@@ -9,9 +9,9 @@
 </p>
 
 <p>
-  <img src="https://img.shields.io/badge/Status-Production%20Ready-success?style=for-the-badge" alt="Status" />
+  <img src="https://img.shields.io/badge/Status-DevOps%20Upgrade-blue?style=for-the-badge" alt="Status" />
   <img src="https://img.shields.io/badge/Version-1.0.0-blue?style=for-the-badge" alt="Version" />
-  <img src="https://img.shields.io/badge/Tests-39%20Passed-brightgreen?style=for-the-badge" alt="Tests" />
+  <a href="https://github.com/janithcd/dream-ceylon-crm-mern/actions/workflows/ci.yml"><img src="https://github.com/janithcd/dream-ceylon-crm-mern/actions/workflows/ci.yml/badge.svg" alt="CRM CI" /></a>
   <img src="https://img.shields.io/badge/License-Private-lightgrey?style=for-the-badge" alt="License" />
 </p>
 
@@ -556,3 +556,7 @@ This project is currently maintained as private software for Dream Ceylon Journe
 Made with ❤️ in Sri Lanka 🇱🇰
 
 </div>
+
+## DevOps foundation
+
+See [docs/DEVOPS.md](docs/DEVOPS.md) for the automated checks, Docker setup, current limitations, and the AWS/Jenkins/Kubernetes roadmap.

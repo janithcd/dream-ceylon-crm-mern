@@ -51,6 +51,10 @@ const authorizeAnyPermission = (...requiredPermissions) => {
 
         const adminPermissions = resolveAdminPermissions(admin);
 
+        if (admin.status === "Inactive") {
+            return res.status(403).json({ message: "Your admin account is inactive." });
+        }
+
         const hasPermission = requiredPermissions.some((permission) =>
             adminPermissions.includes(permission)
         );

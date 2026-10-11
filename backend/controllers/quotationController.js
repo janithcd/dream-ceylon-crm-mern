@@ -1,3 +1,4 @@
+const { formatDocumentDate } = require("../utils/documentDate");
 const fs = require("fs");
 const path = require("path");
 const {
@@ -128,21 +129,9 @@ const formatMoney = (amount, currency = "USD") => {
     })}`;
 };
 
-const formatDate = (value) => {
-    if (!value) return "Not provided";
-
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return safeText(value);
-    }
-
-    return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-    });
-};
+const formatDate = (value) => formatDocumentDate(value, {
+    month: "long", fallback: value ? safeText(value) : "Not provided",
+});
 
 const parseList = (value, fallback = []) => {
     if (Array.isArray(value)) {

@@ -10,6 +10,9 @@ const databaseState = {
     3: "disconnecting",
 };
 
+// Liveness is independent of MongoDB; readiness retains the existing contract.
+router.get("/live", (req, res) => res.status(200).json({ status: "ok" }));
+
 router.get("/", (req, res) => {
     const dbState =
         databaseState[mongoose.connection.readyState] || "unknown";

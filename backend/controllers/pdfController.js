@@ -1,3 +1,4 @@
+const { formatDocumentDate } = require("../utils/documentDate");
 const fs = require("fs");
 const path = require("path");
 const {
@@ -141,13 +142,7 @@ const resolveAssetPath = (filePath) => {
     return null;
 };
 
-const formatToday = () => {
-    return new Date().toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-    });
-};
+const formatToday = () => formatDocumentDate(new Date(), { month: "long" });
 
 const toTitleCase = (value) => {
     const text = safeText(value).trim();

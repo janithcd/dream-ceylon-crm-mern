@@ -16,3 +16,8 @@ dist
 # Logs
 *.log
 npm-debug.log*
+# Secrets and generated reports
+.env.*
+!.env.example
+coverage/
+backend/uploads/

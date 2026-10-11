@@ -1,3 +1,4 @@
+const { formatDocumentDate } = require("../utils/documentDate");
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
@@ -44,31 +45,9 @@ const formatMoney = (amount, currency = "USD") => {
     })}`;
 };
 
-const formatDate = (value) => {
-    if (!value) {
-        return "-";
-    }
+const formatDate = (value) => formatDocumentDate(value);
 
-    const date = new Date(value);
-
-    if (Number.isNaN(date.getTime())) {
-        return "-";
-    }
-
-    return date.toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
-
-const getTodayText = () => {
-    return new Date().toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-};
+const getTodayText = () => formatDocumentDate(new Date());
 
 const drawText = (page, text, x, y, options = {}) => {
     const {

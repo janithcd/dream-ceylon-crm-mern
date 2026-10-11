@@ -31,7 +31,7 @@ const corsOptions = {
         }
 
         return callback(
-            new Error(`CORS blocked request from origin: ${origin}`)
+            Object.assign(new Error("Origin is not allowed."), { status: 403 })
         );
     },
     credentials: true,
@@ -57,7 +57,7 @@ const globalLimiter = rateLimit({
         message:
             "Too many requests were sent from this address. Please try again later.",
     },
-    skip: (req) => req.path === "/api/health",
+    skip: (req) => ["/api/health", "/api/health/live"].includes(req.path),
 });
 
 const authLimiter = rateLimit({

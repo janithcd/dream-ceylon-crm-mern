@@ -41,7 +41,7 @@ Confirm `package.json` contains:
 {
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "node --watch server.js"
   }
 }
 ```
