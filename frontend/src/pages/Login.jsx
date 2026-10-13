@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { FaLock, FaEnvelope } from "react-icons/fa";
 import { useAuth } from "../context/AuthContext";
 
@@ -8,8 +8,8 @@ const Login = () => {
     const { login } = useAuth();
 
     const [formData, setFormData] = useState({
-        email: "admin@dreamceylon.com",
-        password: "DreamCeylon123",
+        email: "",
+        password: "",
     });
 
     const [error, setError] = useState("");
@@ -74,7 +74,8 @@ const Login = () => {
                                                 className="form-control"
                                                 value={formData.email}
                                                 onChange={handleChange}
-                                                placeholder="admin@dreamceylon.com"
+                                                placeholder="Your admin email"
+                                                autoComplete="username"
                                                 required
                                             />
                                         </div>
@@ -93,6 +94,7 @@ const Login = () => {
                                                 value={formData.password}
                                                 onChange={handleChange}
                                                 placeholder="Enter password"
+                                                autoComplete="current-password"
                                                 required
                                             />
                                         </div>
@@ -106,6 +108,10 @@ const Login = () => {
                                         {loading ? "Signing in..." : "Login"}
                                     </button>
                                 </form>
+
+                                <p className="text-center mt-3 mb-0">
+                                    <Link to="/forgot-password">Forgot your password?</Link>
+                                </p>
 
                                 <p className="text-center text-muted small mt-4 mb-0">
                                     MERN Stack Travel Agency CRM

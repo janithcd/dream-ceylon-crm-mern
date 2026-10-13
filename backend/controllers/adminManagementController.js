@@ -34,6 +34,8 @@ const serializeAdmin = (admin) => {
             : { ...admin };
 
     delete value.password;
+    delete value.passwordReset;
+    delete value.tokenVersion;
 
     return {
         ...value,
@@ -302,6 +304,9 @@ const updateAdmin = async (req, res) => {
                 });
             }
 
+            if (admin.email !== normalizedEmail) {
+                admin.passwordReset = undefined;
+            }
             admin.email = normalizedEmail;
         }
 
@@ -451,6 +456,8 @@ const resetAdminPassword = async (req, res) => {
         }
 
         admin.password = password;
+        admin.passwordReset = undefined;
+        admin.tokenVersion = (admin.tokenVersion || 0) + 1;
         await admin.save();
 
         await createActivityLog({

@@ -9,10 +9,11 @@ const {
     resolveAdminPermissions,
 } = require("../config/permissions");
 
-const generateToken = (adminId) => {
+const generateToken = (admin) => {
     return jwt.sign(
         {
-            id: adminId,
+            id: admin._id,
+            v: admin.tokenVersion || 0,
         },
         process.env.JWT_SECRET,
         {
@@ -119,7 +120,7 @@ const registerAdmin = async (req, res) => {
 
         return res.status(201).json({
             ...serializedAdmin,
-            token: generateToken(admin._id),
+            token: generateToken(admin),
         });
     } catch (error) {
         await createActivityLog({
@@ -251,7 +252,7 @@ const loginAdmin = async (req, res) => {
 
         return res.status(200).json({
             ...serializedAdmin,
-            token: generateToken(admin._id),
+            token: generateToken(admin),
         });
     } catch (error) {
         const email = normalizeEmail(req.body?.email);

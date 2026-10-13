@@ -53,6 +53,20 @@ const adminSchema = new mongoose.Schema(
             type: Date,
             default: null,
         },
+
+        tokenVersion: {
+            type: Number,
+            default: 0,
+        },
+
+        passwordReset: {
+            codeHash: { type: String, select: false },
+            expiresAt: { type: Date, select: false },
+            sentAt: { type: Date, select: false },
+            attempts: { type: Number, select: false },
+            tokenHash: { type: String, select: false },
+            tokenExpiresAt: { type: Date, select: false },
+        },
     },
     {
         timestamps: true,

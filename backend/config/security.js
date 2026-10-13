@@ -71,6 +71,16 @@ const authLimiter = rateLimit({
     },
 });
 
+const recoveryLimiter = rateLimit({
+    windowMs: numberFromEnv("RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
+    max: numberFromEnv("PASSWORD_RESET_RATE_LIMIT_MAX", 30),
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+        message: "Too many password recovery attempts. Please wait and try again.",
+    },
+});
+
 const publicInquiryLimiter = rateLimit({
     windowMs: numberFromEnv("RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000),
     max: numberFromEnv("PUBLIC_INQUIRY_RATE_LIMIT_MAX", 5),
@@ -104,6 +114,7 @@ const applySecurityMiddleware = (app) => {
 module.exports = {
     applySecurityMiddleware,
     authLimiter,
+    recoveryLimiter,
     publicInquiryLimiter,
     corsOptions,
 };

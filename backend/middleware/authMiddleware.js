@@ -48,6 +48,12 @@ const protect = async (req, res, next) => {
             });
         }
 
+        if ((decoded.v ?? 0) !== (admin.tokenVersion ?? 0)) {
+            return res.status(401).json({
+                message: "Your login session has ended. Please log in again.",
+            });
+        }
+
         req.admin = admin;
         req.user = admin;
 

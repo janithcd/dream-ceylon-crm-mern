@@ -104,6 +104,7 @@ The system combines operational management, AI-powered productivity tools, brand
 
 - JWT authentication
 - Password hashing with bcrypt
+- Email code password recovery with one-time reset and session revocation
 - Backend permission enforcement
 - Frontend route and action guards
 - Administrator account activation
@@ -314,6 +315,11 @@ OPENAI_MODEL=your_model_name
 
 CLIENT_URL=http://localhost:5173
 CLIENT_URLS=http://localhost:5173
+
+# Zoho CPaaS transactional email Agent
+ZOHO_CPaaS_API_KEY=your_send_api_key
+ZOHO_CPaaS_FROM=admin@dreamceylonjourneys.com
+ZOHO_CPaaS_API_URL=https://cpaas.zoho.com/v1.1/email
 ```
 
 Start the backend:
@@ -321,6 +327,22 @@ Start the backend:
 ```bash
 npm run dev
 ```
+
+### Password recovery and business email
+
+1. Create `admin@dreamceylonjourneys.com` in Zoho Mail after verifying the domain and configuring its incoming MX records. Make sure the mailbox receives messages.
+2. While signed in as a Super Admin, change the CRM account email in **Admins** to that mailbox. The login screen no longer fills in a sample account. Existing accounts are not changed automatically.
+3. In Zoho Mail Admin Console, open **Transactional Emails** to create a Zoho CPaaS account (formerly ZeptoMail). Verify the sending domain there, create or select an Agent, and get its **Send API key**. Zoho Mail Free is an inbox; its normal SMTP is not intended for automated OTP messages.
+4. Set `ZOHO_CPaaS_API_KEY` and `ZOHO_CPaaS_FROM` in the backend environment. Set `ZOHO_CPaaS_API_URL` to the Agent's regional `/v1.1/email` endpoint if it differs from the example. Restart the backend. Never put the Send API key in the frontend or in Git.
+5. On the sign-in page, choose **Forgot your password?** and enter the account email. The six-digit code lasts 10 minutes; a new code can be sent after 60 seconds. Five incorrect attempts invalidate a code. Verification permits one password change within 10 minutes and ends prior login sessions. New passwords need at least 12 characters (at most 72 UTF-8 bytes).
+
+The request endpoint returns the same confirmation for unknown and known addresses. With no transactional email configuration, it returns 503 so an unavailable recovery service is visible. A Super Admin can also reset another admin's password in **Admins**.
+
+| Step | Endpoint | JSON body |
+|---|---|---|
+| Request code | `POST /api/auth/forgot-password` | `{ "email": "admin@dreamceylonjourneys.com" }` |
+| Verify code | `POST /api/auth/verify-reset-code` | `{ "email": "...", "code": "123456" }` |
+| Change password | `POST /api/auth/reset-password` | `{ "email": "...", "resetToken": "...", "password": "..." }` |
 
 ### 3️⃣ Install Frontend Dependencies
 

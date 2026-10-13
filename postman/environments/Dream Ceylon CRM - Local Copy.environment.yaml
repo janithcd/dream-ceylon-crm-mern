@@ -3,7 +3,7 @@ values:
   - key: baseUrl
     value: 'http://localhost:5000'
   - key: superAdminEmail
-    value: admin@dreamceylon.com
+    value: ''
   - key: superAdminPassword
     value: ''
   - key: superAdminToken
