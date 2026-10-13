@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "../api/axios";
 
+const recoveryError = (err, fallback) =>
+    err.response?.data?.message ||
+    (err.response
+        ? fallback
+        : "Cannot connect to the CRM API. Check that the backend is running and the frontend API URL is correct.");
+
 const ForgotPassword = () => {
     const [email, setEmail] = useState("");
     const [code, setCode] = useState("");
@@ -32,7 +38,7 @@ const ForgotPassword = () => {
             setCode("");
             setCooldown(60);
         } catch (err) {
-            setError(err.response?.data?.message || "Could not request a code. Try again later.");
+            setError(recoveryError(err, "Could not request a code. Try again later."));
         } finally {
             setLoading(false);
         }
@@ -48,7 +54,7 @@ const ForgotPassword = () => {
             setStep("password");
             setMessage("");
         } catch (err) {
-            setError(err.response?.data?.message || "Could not verify the code. Try again.");
+            setError(recoveryError(err, "Could not verify the code. Try again."));
         } finally {
             setLoading(false);
         }
@@ -72,7 +78,7 @@ const ForgotPassword = () => {
             setStep("complete");
             setMessage(response.data.message);
         } catch (err) {
-            setError(err.response?.data?.message || "Could not change the password. Try again.");
+            setError(recoveryError(err, "Could not change the password. Try again."));
         } finally {
             setLoading(false);
         }
