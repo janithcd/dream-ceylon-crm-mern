@@ -73,6 +73,7 @@ test("recovery codes expire, lock after five guesses, and reset passwords only o
         sent.push({ to, code });
     });
     t.mock.method(console, "error", () => {});
+    t.mock.method(console, "info", () => {});
 
     const server = app.listen(0, "127.0.0.1");
     await new Promise(resolve => server.once("listening", resolve));
@@ -139,9 +140,11 @@ test("transactional email uses Zoho CPaaS with an isolated server-side key", asy
     const fetchCalls = [];
     t.mock.method(global, "fetch", async (url, options) => {
         fetchCalls.push({ url: String(url), options });
-        return { ok: true, status: 200 };
+        return { ok: true, status: 200, json: async () => ({
+            data: [{ code: "EM_104", message: "OK" }], message: "OK", request_id: "req-example",
+        }) };
     });
-    await mail.sendPasswordResetCode({ to: "admin@example.test", code: "000123" });
+    const requestId = await mail.sendPasswordResetCode({ to: "admin@example.test", code: "000123" });
     assert.equal(fetchCalls.length, 1);
     assert.equal(fetchCalls[0].url, "https://cpaas.zoho.com/v1.1/email");
     assert.equal(fetchCalls[0].options.headers.Authorization, "Zoho-enczapikey synthetic-test-key");
@@ -149,4 +152,24 @@ test("transactional email uses Zoho CPaaS with an isolated server-side key", asy
     assert.equal(body.from.address, "admin@example.test");
     assert.equal(body.to[0].email_address.address, "admin@example.test");
     assert.match(body.textbody, /000123/);
+    assert.equal(requestId, "req-example");
+});
+
+test("Zoho errors expose safe diagnostic codes without leaking email or OTP", async (t) => {
+    t.mock.method(global, "fetch", async () => ({
+        ok: false, status: 400, json: async () => ({
+            message: "error", data: {
+                error_code: "TM_4001", sub_code: "SM_128",
+                target_value: "secret@example.test", message: "secret@example.test is blocked",
+            },
+        }),
+    }));
+    await assert.rejects(
+        mail.sendPasswordResetCode({ to: "secret@example.test", code: "123456" }),
+        (error) => {
+            assert.match(error.message, /HTTP 400, code TM_4001, sub-code SM_128/);
+            assert.doesNotMatch(error.message, /secret@example\.test|123456/);
+            return true;
+        }
+    );
 });

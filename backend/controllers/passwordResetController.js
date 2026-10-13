@@ -56,7 +56,9 @@ const requestPasswordReset = async (req, res) => {
             );
             if (claimed) {
                 // Respond without exposing whether an account triggered a network call.
-                void transactionalEmail.sendPasswordResetCode({ to: email, code }).catch(async (error) => {
+                void transactionalEmail.sendPasswordResetCode({ to: email, code }).then((requestId) => {
+                    console.info(`Password reset email accepted by Zoho CPaaS${requestId ? ` (request ID ${requestId})` : ""}.`);
+                }).catch(async (error) => {
                     // Only remove this exact request, so a later request cannot be erased.
                     try {
                         await Admin.updateOne(

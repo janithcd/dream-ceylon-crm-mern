@@ -2,6 +2,10 @@ const isConfigured = () =>
     ["ZOHO_CPaaS_API_KEY", "ZOHO_CPaaS_FROM"]
         .every((name) => Boolean(process.env[name]?.trim()));
 
+// Keep provider diagnostics useful without writing addresses, codes, or API keys to logs.
+const safeCode = (value) => typeof value === "string" && /^[A-Z]{1,10}_[0-9]{1,5}$/.test(value) ? value : null;
+const safeRequestId = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(value) ? value : null;
+
 const sendPasswordResetCode = async ({ to, code }) => {
     if (!isConfigured()) {
         throw new Error("Zoho transactional email is not configured.");
@@ -26,9 +30,20 @@ const sendPasswordResetCode = async ({ to, code }) => {
         }),
         signal: AbortSignal.timeout(10000),
     });
-    if (!response.ok) {
-        throw new Error(`Zoho transactional email returned HTTP ${response.status}.`);
+    const result = await response.json().catch(() => null);
+    const recipientRejected = Array.isArray(result?.data) && result.data.some((item) => item.message !== "OK");
+    if (!response.ok || result?.message !== "OK" || recipientRejected) {
+        const providerData = Array.isArray(result?.data) ? result.data[0] : result?.data;
+        const details = [`HTTP ${response.status}`];
+        const errorCode = safeCode(providerData?.error_code);
+        const subCode = safeCode(providerData?.sub_code);
+        const requestId = safeRequestId(result?.request_id);
+        if (errorCode) details.push(`code ${errorCode}`);
+        if (subCode) details.push(`sub-code ${subCode}`);
+        if (requestId) details.push(`request ID ${requestId}`);
+        throw new Error(`Zoho CPaaS email request failed (${details.join(", ")}).`);
     }
+    return safeRequestId(result.request_id);
 };
 
 module.exports = { isConfigured, sendPasswordResetCode };
