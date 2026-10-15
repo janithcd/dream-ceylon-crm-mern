@@ -63,6 +63,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - View bookings in a calendar
 - Generate booking invoices and receipts
 - Track outstanding balances
+- Record private supplier costs and compare estimated quotation profit with booked profit
 
 ### 💳 Payments and Finance
 
@@ -72,7 +73,12 @@ The system combines operational management, AI-powered productivity tools, brand
 - Calculate paid, pending, and outstanding amounts
 - Generate individual payment receipts
 - View financial reports
+- Keep cost entries visible only to admins with cost permissions
 - Export report data
+
+The **Cost & Profit** page is available to Super Admin and Finance accounts. Open a quotation to enter *estimated* supplier costs, or a booking to enter *actual* supplier costs. Cost entries are stored separately from client quotations and invoices, and require `cost.view` to read or `cost.manage` to change. A Super Admin can grant these permissions to another admin. Costs never appear in customer PDFs.
+
+Enter each supplier amount in its own currency. If it differs from the quotation or booking currency, enter the rate as **one supplier currency unit in the selling currency**. For example, if the client price is in USD and one LKR is worth 0.0033 USD, enter `0.0033` for an LKR cost. This rate is saved on the entry; the CRM does not fetch live exchange rates. Changing a sale currency flags old costs for review and hides profit until they are revalued. The summary uses `profit = client selling price − recorded costs` and `margin = profit / client selling price`. No profit is shown before any costs are entered. Booking profit uses the full booked selling price, while actual cash received and refunds remain in Payment Reports.
 
 ### 🤖 AI Tools
 
@@ -505,6 +511,7 @@ The project includes a complete Postman test collection covering:
 - [x] Quotations
 - [x] Booking management
 - [x] Payment management
+- [x] Supplier costs and profit tracking
 - [x] Follow-ups
 - [x] PDF documents
 - [x] AI tools

@@ -9,6 +9,8 @@
 - Quotation-to-booking conversion
 - Booking calendar
 - Payment tracking and balance calculation
+- Private supplier cost estimates on quotations and actual costs on bookings
+- Profit and margin summaries with saved manual currency conversion rates
 - Financial reporting and CSV export
 
 ## Document Generation

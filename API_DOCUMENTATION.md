@@ -103,6 +103,19 @@ DELETE /booking-payments/:id
 POST   /payment-receipts/:id
 ```
 
+## Supplier Costs and Profit
+
+Requires `cost.view` for read and both `cost.view` and `cost.manage` for writes. `:type` is `quotation` or `booking`.
+
+```http
+GET    /finance/costs/:type/:id
+POST   /finance/costs/:type/:id
+PUT    /finance/costs/:id
+DELETE /finance/costs/:id
+```
+
+POST and PUT take `{ "category": "Hotel", "description": "Two nights", "amount": 30000, "currency": "LKR", "conversionRate": 0.003333 }`. The conversion rate is **one unit of the supplier currency in the quotation or booking currency**; it is set to 1 when currencies match. Each item stores its target currency so that changes to the parent sale currency require a manual revaluation. GET returns cost items and a profit summary, plus the linked quotation's estimated cost when viewing a converted booking. These endpoints are private and separate from public and client document APIs.
+
 ## Follow-Ups
 
 ```http

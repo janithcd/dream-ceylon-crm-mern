@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
     FaBell,
+    FaCoins,
     FaEdit,
     FaFileCsv,
     FaFileInvoiceDollar,
@@ -986,6 +987,15 @@ const Bookings = () => {
 
                                         <td className="text-end">
                                             <div className="d-flex justify-content-end gap-2">
+                                                <PermissionGuard all={["cost.view", "quotation.view", "booking.view"]}>
+                                                    <button
+                                                        className="btn btn-sm btn-outline-secondary"
+                                                        onClick={() => navigate(`/cost-profit?type=booking&id=${booking._id}`)}
+                                                        title="Actual costs and booked profit"
+                                                    >
+                                                        <FaCoins />
+                                                    </button>
+                                                </PermissionGuard>
                                                 <PermissionGuard permission="followUp.manage">
                                                     <button
                                                         className="btn btn-sm btn-outline-warning"

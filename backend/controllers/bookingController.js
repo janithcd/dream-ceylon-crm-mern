@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Booking = require("../models/Booking");
+const CostEntry = require("../models/CostEntry");
 const Inquiry = require("../models/Inquiry");
 const { createActivityLog } = require("../utils/createActivityLog");
 
@@ -431,6 +432,11 @@ const deleteBooking = async (req, res) => {
         };
 
         await booking.deleteOne();
+        try {
+            await CostEntry.deleteMany({ recordType: "Booking", recordId: deletedDetails.id });
+        } catch (cleanupError) {
+            console.error("Could not remove deleted booking cost entries:", cleanupError);
+        }
 
         await createActivityLog({
             req,

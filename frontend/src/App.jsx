@@ -17,6 +17,7 @@ import BookingCalendar from "./pages/BookingCalendar";
 import FollowUps from "./pages/FollowUps";
 import Customers from "./pages/Customers";
 import PaymentReports from "./pages/PaymentReports";
+import CostProfit from "./pages/CostProfit";
 import Settings from "./pages/Settings";
 import ActivityLogs from "./pages/ActivityLogs";
 import Admins from "./pages/Admins";
@@ -150,6 +151,14 @@ const App = () => {
                             element={
                                 <PermissionRoute permission={ROUTE_PERMISSIONS.paymentReports}>
                                     <PaymentReports />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="cost-profit"
+                            element={
+                                <PermissionRoute all={[ROUTE_PERMISSIONS.costProfit, ROUTE_PERMISSIONS.quotations, ROUTE_PERMISSIONS.bookings]}>
+                                    <CostProfit />
                                 </PermissionRoute>
                             }
                         />

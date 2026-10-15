@@ -10,6 +10,7 @@ import {
     FaTrash,
     FaBell,
     FaFileCsv,
+    FaCoins,
 } from "react-icons/fa";
 import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
@@ -680,6 +681,15 @@ const QuotationHistory = () => {
 
                                         <td>
                                             <div className="d-flex justify-content-end gap-2">
+                                                <PermissionGuard all={["cost.view", "quotation.view", "booking.view"]}>
+                                                    <button
+                                                        className="btn btn-sm btn-outline-secondary"
+                                                        onClick={() => navigate(`/cost-profit?type=quotation&id=${quotation._id}`)}
+                                                        title="Estimated costs and profit"
+                                                    >
+                                                        <FaCoins />
+                                                    </button>
+                                                </PermissionGuard>
                                                 <PermissionGuard permission="followUp.manage">
                                                     <button
                                                         className="btn btn-sm btn-outline-warning"

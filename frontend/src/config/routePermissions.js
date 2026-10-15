@@ -12,6 +12,7 @@ export const ROUTE_PERMISSIONS = Object.freeze({
 
     payments: "payment.view",
     paymentReports: "report.view",
+    costProfit: "cost.view",
 
     followUps: "followUp.view",
     customers: "customer.view",

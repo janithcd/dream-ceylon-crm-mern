@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Quotation = require("../models/Quotation");
+const CostEntry = require("../models/CostEntry");
 const { createActivityLog } = require("../utils/createActivityLog");
 
 const safeText = (value) => {
@@ -464,6 +465,11 @@ const deleteQuotation = async (req, res) => {
         };
 
         await quotation.deleteOne();
+        try {
+            await CostEntry.deleteMany({ recordType: "Quotation", recordId: deletedDetails.id });
+        } catch (cleanupError) {
+            console.error("Could not remove deleted quotation cost entries:", cleanupError);
+        }
 
         await createActivityLog({
             req,

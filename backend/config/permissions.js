@@ -39,6 +39,8 @@ const PERMISSIONS = Object.freeze({
 
     REPORT_VIEW: "report.view",
     REPORT_EXPORT: "report.export",
+    COST_VIEW: "cost.view",
+    COST_MANAGE: "cost.manage",
 
     PDF_GENERATE: "pdf.generate",
 
@@ -148,6 +150,8 @@ const ROLE_PERMISSIONS = Object.freeze({
         PERMISSIONS.REPORT_EXPORT,
 
         PERMISSIONS.QUOTATION_VIEW,
+        PERMISSIONS.COST_VIEW,
+        PERMISSIONS.COST_MANAGE,
         PERMISSIONS.PDF_GENERATE,
     ],
 

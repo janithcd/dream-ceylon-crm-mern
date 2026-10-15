@@ -39,6 +39,8 @@ export const PERMISSIONS = Object.freeze({
 
     REPORT_VIEW: "report.view",
     REPORT_EXPORT: "report.export",
+    COST_VIEW: "cost.view",
+    COST_MANAGE: "cost.manage",
 
     PDF_GENERATE: "pdf.generate",
 
@@ -140,6 +142,13 @@ export const PERMISSION_GROUPS = [
             ["customer.view", "View customers"],
             ["report.view", "View reports"],
             ["report.export", "Export reports"],
+        ],
+    },
+    {
+        title: "Supplier Costs & Profit",
+        permissions: [
+            ["cost.view", "View supplier costs and profit"],
+            ["cost.manage", "Manage supplier costs"],
         ],
     },
     {

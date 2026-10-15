@@ -6,6 +6,7 @@ import {
     FaCar,
     FaChartLine,
     FaCog,
+    FaCoins,
     FaEnvelopeOpenText,
     FaFileInvoiceDollar,
     FaGlobeAsia,
@@ -126,6 +127,13 @@ const AdminLayout = () => {
                         <NavLink to="/payment-reports">
                             <FaMoneyBillWave />
                             Payment Reports
+                        </NavLink>
+                    </PermissionGuard>
+
+                    <PermissionGuard all={[ROUTE_PERMISSIONS.costProfit, ROUTE_PERMISSIONS.quotations, ROUTE_PERMISSIONS.bookings]}>
+                        <NavLink to="/cost-profit">
+                            <FaCoins />
+                            Cost &amp; Profit
                         </NavLink>
                     </PermissionGuard>
 

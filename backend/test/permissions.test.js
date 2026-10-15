@@ -17,6 +17,15 @@ test("Sales cannot access payment reports", () => {
 test("Finance can access payment reports", () => {
     assert.equal(run(authorizePermissions("report.view", "payment.view"), { role: "Finance" }).next, true);
 });
+test("only finance and Super Admin see and manage supplier costs by default", () => {
+    for (const role of ["Manager", "Sales", "Viewer"]) {
+        assert.equal(run(authorizePermissions("cost.view"), { role }).status, 403);
+        assert.equal(run(authorizePermissions("cost.view", "cost.manage"), { role }).status, 403);
+    }
+    for (const role of ["Finance", "Super Admin"]) {
+        assert.equal(run(authorizePermissions("cost.view", "cost.manage"), { role }).next, true);
+    }
+});
 test("Finance cannot manage administrator accounts", () => {
     assert.equal(run(authorizePermissions("admin.create"), { role: "Finance" }).status, 403);
 });

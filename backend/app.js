@@ -28,6 +28,7 @@ const paymentReceiptPdfRoutes = require("./routes/paymentReceiptPdfRoutes");
 const followUpRoutes = require("./routes/followUpRoutes");
 const customerRoutes = require("./routes/customerRoutes");
 const financeReportRoutes = require("./routes/financeReportRoutes");
+const costRoutes = require("./routes/costRoutes");
 const settingRoutes = require("./routes/settingRoutes");
 const activityLogRoutes = require("./routes/activityLogRoutes");
 const adminManagementRoutes = require("./routes/adminManagementRoutes");
@@ -117,6 +118,7 @@ app.use("/api/payment-receipts", paymentReceiptPdfRoutes);
 app.use("/api/follow-ups", followUpRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/finance", financeReportRoutes);
+app.use("/api/finance/costs", costRoutes);
 app.use("/api/settings", settingRoutes);
 
 
