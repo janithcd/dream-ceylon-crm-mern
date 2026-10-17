@@ -72,6 +72,7 @@ const main = async () => {
             title: "Confirm hotel", assignedTo: String(admin._id),
             dueDate: dateOnly(new Date(Date.now() - dayMs)),
             priority: "High",
+            notes: "  Check supplier room availability  ",
         });
         const addedBody = await added.text();
         assert.equal(added.status, 201, `Add task: ${addedBody}`);
@@ -80,6 +81,7 @@ const main = async () => {
         assert.equal(tasks[0].title, "Confirm hotel");
         assert.equal(String(tasks[0].assignedTo), String(admin._id));
         assert.equal(tasks[0].priority, "High");
+        assert.equal(tasks[0].notes, "Check supplier room availability");
         const bookingView = await request(`http://127.0.0.1:5000/api/bookings/${booking._id}`, "GET");
         assert.equal(bookingView.status, 200);
         assert.equal((await bookingView.json()).preparationTasks[0].assignedTo.name, "CI Booking Test");
@@ -90,13 +92,15 @@ const main = async () => {
         assert.equal(overdueMine.total, 1);
         assert.equal(overdueMine.items[0].bookingCode, booking.bookingCode);
         assert.equal(overdueMine.items[0].priority, "High");
+        assert.equal(overdueMine.items[0].notes, "Check supplier room availability");
         assert.equal((await getMine("?priorityFilter=high")).total, 1);
 
         const taskUrl = `${url}/${tasks[0]._id}`;
-        const rescheduled = await request(taskUrl, "PUT", { dueDate: dateOnly(new Date(Date.now() + dayMs)), priority: "Low" });
+        const rescheduled = await request(taskUrl, "PUT", { dueDate: dateOnly(new Date(Date.now() + dayMs)), priority: "Low", notes: "Supplier confirmed" });
         assert.equal(rescheduled.status, 200);
         assert.equal(String((await Booking.findById(booking._id)).preparationTasks[0].assignedTo), String(admin._id));
         assert.equal((await Booking.findById(booking._id)).preparationTasks[0].priority, "Low");
+        assert.equal((await Booking.findById(booking._id)).preparationTasks[0].notes, "Supplier confirmed");
         assert.equal((await getMine("?priorityFilter=high")).total, 0);
         assert.equal((await getMine()).items[0].priority, "Low");
         assert.equal((await ownAttention()).overdueTaskCount, 0);
@@ -131,6 +135,11 @@ const main = async () => {
         const unassignedTask = (await Booking.findById(booking._id)).preparationTasks[0];
         assert.equal(unassignedTask.assignedTo, null);
         assert.equal(unassignedTask.dueDate, null);
+
+        const claimUrl = `${taskUrl}/claim`;
+        assert.equal((await request(claimUrl, "PATCH")).status, 200);
+        assert.equal(String((await Booking.findById(booking._id)).preparationTasks[0].assignedTo), String(admin._id));
+        assert.equal((await request(claimUrl, "PATCH")).status, 409);
 
         const removed = await request(taskUrl, "DELETE");
         assert.equal(removed.status, 200);

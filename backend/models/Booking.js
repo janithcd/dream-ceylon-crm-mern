@@ -60,6 +60,12 @@ const preparationTaskSchema = new mongoose.Schema({
         enum: ["High", "Normal", "Low"],
         default: "Normal",
     },
+    notes: {
+        type: String,
+        trim: true,
+        maxlength: 500,
+        default: "",
+    },
     createdAt: {
         type: Date,
         default: Date.now,

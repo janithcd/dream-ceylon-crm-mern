@@ -11,6 +11,7 @@ const {
     getPreparationAssignees,
     addPreparationTask,
     updatePreparationTaskDetails,
+    claimPreparationTask,
     setPreparationTaskCompletion,
     deletePreparationTask,
 } = require("../controllers/bookingPreparationController");
@@ -76,6 +77,13 @@ router.patch(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
     setPreparationTaskCompletion
+);
+
+router.patch(
+    "/:id/preparation-tasks/:taskId/claim",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
+    claimPreparationTask
 );
 
 router.put(
