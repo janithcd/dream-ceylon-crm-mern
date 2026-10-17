@@ -1,6 +1,6 @@
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
     FaBell,
     FaCoins,
@@ -42,6 +42,8 @@ const initialFormState = {
 
 const Bookings = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const initialKeyword = searchParams.get("keyword") || "";
 
     const [bookings, setBookings] = useState([]);
     const [inquiries, setInquiries] = useState([]);
@@ -52,8 +54,8 @@ const Bookings = () => {
     const [editingId, setEditingId] = useState(null);
     const [selectedPaymentBooking, setSelectedPaymentBooking] = useState(null);
 
-    const [searchInput, setSearchInput] = useState("");
-    const [keyword, setKeyword] = useState("");
+    const [searchInput, setSearchInput] = useState(initialKeyword);
+    const [keyword, setKeyword] = useState(initialKeyword);
     const [bookingStatus, setBookingStatus] = useState("");
     const [paymentStatus, setPaymentStatus] = useState("");
     const [vehicleType, setVehicleType] = useState("");

@@ -5,6 +5,7 @@ const Booking = require("../models/Booking");
 const Vehicle = require("../models/Vehicle");
 const Quotation = require("../models/Quotation");
 const { getBusinessMonthStart } = require("../utils/businessDate");
+const { getUpcomingDepartureQuery } = require("../utils/upcomingDepartures");
 
 // @desc    Get dashboard statistics
 // @route   GET /api/dashboard/stats
@@ -235,6 +236,11 @@ const getDashboardStats = async (req, res) => {
             .sort({ createdAt: -1 })
             .limit(5);
 
+        const upcomingDepartures = await Booking.find(getUpcomingDepartureQuery())
+            .select("bookingCode customer.fullName travelStartDate travelEndDate bookingStatus paymentStatus")
+            .sort({ travelStartDate: 1, createdAt: 1 })
+            .limit(5);
+
         const recentQuotations = await Quotation.find()
             .populate("inquiry", "fullName email whatsappNumber country status")
             .populate("booking", "bookingCode bookingStatus paymentStatus")
@@ -314,6 +320,7 @@ const getDashboardStats = async (req, res) => {
 
             recentInquiries,
             recentBookings,
+            upcomingDepartures,
             recentQuotations,
         });
     } catch (error) {

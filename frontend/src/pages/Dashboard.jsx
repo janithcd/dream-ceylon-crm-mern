@@ -517,6 +517,64 @@ const Dashboard = () => {
                 <DashboardFollowUpAlerts />
             </PermissionGuard>
 
+            <PermissionGuard permission="booking.view">
+                <div className="card border-0 shadow-sm rounded-4 mb-4">
+                    <div className="card-body p-4">
+                        <div className="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
+                            <div>
+                                <h5 className="fw-bold mb-1">Upcoming Departures</h5>
+                                <p className="text-muted small mb-0">The next five tours starting within 30 days, including today.</p>
+                            </div>
+                            <button className="btn btn-outline-primary btn-sm" onClick={() => navigate("/booking-calendar")}>
+                                <FaCalendarCheck className="me-2" />
+                                Open calendar
+                            </button>
+                        </div>
+
+                        {!stats?.upcomingDepartures?.length ? (
+                            <p className="text-muted mb-0">No departures in the next 30 days.</p>
+                        ) : (
+                            <div className="table-responsive">
+                                <table className="table align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Booking</th>
+                                            <th>Client</th>
+                                            <th>Departure</th>
+                                            <th>Return</th>
+                                            <th>Booking status</th>
+                                            <th>Payment</th>
+                                            <th className="text-end">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {stats.upcomingDepartures.map((booking) => (
+                                            <tr key={booking._id}>
+                                                <td className="fw-semibold">{booking.bookingCode}</td>
+                                                <td>{booking.customer?.fullName || "-"}</td>
+                                                <td>{formatCalendarDate(booking.travelStartDate)}</td>
+                                                <td>{formatCalendarDate(booking.travelEndDate)}</td>
+                                                <td>{booking.bookingStatus}</td>
+                                                <td>{booking.paymentStatus}</td>
+                                                <td className="text-end">
+                                                    <button
+                                                        className="btn btn-sm btn-outline-primary"
+                                                        onClick={() => navigate(`/bookings?keyword=${encodeURIComponent(booking.bookingCode)}`)}
+                                                        aria-label={`View booking ${booking.bookingCode}`}
+                                                    >
+                                                        View
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </PermissionGuard>
+
             <PermissionGuard permission="activityLog.view">
                 <DashboardRecentActivity />
             </PermissionGuard>
