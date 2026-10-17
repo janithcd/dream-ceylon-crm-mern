@@ -62,6 +62,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - Convert accepted quotations into bookings
 - Manage booking details and status
 - Track an internal preparation checklist per booking for hotels, transport, guides, itineraries, or custom tasks
+- Record hotel stays, room and meal plans, confirmation status, and hotel references on each booking
 - View bookings in a calendar
 - Generate booking invoices and receipts
 - Track outstanding balances

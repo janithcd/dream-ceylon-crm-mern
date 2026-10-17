@@ -52,6 +52,24 @@ const preparationTaskSchema = new mongoose.Schema({
     },
 });
 
+const hotelStaySchema = new mongoose.Schema({
+    hotelName: { type: String, required: true, trim: true, maxlength: 120 },
+    location: { type: String, trim: true, maxlength: 120, default: "" },
+    checkInDate: { type: Date, required: true },
+    checkOutDate: { type: Date, required: true },
+    rooms: { type: Number, min: 1, max: 20, default: 1 },
+    roomType: { type: String, trim: true, maxlength: 100, default: "" },
+    mealPlan: {
+        type: String,
+        enum: ["Room Only", "Bed & Breakfast", "Half Board", "Full Board", "All Inclusive", "Other"],
+        default: "Room Only",
+    },
+    status: { type: String, enum: ["Requested", "Confirmed", "Cancelled"], default: "Requested" },
+    confirmationNumber: { type: String, trim: true, maxlength: 100, default: "" },
+    notes: { type: String, trim: true, maxlength: 500, default: "" },
+    createdAt: { type: Date, default: Date.now },
+});
+
 const bookingSchema = new mongoose.Schema(
     {
         bookingCode: {
@@ -141,6 +159,11 @@ const bookingSchema = new mongoose.Schema(
 
         preparationTasks: {
             type: [preparationTaskSchema],
+            default: [],
+        },
+
+        hotelStays: {
+            type: [hotelStaySchema],
             default: [],
         },
     },

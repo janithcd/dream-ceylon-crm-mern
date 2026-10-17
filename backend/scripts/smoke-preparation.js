@@ -56,7 +56,31 @@ const main = async () => {
         const removed = await request(taskUrl, "DELETE");
         assert.equal(removed.status, 200);
         assert.equal((await Booking.findById(booking._id)).preparationTasks.length, 0);
-        console.log("Booking preparation smoke test passed against MongoDB.");
+
+        const hotelsUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/hotel-stays`;
+        const hotelAdded = await request(hotelsUrl, "POST", {
+            hotelName: "CI Hotel",
+            location: "Sigiriya",
+            checkInDate: "2027-03-01",
+            checkOutDate: "2027-03-03",
+            rooms: 1,
+            mealPlan: "Half Board",
+        });
+        const hotelAddedBody = await hotelAdded.text();
+        assert.equal(hotelAdded.status, 201, `Add hotel stay: ${hotelAddedBody}`);
+        const hotel = (await Booking.findById(booking._id)).hotelStays[0];
+        assert.equal(hotel.hotelName, "CI Hotel");
+
+        const hotelUrl = `${hotelsUrl}/${hotel._id}`;
+        const confirmed = await request(hotelUrl, "PUT", { status: "Confirmed", confirmationNumber: "CI-123" });
+        const confirmedBody = await confirmed.text();
+        assert.equal(confirmed.status, 200, `Confirm hotel stay: ${confirmedBody}`);
+        assert.equal((await Booking.findById(booking._id)).hotelStays[0].confirmationNumber, "CI-123");
+
+        const hotelRemoved = await request(hotelUrl, "DELETE");
+        assert.equal(hotelRemoved.status, 200);
+        assert.equal((await Booking.findById(booking._id)).hotelStays.length, 0);
+        console.log("Booking preparation and hotel stays smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
             await ActivityLog.deleteMany({ relatedRecordId: booking._id });

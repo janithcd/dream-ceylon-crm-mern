@@ -1,0 +1,251 @@
+import { useEffect, useState } from "react";
+import { FaEdit, FaHotel, FaPlus, FaTrash } from "react-icons/fa";
+import api from "../api/axios";
+import { usePermissions } from "../context/PermissionContext";
+import { formatCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
+
+const mealPlans = ["Room Only", "Bed & Breakfast", "Half Board", "Full Board", "All Inclusive", "Other"];
+const statuses = ["Requested", "Confirmed", "Cancelled"];
+
+const emptyForm = () => ({
+    hotelName: "",
+    location: "",
+    checkInDate: "",
+    checkOutDate: "",
+    rooms: 1,
+    roomType: "",
+    mealPlan: "Room Only",
+    status: "Requested",
+    confirmationNumber: "",
+    notes: "",
+});
+
+const BookingHotelsModal = ({ booking, onClose, onChanged }) => {
+    const { hasPermission } = usePermissions();
+    const canUpdate = hasPermission("booking.update");
+    const [stays, setStays] = useState(booking.hotelStays || []);
+    const [form, setForm] = useState(emptyForm);
+    const [editingId, setEditingId] = useState("");
+    const [showForm, setShowForm] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
+
+    useEffect(() => {
+        let active = true;
+        api.get(`/bookings/${booking._id}`)
+            .then((response) => {
+                if (active) setStays(response.data.hotelStays || []);
+            })
+            .catch((err) => {
+                if (active) setError(err.response?.data?.message || "Failed to load hotel stays.");
+            })
+            .finally(() => {
+                if (active) setLoading(false);
+            });
+        return () => { active = false; };
+    }, [booking._id]);
+
+    const confirmedCount = stays.filter((stay) => stay.status === "Confirmed").length;
+    const requestedCount = stays.filter((stay) => stay.status === "Requested").length;
+
+    const resetForm = () => {
+        setForm(emptyForm());
+        setEditingId("");
+        setShowForm(false);
+    };
+
+    const editStay = (stay) => {
+        setError("");
+        setSuccess("");
+        setForm({
+            hotelName: stay.hotelName || "",
+            location: stay.location || "",
+            checkInDate: toCalendarDateInput(stay.checkInDate),
+            checkOutDate: toCalendarDateInput(stay.checkOutDate),
+            rooms: stay.rooms || 1,
+            roomType: stay.roomType || "",
+            mealPlan: stay.mealPlan || "Room Only",
+            status: stay.status || "Requested",
+            confirmationNumber: stay.confirmationNumber || "",
+            notes: stay.notes || "",
+        });
+        setEditingId(stay._id);
+        setShowForm(true);
+    };
+
+    const saveStay = async (event) => {
+        event.preventDefault();
+        if (busy) return;
+        try {
+            setBusy(true);
+            setError("");
+            setSuccess("");
+            const url = `/bookings/${booking._id}/hotel-stays`;
+            const payload = { ...form, rooms: Number(form.rooms) };
+            const response = editingId
+                ? await api.put(`${url}/${editingId}`, payload)
+                : await api.post(url, payload);
+            setStays(response.data.hotelStays || []);
+            setSuccess(editingId ? "Hotel stay updated." : "Hotel stay added.");
+            resetForm();
+            onChanged();
+        } catch (err) {
+            setError(err.response?.data?.message || "Failed to save hotel stay.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const removeStay = async (stay) => {
+        if (busy || !window.confirm(`Remove ${stay.hotelName} from this booking?`)) return;
+        try {
+            setBusy(true);
+            setError("");
+            setSuccess("");
+            const response = await api.delete(`/bookings/${booking._id}/hotel-stays/${stay._id}`);
+            setStays(response.data.hotelStays || []);
+            if (editingId === stay._id) resetForm();
+            onChanged();
+        } catch (err) {
+            setError(err.response?.data?.message || "Failed to remove hotel stay.");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const updateField = (event) => setForm((previous) => ({ ...previous, [event.target.name]: event.target.value }));
+
+    return (
+        <>
+            <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="booking-hotels-title">
+                <div className="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
+                    <div className="modal-content">
+                        <div className="modal-header">
+                            <div>
+                                <h5 id="booking-hotels-title" className="modal-title"><FaHotel className="me-2" />Hotel reservations</h5>
+                                <small className="text-muted">{booking.bookingCode} · {booking.customer?.fullName}</small>
+                            </div>
+                            <button type="button" className="btn-close" aria-label="Close" onClick={onClose} />
+                        </div>
+
+                        <div className="modal-body">
+                            <p className="text-muted small">Internal stay details for this booking. Record supplier costs separately in Cost & Profit.</p>
+                            {error && <div className="alert alert-danger" role="alert">{error}</div>}
+                            {success && <div className="alert alert-success" role="status">{success}</div>}
+
+                            <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                <h6 className="fw-bold mb-0">{confirmedCount} confirmed · {requestedCount} awaiting confirmation</h6>
+                                {canUpdate && !loading && !showForm && (
+                                    <button className="btn btn-primary btn-sm" type="button" onClick={() => { setForm(emptyForm()); setEditingId(""); setShowForm(true); }} disabled={busy || stays.length >= 50}>
+                                        <FaPlus className="me-2" />Add hotel stay
+                                    </button>
+                                )}
+                            </div>
+
+                            {loading ? <p className="text-muted">Loading hotel stays...</p> : stays.length === 0 ? (
+                                <div className="border rounded-3 p-3 text-muted mb-3">No hotel stays recorded. Transport-only bookings can leave this empty.</div>
+                            ) : (
+                                <div className="row g-3 mb-4">
+                                    {stays.map((stay) => (
+                                        <div key={stay._id} className="col-12 col-lg-6">
+                                            <div className="border rounded-4 p-3 h-100">
+                                                <div className="d-flex justify-content-between align-items-start gap-2">
+                                                    <div>
+                                                        <h6 className="fw-bold mb-1">{stay.hotelName}</h6>
+                                                        <small className="text-muted">{stay.location || "Location not specified"}</small>
+                                                    </div>
+                                                    <span className={`badge ${stay.status === "Confirmed" ? "text-bg-success" : stay.status === "Cancelled" ? "text-bg-secondary" : "text-bg-warning"}`}>
+                                                        {stay.status}
+                                                    </span>
+                                                </div>
+                                                <div className="small mt-3">
+                                                    <div><strong>Stay:</strong> {formatCalendarDate(stay.checkInDate)} – {formatCalendarDate(stay.checkOutDate)}</div>
+                                                    <div><strong>Rooms:</strong> {stay.rooms} {stay.roomType && `· ${stay.roomType}`}</div>
+                                                    <div><strong>Meal plan:</strong> {stay.mealPlan}</div>
+                                                    {stay.confirmationNumber && <div><strong>Confirmation:</strong> {stay.confirmationNumber}</div>}
+                                                    {stay.notes && <div className="text-muted mt-2">{stay.notes}</div>}
+                                                </div>
+                                                {canUpdate && (
+                                                    <div className="d-flex gap-2 mt-3">
+                                                        <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => editStay(stay)} disabled={busy}><FaEdit className="me-1" />Edit</button>
+                                                        <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => removeStay(stay)} disabled={busy}><FaTrash className="me-1" />Remove</button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {canUpdate && !loading && showForm && (
+                                <form id="hotel-stay-form" onSubmit={saveStay}>
+                                    <h6 className="fw-bold mb-3">{editingId ? "Edit hotel stay" : "Add hotel stay"}</h6>
+                                    <div className="row g-3">
+                                        <div className="col-md-6">
+                                            <label className="form-label" htmlFor="stay-name">Property / hotel *</label>
+                                            <input id="stay-name" name="hotelName" className="form-control" value={form.hotelName} onChange={updateField} maxLength={120} required />
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label className="form-label" htmlFor="stay-location">Location</label>
+                                            <input id="stay-location" name="location" className="form-control" value={form.location} onChange={updateField} maxLength={120} placeholder="e.g. Sigiriya" />
+                                        </div>
+                                        <div className="col-md-4">
+                                            <label className="form-label" htmlFor="stay-check-in">Check-in *</label>
+                                            <input id="stay-check-in" name="checkInDate" type="date" className="form-control" value={form.checkInDate} onChange={updateField} required />
+                                        </div>
+                                        <div className="col-md-4">
+                                            <label className="form-label" htmlFor="stay-check-out">Check-out *</label>
+                                            <input id="stay-check-out" name="checkOutDate" type="date" className="form-control" value={form.checkOutDate} onChange={updateField} required />
+                                        </div>
+                                        <div className="col-md-4">
+                                            <label className="form-label" htmlFor="stay-rooms">Rooms *</label>
+                                            <input id="stay-rooms" name="rooms" type="number" min="1" max="20" step="1" className="form-control" value={form.rooms} onChange={updateField} required />
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label className="form-label" htmlFor="stay-room-type">Room type</label>
+                                            <input id="stay-room-type" name="roomType" className="form-control" value={form.roomType} onChange={updateField} maxLength={100} placeholder="e.g. Superior double" />
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label className="form-label" htmlFor="stay-meal-plan">Meal plan</label>
+                                            <select id="stay-meal-plan" name="mealPlan" className="form-select" value={form.mealPlan} onChange={updateField}>
+                                                {mealPlans.map((plan) => <option key={plan}>{plan}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label className="form-label" htmlFor="stay-status">Reservation status</label>
+                                            <select id="stay-status" name="status" className="form-select" value={form.status} onChange={updateField}>
+                                                {statuses.map((status) => <option key={status}>{status}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label className="form-label" htmlFor="stay-reference">Hotel confirmation reference</label>
+                                            <input id="stay-reference" name="confirmationNumber" className="form-control" value={form.confirmationNumber} onChange={updateField} maxLength={100} />
+                                        </div>
+                                        <div className="col-12">
+                                            <label className="form-label" htmlFor="stay-notes">Internal notes</label>
+                                            <textarea id="stay-notes" name="notes" className="form-control" rows="2" value={form.notes} onChange={updateField} maxLength={500} />
+                                        </div>
+                                    </div>
+                                    <div className="d-flex justify-content-end gap-2 mt-3">
+                                        <button type="button" className="btn btn-outline-secondary" onClick={resetForm} disabled={busy}>Cancel</button>
+                                        <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Saving..." : editingId ? "Save changes" : "Add stay"}</button>
+                                    </div>
+                                </form>
+                            )}
+                            {stays.length >= 50 && <small className="text-muted">Maximum of 50 hotel stays per booking.</small>}
+                        </div>
+
+                        <div className="modal-footer">
+                            <button type="button" className="btn btn-outline-secondary" onClick={onClose}>Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div className="modal-backdrop fade show" />
+        </>
+    );
+};
+
+export default BookingHotelsModal;

@@ -8,6 +8,7 @@ import {
     FaEdit,
     FaFileCsv,
     FaFileInvoiceDollar,
+    FaHotel,
     FaPlus,
     FaReceipt,
     FaSearch,
@@ -17,6 +18,7 @@ import {
 import api from "../api/axios";
 import BookingPaymentsModal from "../components/BookingPaymentsModal";
 import BookingPreparationModal from "../components/BookingPreparationModal";
+import BookingHotelsModal from "../components/BookingHotelsModal";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 
@@ -56,6 +58,7 @@ const Bookings = () => {
     const [editingId, setEditingId] = useState(null);
     const [selectedPaymentBooking, setSelectedPaymentBooking] = useState(null);
     const [selectedPreparationBooking, setSelectedPreparationBooking] = useState(null);
+    const [selectedHotelBooking, setSelectedHotelBooking] = useState(null);
 
     const [searchInput, setSearchInput] = useState(initialKeyword);
     const [keyword, setKeyword] = useState(initialKeyword);
@@ -948,6 +951,15 @@ const Bookings = () => {
                                                 <small className="d-block text-muted">
                                                     Preparation: {(booking.preparationTasks || []).filter((task) => task.completedAt).length}/{booking.preparationTasks?.length || 0}
                                                 </small>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-link btn-sm p-0 text-start d-block"
+                                                    onClick={() => setSelectedHotelBooking(booking)}
+                                                    aria-label={`View hotel reservations for ${booking.bookingCode}`}
+                                                >
+                                                    <FaHotel className="me-1" />
+                                                    {(booking.hotelStays || []).filter((stay) => stay.status === "Confirmed").length} confirmed / {(booking.hotelStays || []).filter((stay) => stay.status !== "Cancelled").length} active stays
+                                                </button>
                                             </div>
                                         </td>
 
@@ -1130,6 +1142,13 @@ const Bookings = () => {
                 <BookingPreparationModal
                     booking={selectedPreparationBooking}
                     onClose={() => setSelectedPreparationBooking(null)}
+                    onChanged={fetchBookings}
+                />
+            )}
+            {selectedHotelBooking && (
+                <BookingHotelsModal
+                    booking={selectedHotelBooking}
+                    onClose={() => setSelectedHotelBooking(null)}
                     onChanged={fetchBookings}
                 />
             )}
