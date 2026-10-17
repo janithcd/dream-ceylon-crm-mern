@@ -87,7 +87,8 @@ const populateBooking = (query) => {
         .populate(
             "selectedPackage",
             "title durationDays category overview priceFrom currency status"
-        );
+        )
+        .populate("preparationTasks.assignedTo", "name role status");
 };
 
 const buildBookingQuery = (queryParams) => {

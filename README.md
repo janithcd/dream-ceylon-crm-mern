@@ -61,7 +61,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - Generate branded quotation PDFs
 - Convert accepted quotations into bookings
 - Manage booking details and status
-- Track an internal preparation checklist per booking for hotels, transport, guides, itineraries, or custom tasks
+- Track an internal preparation checklist per booking for hotels, transport, guides, itineraries, or custom tasks; assign active staff and optional due dates
 - Record hotel stays, room and meal plans, confirmation status, and hotel references on each booking
 - View bookings in a calendar
 - Generate booking invoices and receipts
@@ -104,7 +104,7 @@ Enter each supplier amount in its own currency. If it differs from the quotation
 
 - Dashboard statistics
 - Upcoming departures for the next 30 days, with shortcuts to each booking
-- Bookings needing attention for upcoming departures with requested hotel stays or unfinished preparation tasks
+- Bookings needing attention for upcoming departures with requested hotel stays, unfinished preparation tasks, and overdue task counts
 - Revenue and booking charts
 - Recent activity panel
 - Follow-up alerts

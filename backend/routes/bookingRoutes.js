@@ -8,7 +8,9 @@ const {
     deleteBooking,
 } = require("../controllers/bookingController");
 const {
+    getPreparationAssignees,
     addPreparationTask,
+    updatePreparationTaskDetails,
     setPreparationTaskCompletion,
     deletePreparationTask,
 } = require("../controllers/bookingPreparationController");
@@ -25,6 +27,13 @@ const {
 const { PERMISSIONS } = require("../config/permissions");
 
 const router = express.Router();
+
+router.get(
+    "/preparation-assignees",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
+    getPreparationAssignees
+);
 
 router.post(
     "/:id/hotel-stays",
@@ -59,6 +68,13 @@ router.patch(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
     setPreparationTaskCompletion
+);
+
+router.put(
+    "/:id/preparation-tasks/:taskId",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
+    updatePreparationTaskDetails
 );
 
 router.delete(

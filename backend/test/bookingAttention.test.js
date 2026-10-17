@@ -21,17 +21,23 @@ test("attention summary counts only requested stays and unfinished tasks", () =>
         customer: { fullName: "Guest" },
         travelStartDate: "2026-10-20",
         hotelStays: [{ status: "Requested" }, { status: "Confirmed" }, { status: "Cancelled" }, { status: "Requested" }],
-        preparationTasks: [{ completedAt: null }, { completedAt: new Date() }, {}],
-    }), {
+        preparationTasks: [
+            { completedAt: null, dueDate: "2026-10-16T00:00:00Z" },
+            { completedAt: new Date(), dueDate: "2026-10-15T00:00:00Z" },
+            { dueDate: "2026-10-17T00:00:00Z" },
+        ],
+    }, new Date("2026-10-16T19:00:00Z")), {
         _id: "booking-1",
         bookingCode: "DCJ-1",
         customerName: "Guest",
         travelStartDate: "2026-10-20",
         pendingHotelCount: 2,
         openTaskCount: 2,
+        overdueTaskCount: 1,
     });
 
     const empty = summarizeBookingAttention({ _id: "booking-2" });
     assert.equal(empty.pendingHotelCount, 0);
     assert.equal(empty.openTaskCount, 0);
+    assert.equal(empty.overdueTaskCount, 0);
 });

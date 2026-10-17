@@ -46,6 +46,15 @@ const preparationTaskSchema = new mongoose.Schema({
         ref: "Admin",
         default: null,
     },
+    assignedTo: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Admin",
+        default: null,
+    },
+    dueDate: {
+        type: Date,
+        default: null,
+    },
     createdAt: {
         type: Date,
         default: Date.now,

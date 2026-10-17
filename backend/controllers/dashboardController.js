@@ -246,7 +246,7 @@ const getDashboardStats = async (req, res) => {
         const attentionQuery = getBookingAttentionQuery(now);
         const [attentionBookings, attentionTotal] = await Promise.all([
             Booking.find(attentionQuery)
-                .select("bookingCode customer.fullName travelStartDate hotelStays.status preparationTasks.completedAt")
+                .select("bookingCode customer.fullName travelStartDate hotelStays.status preparationTasks.completedAt preparationTasks.dueDate")
                 .sort({ travelStartDate: 1, createdAt: 1 })
                 .limit(10)
                 .lean(),
@@ -335,7 +335,7 @@ const getDashboardStats = async (req, res) => {
             upcomingDepartures,
             bookingAttention: {
                 total: attentionTotal,
-                items: attentionBookings.map(summarizeBookingAttention),
+                items: attentionBookings.map((booking) => summarizeBookingAttention(booking, now)),
             },
             recentQuotations,
         });

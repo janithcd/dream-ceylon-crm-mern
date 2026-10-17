@@ -551,6 +551,7 @@ const Dashboard = () => {
                                                 <th>Departure</th>
                                                 <th>Hotels awaiting confirmation</th>
                                                 <th>Open tasks</th>
+                                                <th>Overdue tasks</th>
                                                 <th className="text-end">Action</th>
                                             </tr>
                                         </thead>
@@ -562,6 +563,11 @@ const Dashboard = () => {
                                                     <td>{formatCalendarDate(booking.travelStartDate)}</td>
                                                     <td>{booking.pendingHotelCount}</td>
                                                     <td>{booking.openTaskCount}</td>
+                                                    <td>
+                                                        {booking.overdueTaskCount ? (
+                                                            <span className="badge text-bg-danger">{booking.overdueTaskCount} overdue</span>
+                                                        ) : "0"}
+                                                    </td>
                                                     <td className="text-end">
                                                         <button
                                                             className="btn btn-sm btn-outline-primary"

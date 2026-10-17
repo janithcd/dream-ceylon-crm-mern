@@ -14,6 +14,7 @@ test("booking preparation tasks use booking permissions and can be completed or 
     const bookingId = "507f1f77bcf86cd799439011";
     const salesId = "507f1f77bcf86cd799439012";
     const viewerId = "507f1f77bcf86cd799439013";
+    const inactiveId = "507f1f77bcf86cd799439014";
     const booking = new Booking({
         _id: bookingId,
         bookingCode: "DCJ-TEST-101",
@@ -23,13 +24,20 @@ test("booking preparation tasks use booking permissions and can be completed or 
         numberOfTravelers: 2,
         totalPrice: 1000,
     });
+    t.mock.method(booking, "populate", async () => booking);
 
     t.mock.method(Admin, "findById", (id) => ({ select: async () => ({
         _id: id,
         role: String(id) === viewerId ? "Viewer" : "Sales",
-        status: "Active",
+        status: String(id) === inactiveId ? "Inactive" : "Active",
         tokenVersion: 0,
     }) }));
+    t.mock.method(Admin, "find", () => ({
+        select: () => ({ sort: () => ({ lean: async () => [
+            { _id: salesId, name: "Sales Agent", role: "Sales" },
+            { _id: viewerId, name: "Viewer", role: "Viewer" },
+        ] }) }),
+    }));
     t.mock.method(ActivityLog, "create", async () => ({}));
     t.mock.method(Booking, "exists", async () => ({ _id: bookingId }));
     t.mock.method(Booking, "findOneAndUpdate", async (query, update) => {
@@ -41,8 +49,9 @@ test("booking preparation tasks use booking permissions and can be completed or 
             const task = booking.preparationTasks.id(query["preparationTasks._id"]);
             if (!task) return null;
             if (update.$set) {
-                task.completedAt = update.$set["preparationTasks.$.completedAt"];
-                task.completedBy = update.$set["preparationTasks.$.completedBy"];
+                for (const [key, value] of Object.entries(update.$set)) {
+                    task[key.split(".")[2]] = value;
+                }
             } else if (update.$pull) {
                 task.deleteOne();
             }
@@ -64,18 +73,41 @@ test("booking preparation tasks use booking permissions and can be completed or 
         body: body === undefined ? undefined : JSON.stringify(body),
     });
 
+    const assigneesUrl = `http://127.0.0.1:${server.address().port}/api/bookings/preparation-assignees`;
+    assert.equal((await request(assigneesUrl, "GET", viewerId)).status, 403);
+    assert.deepEqual((await (await request(assigneesUrl, "GET", salesId)).json()).admins, [
+        { _id: salesId, name: "Sales Agent", role: "Sales" },
+    ]);
+
     assert.equal((await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: '{}' })).status, 401);
     assert.equal((await request(url, "POST", viewerId, { title: "Confirm hotel" })).status, 403);
     assert.equal((await request(url, "POST", salesId, { title: "  " })).status, 400);
     assert.equal((await request(url, "POST", salesId, { title: "x".repeat(121) })).status, 400);
+    assert.equal((await request(url, "POST", salesId, { title: "Task", dueDate: "2027-02-30" })).status, 400);
+    assert.equal((await request(url, "POST", salesId, { title: "Task", assignedTo: viewerId })).status, 400);
+    assert.equal((await request(url, "POST", salesId, { title: "Task", assignedTo: inactiveId })).status, 400);
 
-    const created = await request(url, "POST", salesId, { title: "  Confirm hotel  " });
+    const created = await request(url, "POST", salesId, {
+        title: "  Confirm hotel  ", assignedTo: salesId, dueDate: "2027-02-28",
+    });
     assert.equal(created.status, 201);
     const task = (await created.json()).tasks[0];
     assert.equal(task.title, "Confirm hotel");
     assert.equal(task.completedAt, null);
+    assert.equal(String(task.assignedTo), salesId);
+    assert.equal(task.dueDate, "2027-02-28T00:00:00.000Z");
 
     const taskUrl = `${url}/${task._id}`;
+    assert.equal((await request(taskUrl, "PUT", viewerId, { dueDate: null })).status, 403);
+    assert.equal((await request(taskUrl, "PUT", salesId, {})).status, 400);
+    assert.equal((await request(taskUrl, "PUT", salesId, { dueDate: "not-a-date" })).status, 400);
+    assert.equal((await request(taskUrl, "PUT", salesId, { assignedTo: "bad" })).status, 400);
+    const edited = await request(taskUrl, "PUT", salesId, { assignedTo: null, dueDate: "2027-03-01" });
+    assert.equal(edited.status, 200);
+    assert.equal((await edited.json()).tasks[0].dueDate, "2027-03-01T00:00:00.000Z");
+    assert.equal(booking.preparationTasks[0].assignedTo, null);
+    assert.equal((await request(taskUrl, "PUT", salesId, { dueDate: null })).status, 200);
+    assert.equal(booking.preparationTasks[0].dueDate, null);
     assert.equal((await request(taskUrl, "PATCH", salesId, { completed: "yes" })).status, 400);
     const completed = await request(taskUrl, "PATCH", salesId, { completed: true });
     assert.equal(completed.status, 200);
