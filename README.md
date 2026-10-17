@@ -106,6 +106,7 @@ Enter each supplier amount in its own currency. If it differs from the quotation
 - Upcoming departures for the next 30 days, with shortcuts to each booking
 - Bookings needing attention for upcoming departures with requested hotel stays, unfinished preparation tasks, and overdue task counts
 - My Tasks view for each admin's assigned preparation work, with due-date filters and quick completion
+- Header alerts for assigned tasks due today or overdue, updated after checklist changes and while the CRM is open
 - Revenue and booking charts
 - Recent activity panel
 - Follow-up alerts

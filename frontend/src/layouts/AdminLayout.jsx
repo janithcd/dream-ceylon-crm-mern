@@ -23,6 +23,7 @@ import {
 
 import { useAuth } from "../context/AuthContext";
 import PermissionGuard from "../components/PermissionGuard";
+import TaskAlert from "../components/TaskAlert";
 import { ROUTE_PERMISSIONS } from "../config/routePermissions";
 
 const AdminLayout = () => {
@@ -234,14 +235,19 @@ const AdminLayout = () => {
                         </small>
                     </div>
 
-                    <button
-                        type="button"
-                        className="btn btn-outline-danger btn-sm"
-                        onClick={handleLogout}
-                    >
-                        <FaSignOutAlt className="me-1" />
-                        Logout
-                    </button>
+                    <div className="d-flex align-items-center gap-3">
+                        <PermissionGuard permission={ROUTE_PERMISSIONS.myTasks}>
+                            <TaskAlert />
+                        </PermissionGuard>
+                        <button
+                            type="button"
+                            className="btn btn-outline-danger btn-sm"
+                            onClick={handleLogout}
+                        >
+                            <FaSignOutAlt className="me-1" />
+                            Logout
+                        </button>
+                    </div>
                 </header>
 
                 <section className="content-area">

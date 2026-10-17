@@ -4,6 +4,7 @@ import { FaCheckCircle, FaClipboardCheck, FaSyncAlt, FaUndo } from "react-icons/
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
+import { notifyTasksChanged } from "../utils/taskEvents";
 
 const emptyData = {
     items: [], summary: { open: 0, completed: 0, overdue: 0, today: 0, upcoming: 0, noDue: 0 },
@@ -92,6 +93,7 @@ const MyTasks = () => {
             setNotice("");
             const completed = !task.completedAt;
             await api.patch(`/bookings/${task.bookingId}/preparation-tasks/${task._id}`, { completed });
+            notifyTasksChanged();
             setNotice(completed ? "Task completed." : "Task reopened.");
             setLoading(true);
             if (page > 1 && data.items.length === 1) setPage(page - 1);

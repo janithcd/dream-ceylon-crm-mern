@@ -109,6 +109,8 @@ body {
 }
 
 .topbar {
+  position: relative;
+  z-index: 10;
   height: 74px;
   background: #ffffff;
   border-bottom: 1px solid #e5e7eb;
@@ -116,6 +118,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.task-alert-panel {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 1rem;
+  width: min(360px, calc(100vw - 2rem));
+  max-height: min(440px, calc(100vh - 110px));
+  overflow-y: auto;
+  z-index: 20;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.16);
 }
 
 .content-area {
@@ -175,5 +188,7 @@ body {
   .topbar {
     height: auto;
     padding: 1rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
   }
 }

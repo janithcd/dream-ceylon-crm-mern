@@ -3,6 +3,7 @@ import { FaClipboardCheck, FaEdit, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
+import { notifyTasksChanged } from "../utils/taskEvents";
 
 const suggestedTasks = [
     "Confirm accommodation",
@@ -73,6 +74,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
             setNewAssigneeId("");
             setNewDueDate("");
             setSuccess("Task added.");
+            notifyTasksChanged();
             onChanged();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to add task.");
@@ -104,6 +106,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
             setTasks(response.data.tasks || []);
             setEditingTaskId("");
             setSuccess("Task details saved.");
+            notifyTasksChanged();
             onChanged();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to save task details.");
@@ -120,6 +123,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
             setSuccess("");
             const response = await api.patch(`/bookings/${booking._id}/preparation-tasks/${task._id}`, { completed });
             setTasks(response.data.tasks || []);
+            notifyTasksChanged();
             onChanged();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to update task.");
@@ -136,6 +140,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
             setSuccess("");
             const response = await api.delete(`/bookings/${booking._id}/preparation-tasks/${task._id}`);
             setTasks(response.data.tasks || []);
+            notifyTasksChanged();
             onChanged();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to remove task.");
