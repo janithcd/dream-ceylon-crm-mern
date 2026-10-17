@@ -11,6 +11,7 @@ import Packages from "./pages/Packages";
 import Inquiries from "./pages/Inquiries";
 import Bookings from "./pages/Bookings";
 import MyTasks from "./pages/MyTasks";
+import TeamTasks from "./pages/TeamTasks";
 import Vehicles from "./pages/Vehicles";
 import Quotations from "./pages/Quotations";
 import QuotationHistory from "./pages/QuotationHistory";
@@ -144,6 +145,14 @@ const App = () => {
                             element={
                                 <PermissionRoute permission={ROUTE_PERMISSIONS.myTasks}>
                                     <MyTasks />
+                                </PermissionRoute>
+                            }
+                        />
+                        <Route
+                            path="team-tasks"
+                            element={
+                                <PermissionRoute permission={ROUTE_PERMISSIONS.teamTasks}>
+                                    <TeamTasks />
                                 </PermissionRoute>
                             }
                         />

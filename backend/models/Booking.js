@@ -202,6 +202,7 @@ bookingSchema.pre("save", function () {
 });
 
 bookingSchema.index({ "preparationTasks.assignedTo": 1, bookingStatus: 1 });
+bookingSchema.index({ bookingStatus: 1, "preparationTasks.completedAt": 1 });
 
 const Booking = mongoose.model("Booking", bookingSchema);
 

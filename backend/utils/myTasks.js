@@ -76,4 +76,4 @@ const buildMyTasksPipeline = (adminId, { status = "open", dateFilter = "all", pr
     ];
 };
 
-module.exports = { buildMyTasksPipeline, DATE_FILTERS, PRIORITY_FILTERS, PAGE_SIZE };
+module.exports = { buildMyTasksPipeline, ACTIVE_BOOKING_STATUSES, DATE_FILTERS, PRIORITY_FILTERS, PAGE_SIZE };

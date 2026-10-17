@@ -63,6 +63,12 @@ const main = async () => {
             assert.equal(response.status, 200, `My tasks: ${JSON.stringify(body)}`);
             return body;
         };
+        const getTeam = async (params = "") => {
+            const response = await request(`http://127.0.0.1:5000/api/bookings/team-tasks${params}`, "GET");
+            const body = await response.json();
+            assert.equal(response.status, 200, `Team tasks: ${JSON.stringify(body)}`);
+            return body;
+        };
 
         const assignees = await request("http://127.0.0.1:5000/api/bookings/preparation-assignees", "GET");
         assert.equal(assignees.status, 200);
@@ -94,6 +100,8 @@ const main = async () => {
         assert.equal(overdueMine.items[0].priority, "High");
         assert.equal(overdueMine.items[0].notes, "Check supplier room availability");
         assert.equal((await getMine("?priorityFilter=high")).total, 1);
+        assert.equal((await getTeam()).summary.assigned, 1);
+        assert.equal((await getTeam()).total, 0);
 
         const taskUrl = `${url}/${tasks[0]._id}`;
         const rescheduled = await request(taskUrl, "PUT", { dueDate: dateOnly(new Date(Date.now() + dayMs)), priority: "Low", notes: "Supplier confirmed" });
@@ -135,11 +143,30 @@ const main = async () => {
         const unassignedTask = (await Booking.findById(booking._id)).preparationTasks[0];
         assert.equal(unassignedTask.assignedTo, null);
         assert.equal(unassignedTask.dueDate, null);
+        const teamBeforeClaim = await getTeam("?dateFilter=noDue");
+        assert.equal(teamBeforeClaim.total, 1);
+        assert.equal(teamBeforeClaim.summary.unassigned, 1);
+        assert.equal(teamBeforeClaim.items[0].notes, "Supplier confirmed");
 
+        otherAdmin = await Admin.create({
+            name: "CI Other Agent",
+            email: `ci-other-${Date.now()}@example.invalid`,
+            password: "disposable-ci-only-password",
+            role: "Sales",
+        });
+        const otherToken = jwt.sign({ id: otherAdmin._id, v: 0 }, process.env.JWT_SECRET);
         const claimUrl = `${taskUrl}/claim`;
-        assert.equal((await request(claimUrl, "PATCH")).status, 200);
-        assert.equal(String((await Booking.findById(booking._id)).preparationTasks[0].assignedTo), String(admin._id));
-        assert.equal((await request(claimUrl, "PATCH")).status, 409);
+        const claims = await Promise.all([
+            request(claimUrl, "PATCH"),
+            fetch(claimUrl, { method: "PATCH", headers: { Authorization: `Bearer ${otherToken}` } }),
+        ]);
+        assert.deepEqual(claims.map((response) => response.status).sort(), [200, 409]);
+        const claimedBy = String((await Booking.findById(booking._id)).preparationTasks[0].assignedTo);
+        assert.ok([String(admin._id), String(otherAdmin._id)].includes(claimedBy));
+        assert.equal((await getTeam()).summary.unassigned, 0);
+        const assignedTeam = await getTeam("?assignment=assigned");
+        assert.equal(assignedTeam.total, 1);
+        assert.equal(assignedTeam.items[0].assignee.name, claimedBy === String(admin._id) ? "CI Booking Test" : "CI Other Agent");
 
         const removed = await request(taskUrl, "DELETE");
         assert.equal(removed.status, 200);
@@ -172,16 +199,9 @@ const main = async () => {
         assert.equal(hotelRemoved.status, 200);
         assert.equal((await Booking.findById(booking._id)).hotelStays.length, 0);
 
-        otherAdmin = await Admin.create({
-            name: "CI Other Agent",
-            email: `ci-other-${Date.now()}@example.invalid`,
-            password: "disposable-ci-only-password",
-            role: "Sales",
-        });
         const otherTask = await request(url, "POST", { title: "Other agent only", assignedTo: String(otherAdmin._id) });
         assert.equal(otherTask.status, 201);
         const otherTaskId = (await otherTask.json()).tasks[0]._id;
-        const otherToken = jwt.sign({ id: otherAdmin._id, v: 0 }, process.env.JWT_SECRET);
         assert.equal((await getMine()).total, 0);
         assert.equal((await getMine("", otherToken)).items[0].title, "Other agent only");
         assert.equal((await getMine("", otherToken)).items[0].priority, "Normal");
