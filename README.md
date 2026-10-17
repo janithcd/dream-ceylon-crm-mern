@@ -61,6 +61,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - Generate branded quotation PDFs
 - Convert accepted quotations into bookings
 - Manage booking details and status
+- Track an internal preparation checklist per booking for hotels, transport, guides, itineraries, or custom tasks
 - View bookings in a calendar
 - Generate booking invoices and receipts
 - Track outstanding balances

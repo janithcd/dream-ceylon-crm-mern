@@ -30,6 +30,28 @@ const customerSchema = new mongoose.Schema(
     { _id: false }
 );
 
+const preparationTaskSchema = new mongoose.Schema({
+    title: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 120,
+    },
+    completedAt: {
+        type: Date,
+        default: null,
+    },
+    completedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Admin",
+        default: null,
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now,
+    },
+});
+
 const bookingSchema = new mongoose.Schema(
     {
         bookingCode: {
@@ -115,6 +137,11 @@ const bookingSchema = new mongoose.Schema(
         adminNotes: {
             type: String,
             default: "",
+        },
+
+        preparationTasks: {
+            type: [preparationTaskSchema],
+            default: [],
         },
     },
     {

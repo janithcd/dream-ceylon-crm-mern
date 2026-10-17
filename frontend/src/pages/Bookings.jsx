@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import {
     FaBell,
     FaCoins,
+    FaClipboardCheck,
     FaEdit,
     FaFileCsv,
     FaFileInvoiceDollar,
@@ -15,6 +16,7 @@ import {
 } from "react-icons/fa";
 import api from "../api/axios";
 import BookingPaymentsModal from "../components/BookingPaymentsModal";
+import BookingPreparationModal from "../components/BookingPreparationModal";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 
@@ -53,6 +55,7 @@ const Bookings = () => {
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [selectedPaymentBooking, setSelectedPaymentBooking] = useState(null);
+    const [selectedPreparationBooking, setSelectedPreparationBooking] = useState(null);
 
     const [searchInput, setSearchInput] = useState(initialKeyword);
     const [keyword, setKeyword] = useState(initialKeyword);
@@ -942,6 +945,9 @@ const Bookings = () => {
                                                 <small className="text-muted">
                                                     {booking.selectedPackage?.title || "No package"}
                                                 </small>
+                                                <small className="d-block text-muted">
+                                                    Preparation: {(booking.preparationTasks || []).filter((task) => task.completedAt).length}/{booking.preparationTasks?.length || 0}
+                                                </small>
                                             </div>
                                         </td>
 
@@ -989,6 +995,15 @@ const Bookings = () => {
 
                                         <td className="text-end">
                                             <div className="d-flex justify-content-end gap-2">
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-primary"
+                                                    onClick={() => setSelectedPreparationBooking(booking)}
+                                                    title="Booking preparation checklist"
+                                                    aria-label={`Preparation checklist for ${booking.bookingCode}`}
+                                                >
+                                                    <FaClipboardCheck />
+                                                </button>
                                                 <PermissionGuard all={["cost.view", "quotation.view", "booking.view"]}>
                                                     <button
                                                         className="btn btn-sm btn-outline-secondary"
@@ -1111,6 +1126,13 @@ const Bookings = () => {
                     />
                 )}
             </PermissionGuard>
+            {selectedPreparationBooking && (
+                <BookingPreparationModal
+                    booking={selectedPreparationBooking}
+                    onClose={() => setSelectedPreparationBooking(null)}
+                    onChanged={fetchBookings}
+                />
+            )}
         </div>
     );
 };

@@ -7,6 +7,11 @@ const {
     updateBooking,
     deleteBooking,
 } = require("../controllers/bookingController");
+const {
+    addPreparationTask,
+    setPreparationTaskCompletion,
+    deletePreparationTask,
+} = require("../controllers/bookingPreparationController");
 
 const { protect } = require("../middleware/authMiddleware");
 const {
@@ -15,6 +20,27 @@ const {
 const { PERMISSIONS } = require("../config/permissions");
 
 const router = express.Router();
+
+router.post(
+    "/:id/preparation-tasks",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
+    addPreparationTask
+);
+
+router.patch(
+    "/:id/preparation-tasks/:taskId",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
+    setPreparationTaskCompletion
+);
+
+router.delete(
+    "/:id/preparation-tasks/:taskId",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
+    deletePreparationTask
+);
 
 router.post(
     "/",
