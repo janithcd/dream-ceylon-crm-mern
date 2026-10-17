@@ -14,6 +14,7 @@ const {
     setPreparationTaskCompletion,
     deletePreparationTask,
 } = require("../controllers/bookingPreparationController");
+const { getMyTasks } = require("../controllers/myTasksController");
 const {
     addHotelStay,
     updateHotelStay,
@@ -27,6 +28,13 @@ const {
 const { PERMISSIONS } = require("../config/permissions");
 
 const router = express.Router();
+
+router.get(
+    "/my-tasks",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW),
+    getMyTasks
+);
 
 router.get(
     "/preparation-assignees",

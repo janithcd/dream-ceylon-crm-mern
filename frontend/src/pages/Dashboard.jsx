@@ -13,6 +13,7 @@ import {
     FaFileInvoiceDollar,
     FaGlobeAsia,
     FaMapMarkedAlt,
+    FaTasks,
 } from "react-icons/fa";
 import {
     Bar,
@@ -386,6 +387,15 @@ const Dashboard = () => {
                                 >
                                     <FaCalendarCheck className="me-2" />
                                     Bookings
+                                </button>
+                            </PermissionGuard>
+                        </div>
+
+                        <div className="col-xl-2 col-md-4 col-sm-6">
+                            <PermissionGuard permission="booking.view">
+                                <button className="btn btn-outline-primary w-100 py-3" onClick={() => navigate("/my-tasks")}>
+                                    <FaTasks className="me-2" />
+                                    My Tasks
                                 </button>
                             </PermissionGuard>
                         </div>

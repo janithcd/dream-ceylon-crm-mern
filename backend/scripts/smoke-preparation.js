@@ -12,6 +12,7 @@ const main = async () => {
 
     await mongoose.connect(process.env.MONGO_URI);
     let admin;
+    let otherAdmin;
     let booking;
 
     try {
@@ -49,6 +50,14 @@ const main = async () => {
             return body.bookingAttention;
         };
         const ownAttention = async () => (await getAttention()).items.find((item) => item.bookingCode === booking.bookingCode);
+        const getMine = async (params = "", authToken = token) => {
+            const response = await fetch(`http://127.0.0.1:5000/api/bookings/my-tasks${params}`, {
+                headers: { Authorization: `Bearer ${authToken}` },
+            });
+            const body = await response.json();
+            assert.equal(response.status, 200, `My tasks: ${JSON.stringify(body)}`);
+            return body;
+        };
 
         const assignees = await request("http://127.0.0.1:5000/api/bookings/preparation-assignees", "GET");
         assert.equal(assignees.status, 200);
@@ -69,23 +78,31 @@ const main = async () => {
         assert.equal((await bookingView.json()).preparationTasks[0].assignedTo.name, "CI Booking Test");
         assert.equal((await ownAttention()).openTaskCount, 1);
         assert.equal((await ownAttention()).overdueTaskCount, 1);
+        const overdueMine = await getMine("?dateFilter=overdue");
+        assert.equal(overdueMine.summary.overdue, 1);
+        assert.equal(overdueMine.total, 1);
+        assert.equal(overdueMine.items[0].bookingCode, booking.bookingCode);
 
         const taskUrl = `${url}/${tasks[0]._id}`;
         const rescheduled = await request(taskUrl, "PUT", { dueDate: dateOnly(new Date(Date.now() + dayMs)) });
         assert.equal(rescheduled.status, 200);
         assert.equal(String((await Booking.findById(booking._id)).preparationTasks[0].assignedTo), String(admin._id));
         assert.equal((await ownAttention()).overdueTaskCount, 0);
+        assert.equal((await getMine("?dateFilter=upcoming")).total, 1);
 
         const completed = await request(taskUrl, "PATCH", { completed: true });
         assert.equal(completed.status, 200);
         assert.ok((await Booking.findById(booking._id)).preparationTasks[0].completedAt);
         assert.equal(String((await Booking.findById(booking._id)).preparationTasks[0].assignedTo), String(admin._id));
         assert.equal(await ownAttention(), undefined);
+        assert.equal((await getMine()).total, 0);
+        assert.equal((await getMine("?status=completed")).total, 1);
 
         const reopened = await request(taskUrl, "PATCH", { completed: false });
         assert.equal(reopened.status, 200);
         assert.equal((await Booking.findById(booking._id)).preparationTasks[0].completedAt, null);
         assert.equal((await ownAttention()).openTaskCount, 1);
+        assert.equal((await getMine()).summary.open, 1);
 
         const unassigned = await request(taskUrl, "PUT", { assignedTo: null, dueDate: null });
         assert.equal(unassigned.status, 200);
@@ -123,13 +140,29 @@ const main = async () => {
         const hotelRemoved = await request(hotelUrl, "DELETE");
         assert.equal(hotelRemoved.status, 200);
         assert.equal((await Booking.findById(booking._id)).hotelStays.length, 0);
-        console.log("Booking preparation, hotel stays, and dashboard attention smoke tests passed against MongoDB.");
+
+        otherAdmin = await Admin.create({
+            name: "CI Other Agent",
+            email: `ci-other-${Date.now()}@example.invalid`,
+            password: "disposable-ci-only-password",
+            role: "Sales",
+        });
+        const otherTask = await request(url, "POST", { title: "Other agent only", assignedTo: String(otherAdmin._id) });
+        assert.equal(otherTask.status, 201);
+        const otherTaskId = (await otherTask.json()).tasks[0]._id;
+        const otherToken = jwt.sign({ id: otherAdmin._id, v: 0 }, process.env.JWT_SECRET);
+        assert.equal((await getMine()).total, 0);
+        assert.equal((await getMine("", otherToken)).items[0].title, "Other agent only");
+        assert.equal((await request(`${url}/${otherTaskId}`, "DELETE")).status, 200);
+
+        console.log("Booking preparation, hotel stays, dashboard attention, and assigned tasks smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
             await ActivityLog.deleteMany({ relatedRecordId: booking._id });
             await Booking.deleteOne({ _id: booking._id });
         }
         if (admin) await Admin.deleteOne({ _id: admin._id });
+        if (otherAdmin) await Admin.deleteOne({ _id: otherAdmin._id });
         await mongoose.disconnect();
     }
 };

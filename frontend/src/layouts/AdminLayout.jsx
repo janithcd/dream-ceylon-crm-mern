@@ -14,6 +14,7 @@ import {
     FaMapMarkedAlt,
     FaMoneyBillWave,
     FaRoute,
+    FaTasks,
     FaSignOutAlt,
     FaUsers,
     FaUsersCog,
@@ -109,6 +110,13 @@ const AdminLayout = () => {
                         <NavLink to="/bookings">
                             <FaCalendarCheck />
                             Bookings
+                        </NavLink>
+                    </PermissionGuard>
+
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.myTasks}>
+                        <NavLink to="/my-tasks">
+                            <FaTasks />
+                            My Tasks
                         </NavLink>
                     </PermissionGuard>
 

@@ -190,6 +190,8 @@ bookingSchema.pre("save", function () {
     }
 });
 
+bookingSchema.index({ "preparationTasks.assignedTo": 1, bookingStatus: 1 });
+
 const Booking = mongoose.model("Booking", bookingSchema);
 
 module.exports = Booking;
