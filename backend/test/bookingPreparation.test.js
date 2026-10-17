@@ -84,11 +84,13 @@ test("booking preparation tasks use booking permissions and can be completed or 
     assert.equal((await request(url, "POST", salesId, { title: "  " })).status, 400);
     assert.equal((await request(url, "POST", salesId, { title: "x".repeat(121) })).status, 400);
     assert.equal((await request(url, "POST", salesId, { title: "Task", dueDate: "2027-02-30" })).status, 400);
+    assert.equal((await request(url, "POST", salesId, { title: "Task", priority: "Critical" })).status, 400);
+    assert.equal((await request(url, "POST", salesId, { title: "Task", priority: null })).status, 400);
     assert.equal((await request(url, "POST", salesId, { title: "Task", assignedTo: viewerId })).status, 400);
     assert.equal((await request(url, "POST", salesId, { title: "Task", assignedTo: inactiveId })).status, 400);
 
     const created = await request(url, "POST", salesId, {
-        title: "  Confirm hotel  ", assignedTo: salesId, dueDate: "2027-02-28",
+        title: "  Confirm hotel  ", assignedTo: salesId, dueDate: "2027-02-28", priority: "High",
     });
     assert.equal(created.status, 201);
     const task = (await created.json()).tasks[0];
@@ -96,12 +98,17 @@ test("booking preparation tasks use booking permissions and can be completed or 
     assert.equal(task.completedAt, null);
     assert.equal(String(task.assignedTo), salesId);
     assert.equal(task.dueDate, "2027-02-28T00:00:00.000Z");
+    assert.equal(task.priority, "High");
 
     const taskUrl = `${url}/${task._id}`;
     assert.equal((await request(taskUrl, "PUT", viewerId, { dueDate: null })).status, 403);
     assert.equal((await request(taskUrl, "PUT", salesId, {})).status, 400);
     assert.equal((await request(taskUrl, "PUT", salesId, { dueDate: "not-a-date" })).status, 400);
     assert.equal((await request(taskUrl, "PUT", salesId, { assignedTo: "bad" })).status, 400);
+    assert.equal((await request(taskUrl, "PUT", salesId, { priority: "Urgent" })).status, 400);
+    assert.equal((await request(taskUrl, "PUT", salesId, { priority: null })).status, 400);
+    assert.equal((await request(taskUrl, "PUT", salesId, { priority: "Low" })).status, 200);
+    assert.equal(booking.preparationTasks[0].priority, "Low");
     const edited = await request(taskUrl, "PUT", salesId, { assignedTo: null, dueDate: "2027-03-01" });
     assert.equal(edited.status, 200);
     assert.equal((await edited.json()).tasks[0].dueDate, "2027-03-01T00:00:00.000Z");
@@ -136,6 +143,10 @@ test("booking preparation task titles obey schema length limits", async () => {
     });
     await booking.validate();
     assert.equal(booking.preparationTasks.length, 1);
+    assert.equal(booking.preparationTasks[0].priority, "Normal");
+    booking.preparationTasks[0].priority = "Critical";
+    await assert.rejects(booking.validate(), /preparationTasks\.0\.priority/);
+    booking.preparationTasks[0].priority = "Normal";
     booking.preparationTasks[0].title = "x".repeat(121);
     await assert.rejects(booking.validate(), /preparationTasks\.0\.title/);
 });

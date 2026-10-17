@@ -7,7 +7,7 @@ import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../u
 import { notifyTasksChanged } from "../utils/taskEvents";
 
 const emptyData = {
-    items: [], summary: { open: 0, completed: 0, overdue: 0, today: 0, upcoming: 0, noDue: 0 },
+    items: [], summary: { open: 0, high: 0, completed: 0, overdue: 0, today: 0, upcoming: 0, noDue: 0 },
     total: 0, page: 1, totalPages: 1,
 };
 
@@ -34,6 +34,7 @@ const MyTasks = () => {
     const canUpdate = hasPermission("booking.update");
     const [status, setStatus] = useState("open");
     const [dateFilter, setDateFilter] = useState("all");
+    const [priorityFilter, setPriorityFilter] = useState("all");
     const [page, setPage] = useState(1);
     const [reloadKey, setReloadKey] = useState(0);
     const [data, setData] = useState(emptyData);
@@ -44,7 +45,7 @@ const MyTasks = () => {
 
     useEffect(() => {
         let active = true;
-        api.get("/bookings/my-tasks", { params: { status, dateFilter, page } })
+        api.get("/bookings/my-tasks", { params: { status, dateFilter, priorityFilter, page } })
             .then((response) => {
                 if (active) setData(response.data);
             })
@@ -58,15 +59,16 @@ const MyTasks = () => {
                 if (active) setLoading(false);
             });
         return () => { active = false; };
-    }, [status, dateFilter, page, reloadKey]);
+    }, [status, dateFilter, priorityFilter, page, reloadKey]);
 
     const changeStatus = (value) => {
-        if (status === value && dateFilter === "all" && page === 1) return;
+        if (status === value && dateFilter === "all" && priorityFilter === "all" && page === 1) return;
         setLoading(true);
         setError("");
         setNotice("");
         setStatus(value);
         setDateFilter("all");
+        setPriorityFilter("all");
         setPage(1);
     };
 
@@ -76,6 +78,15 @@ const MyTasks = () => {
         setError("");
         setNotice("");
         setDateFilter(value);
+        setPage(1);
+    };
+
+    const changePriorityFilter = (value) => {
+        if (priorityFilter === value && page === 1) return;
+        setLoading(true);
+        setError("");
+        setNotice("");
+        setPriorityFilter(value);
         setPage(1);
     };
 
@@ -147,13 +158,19 @@ const MyTasks = () => {
                         <button type="button" className={`btn btn-sm ${status === "completed" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => changeStatus("completed")}>Completed ({data.summary.completed})</button>
                     </div>
                     {status === "open" && (
-                        <div className="d-flex flex-wrap gap-2 mb-4" role="group" aria-label="Task due date">
-                            {dateChoices.map((choice) => (
-                                <button key={choice.value} type="button" className={`btn btn-sm ${dateFilter === choice.value ? "btn-dark" : "btn-outline-secondary"}`} onClick={() => changeDateFilter(choice.value)}>
-                                    {choice.label} ({data.summary[choice.count]})
-                                </button>
-                            ))}
-                        </div>
+                        <>
+                            <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Task due date">
+                                {dateChoices.map((choice) => (
+                                    <button key={choice.value} type="button" className={`btn btn-sm ${dateFilter === choice.value ? "btn-dark" : "btn-outline-secondary"}`} onClick={() => changeDateFilter(choice.value)}>
+                                        {choice.label} ({data.summary[choice.count]})
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="d-flex flex-wrap gap-2 mb-4" role="group" aria-label="Task priority">
+                                <button type="button" className={`btn btn-sm ${priorityFilter === "all" ? "btn-dark" : "btn-outline-secondary"}`} onClick={() => changePriorityFilter("all")}>All priorities</button>
+                                <button type="button" className={`btn btn-sm ${priorityFilter === "high" ? "btn-danger" : "btn-outline-danger"}`} onClick={() => changePriorityFilter("high")}>High priority ({data.summary.high})</button>
+                            </div>
+                        </>
                     )}
 
                     {loading ? (
@@ -171,7 +188,11 @@ const MyTasks = () => {
                                         const taskStatus = dueStatus(task, today);
                                         return (
                                             <tr key={`${task.bookingId}-${task._id}`}>
-                                                <td className="fw-semibold">{task.title}</td>
+                                                <td className="fw-semibold">
+                                                    {task.title}
+                                                    {task.priority === "High" && <span className="badge text-bg-danger ms-2">High</span>}
+                                                    {task.priority === "Low" && <span className="badge text-bg-secondary ms-2">Low</span>}
+                                                </td>
                                                 <td><div>{task.bookingCode}</div><small className="text-muted">{task.customerName || "-"}</small></td>
                                                 <td>
                                                     <div>{task.dueDate ? formatCalendarDate(task.dueDate) : "-"}</div>

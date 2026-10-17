@@ -11,6 +11,7 @@ const suggestedTasks = [
     "Confirm guide",
     "Send final itinerary to client",
 ];
+const priorityOptions = ["High", "Normal", "Low"];
 const assigneeId = (value) => (typeof value === "object" ? value?._id || "" : value || "");
 
 const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
@@ -20,10 +21,12 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
     const [title, setTitle] = useState("");
     const [newAssigneeId, setNewAssigneeId] = useState("");
     const [newDueDate, setNewDueDate] = useState("");
+    const [newPriority, setNewPriority] = useState("Normal");
     const [assignees, setAssignees] = useState([]);
     const [editingTaskId, setEditingTaskId] = useState("");
     const [editAssigneeId, setEditAssigneeId] = useState("");
     const [editDueDate, setEditDueDate] = useState("");
+    const [editPriority, setEditPriority] = useState("Normal");
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
@@ -68,11 +71,13 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
             setSuccess("");
             const response = await api.post(`/bookings/${booking._id}/preparation-tasks`, {
                 title: title.trim(), assignedTo: newAssigneeId || null, dueDate: newDueDate || null,
+                priority: newPriority,
             });
             setTasks(response.data.tasks || []);
             setTitle("");
             setNewAssigneeId("");
             setNewDueDate("");
+            setNewPriority("Normal");
             setSuccess("Task added.");
             notifyTasksChanged();
             onChanged();
@@ -87,6 +92,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
         setEditingTaskId(task._id);
         setEditAssigneeId(assigneeId(task.assignedTo));
         setEditDueDate(toCalendarDateInput(task.dueDate));
+        setEditPriority(task.priority || "Normal");
         setError("");
         setSuccess("");
     };
@@ -98,7 +104,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
             setBusy(true);
             setError("");
             setSuccess("");
-            const details = { dueDate: editDueDate || null };
+            const details = { dueDate: editDueDate || null, priority: editPriority };
             if (editAssigneeId !== assigneeId(task.assignedTo)) {
                 details.assignedTo = editAssigneeId || null;
             }
@@ -163,7 +169,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
                         </div>
 
                         <div className="modal-body">
-                            <p className="text-muted small mb-3">Assign an owner and due date to each arrangement as needed. Completing tasks does not change booking or payment status.</p>
+                            <p className="text-muted small mb-3">Assign an owner, due date, and priority to each arrangement as needed. Completing tasks does not change booking or payment status.</p>
                             {error && <div className="alert alert-danger" role="alert">{error}</div>}
                             {success && <div className="alert alert-success" role="status">{success}</div>}
 
@@ -191,6 +197,8 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
                                                             Owner: {task.assignedTo?.name || "Unassigned"}
                                                             {task.assignedTo?.status === "Inactive" && " (inactive)"}
                                                             {task.dueDate && ` · Due ${formatCalendarDate(task.dueDate)}`}
+                                                            {task.priority === "High" && <span className="badge text-bg-danger ms-2">High priority</span>}
+                                                            {task.priority === "Low" && <span className="badge text-bg-secondary ms-2">Low priority</span>}
                                                             {!task.completedAt && task.dueDate && toCalendarDateInput(task.dueDate) < todayCalendarDate() && (
                                                                 <span className="badge text-bg-danger ms-2">Overdue</span>
                                                             )}
@@ -210,7 +218,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
                                             </div>
                                             {canUpdate && editingTaskId === task._id && (
                                                 <form className="row g-2 mt-2" onSubmit={(event) => saveTaskDetails(event, task)}>
-                                                    <div className="col-md-6">
+                                                    <div className="col-md-4">
                                                         <label className="form-label small" htmlFor={`task-owner-${task._id}`}>Task owner</label>
                                                         <select id={`task-owner-${task._id}`} className="form-select" value={editAssigneeId} onChange={(event) => setEditAssigneeId(event.target.value)} disabled={busy}>
                                                             <option value="">Unassigned</option>
@@ -220,9 +228,15 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
                                                             {assignees.map((admin) => <option key={admin._id} value={admin._id}>{admin.name} · {admin.role}</option>)}
                                                         </select>
                                                     </div>
-                                                    <div className="col-md-6">
+                                                    <div className="col-md-4">
                                                         <label className="form-label small" htmlFor={`task-date-${task._id}`}>Due date</label>
                                                         <input id={`task-date-${task._id}`} type="date" className="form-control" value={editDueDate} onChange={(event) => setEditDueDate(event.target.value)} disabled={busy} />
+                                                    </div>
+                                                    <div className="col-md-4">
+                                                        <label className="form-label small" htmlFor={`task-priority-${task._id}`}>Priority</label>
+                                                        <select id={`task-priority-${task._id}`} className="form-select" value={editPriority} onChange={(event) => setEditPriority(event.target.value)} disabled={busy}>
+                                                            {priorityOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                                                        </select>
                                                     </div>
                                                     <div className="col-12 d-flex gap-2">
                                                         <button type="submit" className="btn btn-sm btn-primary" disabled={busy}>Save task</button>
@@ -250,16 +264,22 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
                                         />
                                     </div>
                                     <div className="row g-2 mt-1">
-                                        <div className="col-md-6">
+                                        <div className="col-md-4">
                                             <label className="form-label small" htmlFor="new-task-owner">Task owner (optional)</label>
                                             <select id="new-task-owner" className="form-select" value={newAssigneeId} onChange={(event) => setNewAssigneeId(event.target.value)} disabled={busy}>
                                                 <option value="">Unassigned</option>
                                                 {assignees.map((admin) => <option key={admin._id} value={admin._id}>{admin.name} · {admin.role}</option>)}
                                             </select>
                                         </div>
-                                        <div className="col-md-6">
+                                        <div className="col-md-4">
                                             <label className="form-label small" htmlFor="new-task-date">Due date (optional)</label>
                                             <input id="new-task-date" type="date" className="form-control" value={newDueDate} onChange={(event) => setNewDueDate(event.target.value)} disabled={busy} />
+                                        </div>
+                                        <div className="col-md-4">
+                                            <label className="form-label small" htmlFor="new-task-priority">Priority</label>
+                                            <select id="new-task-priority" className="form-select" value={newPriority} onChange={(event) => setNewPriority(event.target.value)} disabled={busy}>
+                                                {priorityOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                                            </select>
                                         </div>
                                     </div>
                                     <button type="submit" className="btn btn-primary mt-3" disabled={busy || tasks.length >= 30}>

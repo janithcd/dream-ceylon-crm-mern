@@ -55,6 +55,11 @@ const preparationTaskSchema = new mongoose.Schema({
         type: Date,
         default: null,
     },
+    priority: {
+        type: String,
+        enum: ["High", "Normal", "Low"],
+        default: "Normal",
+    },
     createdAt: {
         type: Date,
         default: Date.now,

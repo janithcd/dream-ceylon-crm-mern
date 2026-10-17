@@ -20,6 +20,12 @@ const parseDueDate = (value) => {
 
 const parseTaskDetails = async (body = {}) => {
     const values = {};
+    if (Object.hasOwn(body, "priority")) {
+        if (typeof body.priority !== "string" || !["High", "Normal", "Low"].includes(body.priority)) {
+            return { error: "Priority must be High, Normal, or Low" };
+        }
+        values.priority = body.priority;
+    }
     if (Object.hasOwn(body, "dueDate")) {
         const parsed = parseDueDate(body.dueDate);
         if (parsed.error) return parsed;
@@ -107,6 +113,7 @@ const addPreparationTask = async (req, res) => {
 
         await logChange(req, booking, `Preparation task added to booking ${booking.bookingCode}`, {
             taskTitle: title, assignedTo: values.assignedTo || null, dueDate: values.dueDate || null,
+            priority: values.priority || "Normal",
         });
         return sendTasks(res, booking, 201);
     } catch (error) {
@@ -119,8 +126,8 @@ const updatePreparationTaskDetails = async (req, res) => {
         if (!validId(req.params.id) || !validId(req.params.taskId)) {
             return res.status(400).json({ message: "Invalid booking or task ID" });
         }
-        if (!req.body || (!Object.hasOwn(req.body, "assignedTo") && !Object.hasOwn(req.body, "dueDate"))) {
-            return res.status(400).json({ message: "Provide an assignee or due date to update" });
+        if (!req.body || (!Object.hasOwn(req.body, "assignedTo") && !Object.hasOwn(req.body, "dueDate") && !Object.hasOwn(req.body, "priority"))) {
+            return res.status(400).json({ message: "Provide an assignee, due date, or priority to update" });
         }
         const { values, error } = await parseTaskDetails(req.body);
         if (error) return res.status(400).json({ message: error });

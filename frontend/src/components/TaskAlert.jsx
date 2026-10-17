@@ -141,6 +141,7 @@ const TaskAlert = () => {
                                                 <span className="d-block fw-semibold small">{task.title}</span>
                                                 <span className="d-block text-muted small">
                                                     {task.bookingCode} · {toCalendarDateInput(task.dueDate) < today ? "Overdue" : "Today"} · {formatCalendarDate(task.dueDate)}
+                                                    {task.priority === "High" && " · High priority"}
                                                 </span>
                                             </Link>
                                         ))}

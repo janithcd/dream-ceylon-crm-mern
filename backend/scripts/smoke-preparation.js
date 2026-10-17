@@ -20,7 +20,12 @@ const main = async () => {
         const travelStart = new Date(Date.now() + 5 * dayMs);
         const travelEnd = new Date(Date.now() + 10 * dayMs);
         const hotelCheckout = new Date(Date.now() + 7 * dayMs);
-        const dateOnly = (date) => date.toISOString().slice(0, 10);
+        const dateOnly = (date) => {
+            const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+                timeZone: "Asia/Colombo", year: "numeric", month: "2-digit", day: "2-digit",
+            }).formatToParts(date).map(({ type, value }) => [type, value]));
+            return `${parts.year}-${parts.month}-${parts.day}`;
+        };
 
         admin = await Admin.create({
             name: "CI Booking Test",
@@ -66,6 +71,7 @@ const main = async () => {
         const added = await request(url, "POST", {
             title: "Confirm hotel", assignedTo: String(admin._id),
             dueDate: dateOnly(new Date(Date.now() - dayMs)),
+            priority: "High",
         });
         const addedBody = await added.text();
         assert.equal(added.status, 201, `Add task: ${addedBody}`);
@@ -73,6 +79,7 @@ const main = async () => {
         assert.equal(tasks.length, 1);
         assert.equal(tasks[0].title, "Confirm hotel");
         assert.equal(String(tasks[0].assignedTo), String(admin._id));
+        assert.equal(tasks[0].priority, "High");
         const bookingView = await request(`http://127.0.0.1:5000/api/bookings/${booking._id}`, "GET");
         assert.equal(bookingView.status, 200);
         assert.equal((await bookingView.json()).preparationTasks[0].assignedTo.name, "CI Booking Test");
@@ -82,13 +89,28 @@ const main = async () => {
         assert.equal(overdueMine.summary.overdue, 1);
         assert.equal(overdueMine.total, 1);
         assert.equal(overdueMine.items[0].bookingCode, booking.bookingCode);
+        assert.equal(overdueMine.items[0].priority, "High");
+        assert.equal((await getMine("?priorityFilter=high")).total, 1);
 
         const taskUrl = `${url}/${tasks[0]._id}`;
-        const rescheduled = await request(taskUrl, "PUT", { dueDate: dateOnly(new Date(Date.now() + dayMs)) });
+        const rescheduled = await request(taskUrl, "PUT", { dueDate: dateOnly(new Date(Date.now() + dayMs)), priority: "Low" });
         assert.equal(rescheduled.status, 200);
         assert.equal(String((await Booking.findById(booking._id)).preparationTasks[0].assignedTo), String(admin._id));
+        assert.equal((await Booking.findById(booking._id)).preparationTasks[0].priority, "Low");
+        assert.equal((await getMine("?priorityFilter=high")).total, 0);
+        assert.equal((await getMine()).items[0].priority, "Low");
         assert.equal((await ownAttention()).overdueTaskCount, 0);
         assert.equal((await getMine("?dateFilter=upcoming")).total, 1);
+
+        const urgent = await request(url, "POST", {
+            title: "Confirm guide", assignedTo: String(admin._id),
+            dueDate: dateOnly(new Date(Date.now() + dayMs)), priority: "High",
+        });
+        assert.equal(urgent.status, 201);
+        const urgentId = (await urgent.json()).tasks.find((task) => task.title === "Confirm guide")._id;
+        assert.deepEqual((await getMine("?dateFilter=upcoming")).items.map((task) => task.priority), ["High", "Low"]);
+        assert.equal((await getMine("?dateFilter=upcoming&priorityFilter=high")).total, 1);
+        assert.equal((await request(`${url}/${urgentId}`, "DELETE")).status, 200);
 
         const completed = await request(taskUrl, "PATCH", { completed: true });
         assert.equal(completed.status, 200);
@@ -153,6 +175,7 @@ const main = async () => {
         const otherToken = jwt.sign({ id: otherAdmin._id, v: 0 }, process.env.JWT_SECRET);
         assert.equal((await getMine()).total, 0);
         assert.equal((await getMine("", otherToken)).items[0].title, "Other agent only");
+        assert.equal((await getMine("", otherToken)).items[0].priority, "Normal");
         assert.equal((await request(`${url}/${otherTaskId}`, "DELETE")).status, 200);
 
         console.log("Booking preparation, hotel stays, dashboard attention, and assigned tasks smoke tests passed against MongoDB.");
