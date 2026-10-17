@@ -57,14 +57,17 @@ const getLinkedCustomerData = async ({ inquiry, quotation, booking }) => {
     }
 
     if (isValidObjectId(quotation)) {
-        const quotationRecord = await Quotation.findById(quotation).select(
-            "clientName country quotationNo"
-        );
+        const quotationRecord = await Quotation.findById(quotation)
+            .select("clientName country quotationNo inquiry")
+            .populate("inquiry", "email whatsappNumber");
 
         if (quotationRecord) {
             return {
                 customerName: safeText(quotationRecord.clientName),
-                customerContact: safeText(quotationRecord.country),
+                customerContact:
+                    safeText(quotationRecord.inquiry?.whatsappNumber) ||
+                    safeText(quotationRecord.inquiry?.email) ||
+                    safeText(quotationRecord.country),
             };
         }
     }
@@ -97,10 +100,11 @@ const populateFollowUp = (query) => {
             "inquiry",
             "fullName email whatsappNumber country status travelDate"
         )
-        .populate(
-            "quotation",
-            "quotationNo clientName country tourTitle status currency totals"
-        )
+        .populate({
+            path: "quotation",
+            select: "quotationNo clientName country tourTitle status currency totals inquiry",
+            populate: { path: "inquiry", select: "whatsappNumber" },
+        })
         .populate(
             "booking",
             "bookingCode customer bookingStatus paymentStatus travelStartDate travelEndDate"

@@ -1,4 +1,5 @@
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
+import { buildWhatsAppFollowUpMessage, buildWhatsAppUrl, getWhatsAppContact } from "../utils/whatsappFollowUp";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -10,6 +11,7 @@ import {
     FaSearch,
     FaSyncAlt,
     FaTrash,
+    FaWhatsapp,
 } from "react-icons/fa";
 import api from "../api/axios";
 import PermissionGuard from "../components/PermissionGuard";
@@ -200,6 +202,8 @@ const FollowUps = () => {
 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [whatsAppDraft, setWhatsAppDraft] = useState(null);
+    const [whatsAppError, setWhatsAppError] = useState("");
 
     const selectedLinkType = useMemo(() => {
         if (formData.inquiry) {
@@ -622,6 +626,27 @@ const FollowUps = () => {
         } finally {
             setCompleteLoadingId("");
         }
+    };
+
+    const openWhatsAppDraft = (followUp) => {
+        setWhatsAppError("");
+        setWhatsAppDraft({
+            number: getWhatsAppContact(followUp),
+            message: buildWhatsAppFollowUpMessage(followUp),
+        });
+    };
+
+    const handleOpenWhatsApp = (event) => {
+        event.preventDefault();
+
+        const url = buildWhatsAppUrl(whatsAppDraft.number, whatsAppDraft.message);
+        if (!url) {
+            setWhatsAppError("Enter a valid international number with country code and a message.");
+            return;
+        }
+
+        window.open(url, "_blank", "noopener,noreferrer");
+        setWhatsAppDraft(null);
     };
 
     const handleDelete = async (followUpId) => {
@@ -1217,6 +1242,20 @@ const FollowUps = () => {
                                                     {followUp.status === "Pending" && (
                                                         <PermissionGuard permission="followUp.manage">
                                                             <button
+                                                                type="button"
+                                                                className="btn btn-sm btn-outline-success"
+                                                                onClick={() => openWhatsAppDraft(followUp)}
+                                                                title="Prepare WhatsApp follow-up"
+                                                                aria-label={`Prepare WhatsApp follow-up for ${followUp.customerName || followUp.title}`}
+                                                            >
+                                                                <FaWhatsapp />
+                                                            </button>
+                                                        </PermissionGuard>
+                                                    )}
+
+                                                    {followUp.status === "Pending" && (
+                                                        <PermissionGuard permission="followUp.manage">
+                                                            <button
                                                                 className="btn btn-sm btn-outline-success"
                                                                 onClick={() => handleComplete(followUp)}
                                                                 disabled={completeLoadingId === followUp._id}
@@ -1280,6 +1319,55 @@ const FollowUps = () => {
                     </div>
                 </div>
             </div>
+
+            {whatsAppDraft && (
+                <>
+                    <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="whatsapp-followup-title">
+                        <div className="modal-dialog modal-dialog-centered">
+                            <form className="modal-content" onSubmit={handleOpenWhatsApp}>
+                                <div className="modal-header">
+                                    <h5 id="whatsapp-followup-title" className="modal-title">Prepare WhatsApp follow-up</h5>
+                                    <button type="button" className="btn-close" aria-label="Close" onClick={() => setWhatsAppDraft(null)} />
+                                </div>
+                                <div className="modal-body">
+                                    <p className="text-muted mb-3">Review the recipient and message. WhatsApp will open with a draft for you to send.</p>
+                                    <label className="form-label fw-semibold" htmlFor="whatsapp-followup-number">Client number</label>
+                                    <input
+                                        id="whatsapp-followup-number"
+                                        type="tel"
+                                        className="form-control"
+                                        autoFocus
+                                        value={whatsAppDraft.number}
+                                        onChange={(event) => {
+                                            setWhatsAppDraft((draft) => ({ ...draft, number: event.target.value }));
+                                            setWhatsAppError("");
+                                        }}
+                                        placeholder="+94 77 123 4567"
+                                    />
+                                    <small className="text-muted d-block mt-1 mb-3">Use the full international number with country code. Add one if the contact is missing or starts with a local 0.</small>
+                                    <label className="form-label fw-semibold" htmlFor="whatsapp-followup-message">Message</label>
+                                    <textarea
+                                        id="whatsapp-followup-message"
+                                        className="form-control"
+                                        rows="5"
+                                        value={whatsAppDraft.message}
+                                        onChange={(event) => {
+                                            setWhatsAppDraft((draft) => ({ ...draft, message: event.target.value }));
+                                            setWhatsAppError("");
+                                        }}
+                                    />
+                                    {whatsAppError && <div className="alert alert-danger mt-3 mb-0" role="alert">{whatsAppError}</div>}
+                                </div>
+                                <div className="modal-footer">
+                                    <button type="button" className="btn btn-outline-secondary" onClick={() => setWhatsAppDraft(null)}>Cancel</button>
+                                    <button type="submit" className="btn btn-success"><FaWhatsapp className="me-2" />Open WhatsApp</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div className="modal-backdrop fade show" />
+                </>
+            )}
         </div>
     );
 };

@@ -52,6 +52,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - View inquiry, quotation, booking, and payment history
 - Schedule and complete customer follow-ups
 - Identify overdue and upcoming follow-ups
+- Open a reviewed WhatsApp message from a pending follow-up (requires an international client number; the admin sends it manually)
 - Export business data to CSV
 
 ### 🧾 Quotations and Bookings
