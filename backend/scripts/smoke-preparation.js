@@ -15,6 +15,12 @@ const main = async () => {
     let booking;
 
     try {
+        const dayMs = 24 * 60 * 60 * 1000;
+        const travelStart = new Date(Date.now() + 5 * dayMs);
+        const travelEnd = new Date(Date.now() + 10 * dayMs);
+        const hotelCheckout = new Date(Date.now() + 7 * dayMs);
+        const dateOnly = (date) => date.toISOString().slice(0, 10);
+
         admin = await Admin.create({
             name: "CI Booking Test",
             email: `ci-booking-${Date.now()}@example.invalid`,
@@ -23,8 +29,8 @@ const main = async () => {
         });
         booking = await Booking.create({
             customer: { fullName: "CI Guest", email: "guest@example.invalid", whatsappNumber: "+94771234567", country: "UK" },
-            travelStartDate: new Date("2027-03-01"),
-            travelEndDate: new Date("2027-03-10"),
+            travelStartDate: new Date(dateOnly(travelStart)),
+            travelEndDate: new Date(dateOnly(travelEnd)),
             numberOfTravelers: 2,
             totalPrice: 1000,
         });
@@ -36,6 +42,13 @@ const main = async () => {
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: body === undefined ? undefined : JSON.stringify(body),
         });
+        const getAttention = async () => {
+            const response = await request("http://127.0.0.1:5000/api/dashboard/stats", "GET");
+            const body = await response.json();
+            assert.equal(response.status, 200, `Dashboard stats: ${JSON.stringify(body)}`);
+            return body.bookingAttention;
+        };
+        const ownAttention = async () => (await getAttention()).items.find((item) => item.bookingCode === booking.bookingCode);
 
         const added = await request(url, "POST", { title: "Confirm hotel" });
         const addedBody = await added.text();
@@ -43,26 +56,30 @@ const main = async () => {
         const tasks = (await Booking.findById(booking._id)).preparationTasks;
         assert.equal(tasks.length, 1);
         assert.equal(tasks[0].title, "Confirm hotel");
+        assert.equal((await ownAttention()).openTaskCount, 1);
 
         const taskUrl = `${url}/${tasks[0]._id}`;
         const completed = await request(taskUrl, "PATCH", { completed: true });
         assert.equal(completed.status, 200);
         assert.ok((await Booking.findById(booking._id)).preparationTasks[0].completedAt);
+        assert.equal(await ownAttention(), undefined);
 
         const reopened = await request(taskUrl, "PATCH", { completed: false });
         assert.equal(reopened.status, 200);
         assert.equal((await Booking.findById(booking._id)).preparationTasks[0].completedAt, null);
+        assert.equal((await ownAttention()).openTaskCount, 1);
 
         const removed = await request(taskUrl, "DELETE");
         assert.equal(removed.status, 200);
         assert.equal((await Booking.findById(booking._id)).preparationTasks.length, 0);
+        assert.equal(await ownAttention(), undefined);
 
         const hotelsUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/hotel-stays`;
         const hotelAdded = await request(hotelsUrl, "POST", {
             hotelName: "CI Hotel",
             location: "Sigiriya",
-            checkInDate: "2027-03-01",
-            checkOutDate: "2027-03-03",
+            checkInDate: dateOnly(travelStart),
+            checkOutDate: dateOnly(hotelCheckout),
             rooms: 1,
             mealPlan: "Half Board",
         });
@@ -70,17 +87,19 @@ const main = async () => {
         assert.equal(hotelAdded.status, 201, `Add hotel stay: ${hotelAddedBody}`);
         const hotel = (await Booking.findById(booking._id)).hotelStays[0];
         assert.equal(hotel.hotelName, "CI Hotel");
+        assert.equal((await ownAttention()).pendingHotelCount, 1);
 
         const hotelUrl = `${hotelsUrl}/${hotel._id}`;
         const confirmed = await request(hotelUrl, "PUT", { status: "Confirmed", confirmationNumber: "CI-123" });
         const confirmedBody = await confirmed.text();
         assert.equal(confirmed.status, 200, `Confirm hotel stay: ${confirmedBody}`);
         assert.equal((await Booking.findById(booking._id)).hotelStays[0].confirmationNumber, "CI-123");
+        assert.equal(await ownAttention(), undefined);
 
         const hotelRemoved = await request(hotelUrl, "DELETE");
         assert.equal(hotelRemoved.status, 200);
         assert.equal((await Booking.findById(booking._id)).hotelStays.length, 0);
-        console.log("Booking preparation and hotel stays smoke tests passed against MongoDB.");
+        console.log("Booking preparation, hotel stays, and dashboard attention smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
             await ActivityLog.deleteMany({ relatedRecordId: booking._id });

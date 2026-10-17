@@ -104,6 +104,7 @@ Enter each supplier amount in its own currency. If it differs from the quotation
 
 - Dashboard statistics
 - Upcoming departures for the next 30 days, with shortcuts to each booking
+- Bookings needing attention for upcoming departures with requested hotel stays or unfinished preparation tasks
 - Revenue and booking charts
 - Recent activity panel
 - Follow-up alerts

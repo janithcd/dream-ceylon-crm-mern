@@ -6,6 +6,7 @@ const Vehicle = require("../models/Vehicle");
 const Quotation = require("../models/Quotation");
 const { getBusinessMonthStart } = require("../utils/businessDate");
 const { getUpcomingDepartureQuery } = require("../utils/upcomingDepartures");
+const { getBookingAttentionQuery, summarizeBookingAttention } = require("../utils/bookingAttention");
 
 // @desc    Get dashboard statistics
 // @route   GET /api/dashboard/stats
@@ -236,10 +237,21 @@ const getDashboardStats = async (req, res) => {
             .sort({ createdAt: -1 })
             .limit(5);
 
-        const upcomingDepartures = await Booking.find(getUpcomingDepartureQuery())
+        const now = new Date();
+        const upcomingDepartures = await Booking.find(getUpcomingDepartureQuery(now))
             .select("bookingCode customer.fullName travelStartDate travelEndDate bookingStatus paymentStatus")
             .sort({ travelStartDate: 1, createdAt: 1 })
             .limit(5);
+
+        const attentionQuery = getBookingAttentionQuery(now);
+        const [attentionBookings, attentionTotal] = await Promise.all([
+            Booking.find(attentionQuery)
+                .select("bookingCode customer.fullName travelStartDate hotelStays.status preparationTasks.completedAt")
+                .sort({ travelStartDate: 1, createdAt: 1 })
+                .limit(10)
+                .lean(),
+            Booking.countDocuments(attentionQuery),
+        ]);
 
         const recentQuotations = await Quotation.find()
             .populate("inquiry", "fullName email whatsappNumber country status")
@@ -321,6 +333,10 @@ const getDashboardStats = async (req, res) => {
             recentInquiries,
             recentBookings,
             upcomingDepartures,
+            bookingAttention: {
+                total: attentionTotal,
+                items: attentionBookings.map(summarizeBookingAttention),
+            },
             recentQuotations,
         });
     } catch (error) {
