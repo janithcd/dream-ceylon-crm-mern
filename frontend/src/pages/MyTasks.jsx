@@ -192,6 +192,7 @@ const MyTasks = () => {
                                                     {task.title}
                                                     {task.priority === "High" && <span className="badge text-bg-danger ms-2">High</span>}
                                                     {task.priority === "Low" && <span className="badge text-bg-secondary ms-2">Low</span>}
+                                                    {task.notes && <small className="d-block text-muted fw-normal mt-1" style={{ whiteSpace: "pre-wrap" }}>{task.notes}</small>}
                                                 </td>
                                                 <td><div>{task.bookingCode}</div><small className="text-muted">{task.customerName || "-"}</small></td>
                                                 <td>

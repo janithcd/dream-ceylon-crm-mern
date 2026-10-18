@@ -5,6 +5,7 @@ const { PERMISSIONS, resolveAdminPermissions } = require("../config/permissions"
 const { createActivityLog } = require("../utils/createActivityLog");
 
 const validId = (value) => mongoose.Types.ObjectId.isValid(value);
+const ACTIVE_BOOKING_STATUSES = ["Pending", "Confirmed", "In Progress"];
 
 const parseDueDate = (value) => {
     if (value === null || value === "") return { value: null };
@@ -20,6 +21,12 @@ const parseDueDate = (value) => {
 
 const parseTaskDetails = async (body = {}) => {
     const values = {};
+    if (Object.hasOwn(body, "notes")) {
+        if (typeof body.notes !== "string" || body.notes.trim().length > 500) {
+            return { error: "Task note must be at most 500 characters" };
+        }
+        values.notes = body.notes.trim();
+    }
     if (Object.hasOwn(body, "priority")) {
         if (typeof body.priority !== "string" || !["High", "Normal", "Low"].includes(body.priority)) {
             return { error: "Priority must be High, Normal, or Low" };
@@ -113,7 +120,7 @@ const addPreparationTask = async (req, res) => {
 
         await logChange(req, booking, `Preparation task added to booking ${booking.bookingCode}`, {
             taskTitle: title, assignedTo: values.assignedTo || null, dueDate: values.dueDate || null,
-            priority: values.priority || "Normal",
+            priority: values.priority || "Normal", hasNotes: Boolean(values.notes),
         });
         return sendTasks(res, booking, 201);
     } catch (error) {
@@ -126,8 +133,8 @@ const updatePreparationTaskDetails = async (req, res) => {
         if (!validId(req.params.id) || !validId(req.params.taskId)) {
             return res.status(400).json({ message: "Invalid booking or task ID" });
         }
-        if (!req.body || (!Object.hasOwn(req.body, "assignedTo") && !Object.hasOwn(req.body, "dueDate") && !Object.hasOwn(req.body, "priority"))) {
-            return res.status(400).json({ message: "Provide an assignee, due date, or priority to update" });
+        if (!req.body || (!Object.hasOwn(req.body, "assignedTo") && !Object.hasOwn(req.body, "dueDate") && !Object.hasOwn(req.body, "priority") && !Object.hasOwn(req.body, "notes"))) {
+            return res.status(400).json({ message: "Provide an assignee, due date, priority, or note to update" });
         }
         const { values, error } = await parseTaskDetails(req.body);
         if (error) return res.status(400).json({ message: error });
@@ -146,6 +153,41 @@ const updatePreparationTaskDetails = async (req, res) => {
         return sendTasks(res, booking);
     } catch (error) {
         return res.status(500).json({ message: "Failed to update preparation task details" });
+    }
+};
+
+const claimPreparationTask = async (req, res) => {
+    try {
+        if (!validId(req.params.id) || !validId(req.params.taskId)) {
+            return res.status(400).json({ message: "Invalid booking or task ID" });
+        }
+
+        const booking = await Booking.findOneAndUpdate(
+            {
+                _id: req.params.id,
+                bookingStatus: { $in: ACTIVE_BOOKING_STATUSES },
+                preparationTasks: { $elemMatch: {
+                    _id: req.params.taskId, assignedTo: null, completedAt: null,
+                } },
+            },
+            { $set: { "preparationTasks.$.assignedTo": req.admin._id } },
+            { new: true, runValidators: true }
+        );
+
+        if (!booking) {
+            const exists = await Booking.exists({ _id: req.params.id, "preparationTasks._id": req.params.taskId });
+            return res.status(exists ? 409 : 404).json({
+                message: exists ? "Task is no longer available to claim" : "Booking task not found",
+            });
+        }
+
+        const task = booking.preparationTasks.id(req.params.taskId);
+        await logChange(req, booking, `Preparation task claimed for booking ${booking.bookingCode}`, {
+            taskId: req.params.taskId, taskTitle: task?.title, assignedTo: req.admin._id,
+        });
+        return sendTasks(res, booking);
+    } catch (error) {
+        return res.status(500).json({ message: "Failed to claim preparation task" });
     }
 };
 
@@ -207,4 +249,4 @@ const deletePreparationTask = async (req, res) => {
     }
 };
 
-module.exports = { getPreparationAssignees, addPreparationTask, updatePreparationTaskDetails, setPreparationTaskCompletion, deletePreparationTask };
+module.exports = { getPreparationAssignees, addPreparationTask, updatePreparationTaskDetails, claimPreparationTask, setPreparationTaskCompletion, deletePreparationTask };

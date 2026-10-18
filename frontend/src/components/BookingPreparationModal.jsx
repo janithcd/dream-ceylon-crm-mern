@@ -22,11 +22,13 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
     const [newAssigneeId, setNewAssigneeId] = useState("");
     const [newDueDate, setNewDueDate] = useState("");
     const [newPriority, setNewPriority] = useState("Normal");
+    const [newNotes, setNewNotes] = useState("");
     const [assignees, setAssignees] = useState([]);
     const [editingTaskId, setEditingTaskId] = useState("");
     const [editAssigneeId, setEditAssigneeId] = useState("");
     const [editDueDate, setEditDueDate] = useState("");
     const [editPriority, setEditPriority] = useState("Normal");
+    const [editNotes, setEditNotes] = useState("");
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
@@ -72,12 +74,14 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
             const response = await api.post(`/bookings/${booking._id}/preparation-tasks`, {
                 title: title.trim(), assignedTo: newAssigneeId || null, dueDate: newDueDate || null,
                 priority: newPriority,
+                notes: newNotes,
             });
             setTasks(response.data.tasks || []);
             setTitle("");
             setNewAssigneeId("");
             setNewDueDate("");
             setNewPriority("Normal");
+            setNewNotes("");
             setSuccess("Task added.");
             notifyTasksChanged();
             onChanged();
@@ -93,6 +97,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
         setEditAssigneeId(assigneeId(task.assignedTo));
         setEditDueDate(toCalendarDateInput(task.dueDate));
         setEditPriority(task.priority || "Normal");
+        setEditNotes(task.notes || "");
         setError("");
         setSuccess("");
     };
@@ -104,7 +109,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
             setBusy(true);
             setError("");
             setSuccess("");
-            const details = { dueDate: editDueDate || null, priority: editPriority };
+            const details = { dueDate: editDueDate || null, priority: editPriority, notes: editNotes };
             if (editAssigneeId !== assigneeId(task.assignedTo)) {
                 details.assignedTo = editAssigneeId || null;
             }
@@ -203,6 +208,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
                                                                 <span className="badge text-bg-danger ms-2">Overdue</span>
                                                             )}
                                                         </span>
+                                                        {task.notes && <span className="d-block small mt-2" style={{ whiteSpace: "pre-wrap" }}>Note: {task.notes}</span>}
                                                     </span>
                                                 </label>
                                                 {canUpdate && (
@@ -237,6 +243,10 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
                                                         <select id={`task-priority-${task._id}`} className="form-select" value={editPriority} onChange={(event) => setEditPriority(event.target.value)} disabled={busy}>
                                                             {priorityOptions.map((value) => <option key={value} value={value}>{value}</option>)}
                                                         </select>
+                                                    </div>
+                                                    <div className="col-12">
+                                                        <label className="form-label small" htmlFor={`task-notes-${task._id}`}>Internal note (optional)</label>
+                                                        <textarea id={`task-notes-${task._id}`} className="form-control" rows="2" maxLength={500} value={editNotes} onChange={(event) => setEditNotes(event.target.value)} disabled={busy} placeholder="Supplier contact, confirmation detail, or handoff context" />
                                                     </div>
                                                     <div className="col-12 d-flex gap-2">
                                                         <button type="submit" className="btn btn-sm btn-primary" disabled={busy}>Save task</button>
@@ -280,6 +290,10 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
                                             <select id="new-task-priority" className="form-select" value={newPriority} onChange={(event) => setNewPriority(event.target.value)} disabled={busy}>
                                                 {priorityOptions.map((value) => <option key={value} value={value}>{value}</option>)}
                                             </select>
+                                        </div>
+                                        <div className="col-12">
+                                            <label className="form-label small" htmlFor="new-task-notes">Internal note (optional)</label>
+                                            <textarea id="new-task-notes" className="form-control" rows="2" maxLength={500} value={newNotes} onChange={(event) => setNewNotes(event.target.value)} disabled={busy} placeholder="Supplier contact, confirmation detail, or handoff context" />
                                         </div>
                                     </div>
                                     <button type="submit" className="btn btn-primary mt-3" disabled={busy || tasks.length >= 30}>

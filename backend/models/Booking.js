@@ -60,6 +60,12 @@ const preparationTaskSchema = new mongoose.Schema({
         enum: ["High", "Normal", "Low"],
         default: "Normal",
     },
+    notes: {
+        type: String,
+        trim: true,
+        maxlength: 500,
+        default: "",
+    },
     createdAt: {
         type: Date,
         default: Date.now,
@@ -196,6 +202,7 @@ bookingSchema.pre("save", function () {
 });
 
 bookingSchema.index({ "preparationTasks.assignedTo": 1, bookingStatus: 1 });
+bookingSchema.index({ bookingStatus: 1, "preparationTasks.completedAt": 1 });
 
 const Booking = mongoose.model("Booking", bookingSchema);
 

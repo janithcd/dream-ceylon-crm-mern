@@ -11,10 +11,12 @@ const {
     getPreparationAssignees,
     addPreparationTask,
     updatePreparationTaskDetails,
+    claimPreparationTask,
     setPreparationTaskCompletion,
     deletePreparationTask,
 } = require("../controllers/bookingPreparationController");
 const { getMyTasks } = require("../controllers/myTasksController");
+const { getTeamTasks } = require("../controllers/teamTasksController");
 const {
     addHotelStay,
     updateHotelStay,
@@ -34,6 +36,13 @@ router.get(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_VIEW),
     getMyTasks
+);
+
+router.get(
+    "/team-tasks",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW),
+    getTeamTasks
 );
 
 router.get(
@@ -76,6 +85,13 @@ router.patch(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
     setPreparationTaskCompletion
+);
+
+router.patch(
+    "/:id/preparation-tasks/:taskId/claim",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
+    claimPreparationTask
 );
 
 router.put(
