@@ -8,6 +8,7 @@
     "build": "vite build",
     "test": "node --test",
     "lint": "eslint .",
+    "lint:runtime": "eslint src --config eslint.runtime.config.js",
     "preview": "vite preview"
   },
   "dependencies": {

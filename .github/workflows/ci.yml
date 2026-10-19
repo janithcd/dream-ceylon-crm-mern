@@ -47,6 +47,7 @@ jobs:
       - run: npm ci --no-fund
       - run: npm audit --audit-level=high
       - run: npm test
+      - run: npm run lint:runtime
       - run: npm run build
         env:
           VITE_API_BASE_URL: /api
