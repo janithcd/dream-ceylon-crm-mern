@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { FaSyncAlt, FaWallet } from "react-icons/fa";
+import { FaSyncAlt, FaWallet, FaWhatsapp } from "react-icons/fa";
 import api from "../api/axios";
 import BookingPaymentsModal from "../components/BookingPaymentsModal";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
+import { buildWhatsAppUrl } from "../utils/whatsappFollowUp";
+import { buildPaymentReminderMessage } from "../utils/paymentReminder";
 
 const emptyData = {
     items: [], summary: { open: 0, departed: 0, next30: 0, later: 0, overdue: 0, due7: 0, scheduledLater: 0, unscheduled: 0 },
@@ -35,6 +37,7 @@ const formatMoney = (amount, currency) =>
 const OutstandingBalances = () => {
     const { hasPermission } = usePermissions();
     const canChangeDueDate = hasPermission("payment.update");
+    const canPrepareReminder = hasPermission("payment.create");
     const [dateFilter, setDateFilter] = useState("all");
     const [dueFilter, setDueFilter] = useState("all");
     const [page, setPage] = useState(1);
@@ -46,6 +49,9 @@ const OutstandingBalances = () => {
     const [selected, setSelected] = useState(null);
     const [editingDue, setEditingDue] = useState(null);
     const [savingDue, setSavingDue] = useState(false);
+    const [reminderLoadingId, setReminderLoadingId] = useState("");
+    const [reminderDraft, setReminderDraft] = useState(null);
+    const [reminderError, setReminderError] = useState("");
 
     useEffect(() => {
         let active = true;
@@ -98,6 +104,41 @@ const OutstandingBalances = () => {
         } finally {
             setSavingDue(false);
         }
+    };
+    const prepareReminder = async (item) => {
+        if (!canPrepareReminder) return;
+        try {
+            setReminderLoadingId(item._id);
+            setError("");
+            setReminderError("");
+            // Fetch on click so the draft does not rely on a balance left open in the queue.
+            const { data: booking } = await api.get(`/bookings/${item._id}`);
+            const message = buildPaymentReminderMessage(booking);
+            if (!message) {
+                refresh();
+                setError("This booking no longer has an open balance. The queue is refreshing.");
+                return;
+            }
+            setReminderDraft({
+                bookingCode: booking.bookingCode,
+                number: booking.customer?.whatsappNumber || "",
+                message,
+            });
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Failed to prepare the payment reminder.");
+        } finally {
+            setReminderLoadingId("");
+        }
+    };
+    const openReminder = (event) => {
+        event.preventDefault();
+        const url = buildWhatsAppUrl(reminderDraft.number, reminderDraft.message);
+        if (!url) {
+            setReminderError("Enter a valid international number with country code and a message.");
+            return;
+        }
+        window.open(url, "_blank", "noopener,noreferrer");
+        setReminderDraft(null);
     };
     const selectedBooking = selected && {
         _id: selected._id,
@@ -194,6 +235,7 @@ const OutstandingBalances = () => {
                                 <td className="text-end"><div className="d-flex justify-content-end gap-2">
                                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelected(item)}>Payments</button>
                                     {canChangeDueDate && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setEditingDue({ id: item._id, value: toCalendarDateInput(item.paymentDueDate) })}>Due date</button>}
+                                    {canPrepareReminder && <button type="button" className="btn btn-sm btn-outline-success" onClick={() => prepareReminder(item)} disabled={Boolean(reminderLoadingId)} aria-label={`Prepare WhatsApp payment reminder for ${item.bookingCode}`}><FaWhatsapp className="me-1" />{reminderLoadingId === item._id ? "Loading..." : "Reminder"}</button>}
                                     <Link className="btn btn-sm btn-outline-secondary" to={`/bookings?keyword=${encodeURIComponent(item.bookingCode)}`}>Booking</Link>
                                 </div></td>
                             </tr>
@@ -218,6 +260,43 @@ const OutstandingBalances = () => {
                     onClose={() => { setSelected(null); refresh(); }}
                     onPaymentChanged={refresh}
                 />
+            )}
+            {reminderDraft && (
+                <>
+                    <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="payment-reminder-title">
+                        <div className="modal-dialog modal-dialog-centered">
+                            <form className="modal-content" onSubmit={openReminder}>
+                                <div className="modal-header">
+                                    <h5 id="payment-reminder-title" className="modal-title">Payment reminder · {reminderDraft.bookingCode}</h5>
+                                    <button type="button" className="btn-close" aria-label="Close" onClick={() => setReminderDraft(null)} />
+                                </div>
+                                <div className="modal-body">
+                                    <p className="text-muted mb-3">Review the recipient and current balance below. WhatsApp opens a draft for you to send.</p>
+                                    <label className="form-label fw-semibold" htmlFor="payment-reminder-number">Client number</label>
+                                    <input
+                                        id="payment-reminder-number" type="tel" className="form-control" autoFocus
+                                        value={reminderDraft.number}
+                                        onChange={(event) => { setReminderDraft((draft) => ({ ...draft, number: event.target.value })); setReminderError(""); }}
+                                        placeholder="+94 77 123 4567"
+                                    />
+                                    <small className="text-muted d-block mt-1 mb-3">Use the full international number with country code.</small>
+                                    <label className="form-label fw-semibold" htmlFor="payment-reminder-message">Message</label>
+                                    <textarea
+                                        id="payment-reminder-message" className="form-control" rows="6"
+                                        value={reminderDraft.message}
+                                        onChange={(event) => { setReminderDraft((draft) => ({ ...draft, message: event.target.value })); setReminderError(""); }}
+                                    />
+                                    {reminderError && <div className="alert alert-danger mt-3 mb-0" role="alert">{reminderError}</div>}
+                                </div>
+                                <div className="modal-footer">
+                                    <button type="button" className="btn btn-outline-secondary" onClick={() => setReminderDraft(null)}>Cancel</button>
+                                    <button type="submit" className="btn btn-success"><FaWhatsapp className="me-2" />Open WhatsApp</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div className="modal-backdrop fade show" />
+                </>
             )}
         </div>
     );
