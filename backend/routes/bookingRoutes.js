@@ -17,6 +17,12 @@ const {
 } = require("../controllers/bookingPreparationController");
 const { getMyTasks } = require("../controllers/myTasksController");
 const { getBookingActivity } = require("../controllers/bookingActivityController");
+const {
+    getTransportAssignments,
+    addTransportAssignment,
+    updateTransportAssignment,
+    deleteTransportAssignment,
+} = require("../controllers/bookingTransportController");
 const { getTeamTasks } = require("../controllers/teamTasksController");
 const {
     addHotelStay,
@@ -58,6 +64,34 @@ router.get(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_VIEW),
     getBookingActivity
+);
+
+router.get(
+    "/:id/transport-assignments",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW),
+    getTransportAssignments
+);
+
+router.post(
+    "/:id/transport-assignments",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
+    addTransportAssignment
+);
+
+router.put(
+    "/:id/transport-assignments/:assignmentId",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
+    updateTransportAssignment
+);
+
+router.delete(
+    "/:id/transport-assignments/:assignmentId",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
+    deleteTransportAssignment
 );
 
 router.post(

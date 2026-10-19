@@ -14,6 +14,7 @@ const main = async () => {
     let admin;
     let otherAdmin;
     let booking;
+    let overlappingBooking;
 
     try {
         const dayMs = 24 * 60 * 60 * 1000;
@@ -207,6 +208,40 @@ const main = async () => {
         assert.equal((await getMine("", otherToken)).items[0].priority, "Normal");
         assert.equal((await request(`${url}/${otherTaskId}`, "DELETE")).status, 200);
 
+        const transportUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/transport-assignments`;
+        const firstTransportResponse = await request(transportUrl, "POST", {
+            route: "Airport pickup and round tour", startDate: dateOnly(travelStart),
+            endDate: dateOnly(hotelCheckout), registration: "WP-CAB 1234",
+            vehicleDescription: "KDH van", chauffeurName: "CI Chauffeur", status: "Confirmed",
+        });
+        const firstTransportText = await firstTransportResponse.text();
+        assert.equal(firstTransportResponse.status, 201, `Add transport: ${firstTransportText}`);
+        const firstTransport = JSON.parse(firstTransportText);
+        assert.equal(firstTransport.conflicts.length, 0);
+        assert.equal((await Booking.findById(booking._id)).transportAssignments[0].registrationKey, "WPCAB1234");
+
+        overlappingBooking = await Booking.create({
+            customer: { fullName: "CI Second Guest", email: "second@example.invalid", whatsappNumber: "+94771234568", country: "UK" },
+            travelStartDate: new Date(dateOnly(travelStart)), travelEndDate: new Date(dateOnly(travelEnd)),
+            numberOfTravelers: 2, totalPrice: 1000,
+        });
+        const otherTransportUrl = `http://127.0.0.1:5000/api/bookings/${overlappingBooking._id}/transport-assignments`;
+        const secondTransportResponse = await request(otherTransportUrl, "POST", {
+            route: "Day tour", startDate: dateOnly(hotelCheckout), endDate: dateOnly(hotelCheckout),
+            registration: "WP CAB-1234", status: "Confirmed",
+        });
+        const secondTransportText = await secondTransportResponse.text();
+        assert.equal(secondTransportResponse.status, 201, `Add overlapping transport: ${secondTransportText}`);
+        const secondTransport = JSON.parse(secondTransportText);
+        assert.equal(secondTransport.conflicts[0].bookings[0].bookingCode, booking.bookingCode);
+        assert.equal((await (await request(transportUrl, "GET")).json()).conflicts[0].bookings[0].bookingCode, overlappingBooking.bookingCode);
+
+        const editedTransport = await request(`${otherTransportUrl}/${secondTransport.assignments[0]._id}`, "PUT", { registration: "WP-OTHER 999" });
+        assert.equal(editedTransport.status, 200);
+        assert.equal((await editedTransport.json()).conflicts.length, 0);
+        assert.equal((await (await request(transportUrl, "GET")).json()).conflicts.length, 0);
+        assert.equal((await request(`${transportUrl}/${firstTransport.assignments[0]._id}`, "DELETE")).status, 200);
+
         const historyUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/activity`;
         await ActivityLog.create({
             action: "CREATE", module: "Payment", description: "CI payment received",
@@ -222,6 +257,7 @@ const main = async () => {
         const salesHistory = await salesHistoryResponse.json();
         assert.ok(salesHistory.events.some((event) => event.description.includes("Preparation task")));
         assert.ok(salesHistory.events.some((event) => event.description.includes("Hotel")));
+        assert.ok(salesHistory.events.some((event) => event.description.includes("Transport")));
         assert.equal(salesHistory.events.some((event) => event.module === "Payment"), false);
         assert.equal(salesHistory.events.some((event) => event.module === "Other"), false);
 
@@ -234,7 +270,7 @@ const main = async () => {
         assert.equal("metadata" in paymentHistory.events[0], false);
         assert.equal((await request("http://127.0.0.1:5000/api/bookings/not-an-id/activity", "GET")).status, 400);
 
-        console.log("Booking preparation, hotel stays, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
+        console.log("Booking preparation, hotel stays, transport overlaps, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
             await ActivityLog.deleteMany({ $or: [
@@ -242,6 +278,10 @@ const main = async () => {
                 { "metadata.bookingId": booking._id },
             ] });
             await Booking.deleteOne({ _id: booking._id });
+        }
+        if (overlappingBooking) {
+            await ActivityLog.deleteMany({ relatedRecordId: overlappingBooking._id });
+            await Booking.deleteOne({ _id: overlappingBooking._id });
         }
         if (admin) await Admin.deleteOne({ _id: admin._id });
         if (otherAdmin) await Admin.deleteOne({ _id: otherAdmin._id });
