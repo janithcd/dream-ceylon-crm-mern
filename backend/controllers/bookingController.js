@@ -3,6 +3,7 @@ const Booking = require("../models/Booking");
 const CostEntry = require("../models/CostEntry");
 const Inquiry = require("../models/Inquiry");
 const { createActivityLog } = require("../utils/createActivityLog");
+const { parsePaymentDueDate } = require("../utils/paymentDueDate");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -239,6 +240,12 @@ const createBooking = async (req, res) => {
     try {
         const payload = buildBookingPayload(req.body);
 
+        if (Object.hasOwn(req.body || {}, "paymentDueDate")) {
+            const parsed = parsePaymentDueDate(req.body.paymentDueDate);
+            if (parsed.error) return res.status(400).json({ message: parsed.error });
+            payload.paymentDueDate = parsed.value;
+        }
+
         if (!payload.customer.fullName) {
             return res.status(400).json({
                 message: "Customer name is required",
@@ -268,6 +275,7 @@ const createBooking = async (req, res) => {
                 currency: booking.currency,
                 bookingStatus: booking.bookingStatus,
                 paymentStatus: booking.paymentStatus,
+                paymentDueDate: booking.paymentDueDate,
             },
         });
 
@@ -359,6 +367,12 @@ const updateBooking = async (req, res) => {
 
         const payload = buildBookingPayload(req.body, booking);
 
+        if (Object.hasOwn(req.body || {}, "paymentDueDate")) {
+            const parsed = parsePaymentDueDate(req.body.paymentDueDate);
+            if (parsed.error) return res.status(400).json({ message: parsed.error });
+            payload.paymentDueDate = parsed.value;
+        }
+
         if (!payload.customer.fullName) {
             return res.status(400).json({
                 message: "Customer name is required",
@@ -387,6 +401,7 @@ const updateBooking = async (req, res) => {
                 currency: booking.currency,
                 bookingStatus: booking.bookingStatus,
                 paymentStatus: booking.paymentStatus,
+                paymentDueDate: booking.paymentDueDate,
             },
         });
 
