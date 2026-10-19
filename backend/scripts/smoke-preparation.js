@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const Admin = require("../models/Admin");
 const Booking = require("../models/Booking");
+const BookingPayment = require("../models/BookingPayment");
 const ActivityLog = require("../models/ActivityLog");
 const { PDFDocument } = require("pdf-lib");
 
@@ -330,9 +331,32 @@ const main = async () => {
         assert.equal("metadata" in paymentHistory.events[0], false);
         assert.equal((await request("http://127.0.0.1:5000/api/bookings/not-an-id/activity", "GET")).status, 400);
 
+        const balancesUrl = "http://127.0.0.1:5000/api/bookings/outstanding-balances";
+        assert.equal((await request(balancesUrl, "GET")).status, 403);
+        const getBalances = async () => {
+            const response = await fetch(`${balancesUrl}?dateFilter=next30`, {
+                headers: { Authorization: `Bearer ${otherToken}` },
+            });
+            const body = await response.json();
+            assert.equal(response.status, 200, `Balance queue: ${JSON.stringify(body)}`);
+            return body.items.find((item) => String(item._id) === String(booking._id));
+        };
+        assert.equal((await getBalances()).balance, 1000);
+        await Admin.findByIdAndUpdate(otherAdmin._id, { $addToSet: { customPermissions: "payment.create" } });
+        for (const amount of [400, 600]) {
+            const paymentResponse = await fetch("http://127.0.0.1:5000/api/booking-payments", {
+                method: "POST",
+                headers: { Authorization: `Bearer ${otherToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ booking: booking._id, amount, currency: "USD", status: "Received" }),
+            });
+            assert.equal(paymentResponse.status, 201, `Record payment: ${await paymentResponse.text()}`);
+            assert.equal((await getBalances())?.balance, amount === 400 ? 600 : undefined);
+        }
+
         console.log("Booking preparation, supplier confirmations, transport overlaps, departure PDF, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
+            await BookingPayment.deleteMany({ booking: booking._id });
             await ActivityLog.deleteMany({ $or: [
                 { relatedRecordId: booking._id },
                 { "metadata.bookingId": booking._id },

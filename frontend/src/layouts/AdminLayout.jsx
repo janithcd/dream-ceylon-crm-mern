@@ -21,6 +21,7 @@ import {
     FaUsers,
     FaUsersCog,
     FaRobot,
+    FaWallet,
 } from "react-icons/fa";
 
 import { useAuth } from "../context/AuthContext";
@@ -153,6 +154,13 @@ const AdminLayout = () => {
                         <NavLink to="/payment-reports">
                             <FaMoneyBillWave />
                             Payment Reports
+                        </NavLink>
+                    </PermissionGuard>
+
+                    <PermissionGuard all={[ROUTE_PERMISSIONS.bookings, ROUTE_PERMISSIONS.payments]}>
+                        <NavLink to="/outstanding-balances">
+                            <FaWallet />
+                            Outstanding Balances
                         </NavLink>
                     </PermissionGuard>
 
