@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
     FaBell,
+    FaCar,
     FaCoins,
     FaClipboardCheck,
     FaEdit,
@@ -21,6 +22,7 @@ import BookingPaymentsModal from "../components/BookingPaymentsModal";
 import BookingPreparationModal from "../components/BookingPreparationModal";
 import BookingHotelsModal from "../components/BookingHotelsModal";
 import BookingActivityModal from "../components/BookingActivityModal";
+import BookingTransportModal from "../components/BookingTransportModal";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 
@@ -62,6 +64,7 @@ const Bookings = () => {
     const [selectedPreparationBooking, setSelectedPreparationBooking] = useState(null);
     const [selectedHotelBooking, setSelectedHotelBooking] = useState(null);
     const [selectedActivityBooking, setSelectedActivityBooking] = useState(null);
+    const [selectedTransportBooking, setSelectedTransportBooking] = useState(null);
 
     const [searchInput, setSearchInput] = useState(initialKeyword);
     const [keyword, setKeyword] = useState(initialKeyword);
@@ -986,7 +989,18 @@ const Bookings = () => {
                                             </small>
                                         </td>
 
-                                        <td>{booking.vehicleType}</td>
+                                        <td>
+                                            <div>{booking.vehicleType}</div>
+                                            <button
+                                                type="button"
+                                                className="btn btn-link btn-sm p-0 text-start"
+                                                onClick={() => setSelectedTransportBooking(booking)}
+                                                aria-label={`Transport arrangements for ${booking.bookingCode}`}
+                                            >
+                                                <FaCar className="me-1" />
+                                                {(booking.transportAssignments || []).filter((item) => item.status === "Confirmed").length} confirmed / {(booking.transportAssignments || []).filter((item) => item.status !== "Cancelled").length} active
+                                            </button>
+                                        </td>
 
                                         <td>
                                             {formatMoney(booking.totalPrice, booking.currency)}
@@ -1169,6 +1183,14 @@ const Bookings = () => {
                     key={selectedActivityBooking._id}
                     booking={selectedActivityBooking}
                     onClose={() => setSelectedActivityBooking(null)}
+                />
+            )}
+            {selectedTransportBooking && (
+                <BookingTransportModal
+                    key={selectedTransportBooking._id}
+                    booking={selectedTransportBooking}
+                    onClose={() => setSelectedTransportBooking(null)}
+                    onChanged={fetchBookings}
                 />
             )}
         </div>

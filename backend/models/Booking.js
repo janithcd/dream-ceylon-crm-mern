@@ -90,6 +90,23 @@ const hotelStaySchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
 });
 
+const transportAssignmentSchema = new mongoose.Schema({
+    route: { type: String, required: true, trim: true, maxlength: 120 },
+    startDate: { type: Date, required: true },
+    endDate: { type: Date, required: true },
+    pickupTime: { type: String, trim: true, default: "" },
+    pickupLocation: { type: String, trim: true, maxlength: 120, default: "" },
+    dropoffLocation: { type: String, trim: true, maxlength: 120, default: "" },
+    vehicleDescription: { type: String, trim: true, maxlength: 100, default: "" },
+    registration: { type: String, trim: true, maxlength: 24, default: "" },
+    registrationKey: { type: String, trim: true, default: "" },
+    chauffeurName: { type: String, trim: true, maxlength: 100, default: "" },
+    chauffeurPhone: { type: String, trim: true, maxlength: 32, default: "" },
+    status: { type: String, enum: ["Requested", "Confirmed", "Cancelled"], default: "Requested" },
+    notes: { type: String, trim: true, maxlength: 500, default: "" },
+    createdAt: { type: Date, default: Date.now },
+});
+
 const bookingSchema = new mongoose.Schema(
     {
         bookingCode: {
@@ -186,6 +203,11 @@ const bookingSchema = new mongoose.Schema(
             type: [hotelStaySchema],
             default: [],
         },
+
+        transportAssignments: {
+            type: [transportAssignmentSchema],
+            default: [],
+        },
     },
     {
         timestamps: true,
@@ -203,6 +225,7 @@ bookingSchema.pre("save", function () {
 
 bookingSchema.index({ "preparationTasks.assignedTo": 1, bookingStatus: 1 });
 bookingSchema.index({ bookingStatus: 1, "preparationTasks.completedAt": 1 });
+bookingSchema.index({ "transportAssignments.registrationKey": 1, "transportAssignments.startDate": 1, "transportAssignments.endDate": 1 });
 
 const Booking = mongoose.model("Booking", bookingSchema);
 
