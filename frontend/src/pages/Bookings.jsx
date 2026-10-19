@@ -12,6 +12,7 @@ import {
     FaHotel,
     FaHistory,
     FaPlus,
+    FaPrint,
     FaReceipt,
     FaSearch,
     FaTrash,
@@ -340,10 +341,7 @@ const Bookings = () => {
             setError("");
             setSuccess("");
 
-            const endpoint =
-                type === "invoice"
-                    ? `/booking-pdf/invoice/${booking._id}`
-                    : `/booking-pdf/receipt/${booking._id}`;
+            const endpoint = `/booking-pdf/${type}/${booking._id}`;
 
             const response = await api.post(
                 endpoint,
@@ -367,21 +365,15 @@ const Bookings = () => {
                     .replace(/^-+|-+$/g, "") || "booking";
 
             link.href = fileUrl;
-            link.download =
-                type === "invoice"
-                    ? `dream-ceylon-invoice-${cleanBookingCode}.pdf`
-                    : `dream-ceylon-receipt-${cleanBookingCode}.pdf`;
+            link.download = `dream-ceylon-${type === "operations-brief" ? "operations" : type}-${cleanBookingCode}.pdf`;
 
             document.body.appendChild(link);
             link.click();
             link.remove();
 
-            window.URL.revokeObjectURL(fileUrl);
+            window.setTimeout(() => window.URL.revokeObjectURL(fileUrl), 1000);
         } catch (err) {
-            let message =
-                type === "invoice"
-                    ? "Failed to download invoice PDF."
-                    : "Failed to download receipt PDF.";
+            let message = `Failed to download ${type === "operations-brief" ? "operations brief" : type} PDF.`;
 
             if (err.response?.data instanceof Blob) {
                 const errorText = await err.response.data.text();
@@ -1100,6 +1092,19 @@ const Bookings = () => {
                                                         title="Download receipt PDF"
                                                     >
                                                         <FaReceipt />
+                                                    </button>
+                                                </PermissionGuard>
+
+                                                <PermissionGuard permission="pdf.generate">
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-info"
+                                                        onClick={() => handleDownloadBookingPdf(booking, "operations-brief")}
+                                                        disabled={pdfLoadingKey === `operations-brief-${booking._id}` || booking.bookingStatus === "Cancelled"}
+                                                        title="Download internal trip operations brief"
+                                                        aria-label={`Download operations brief for ${booking.bookingCode}`}
+                                                    >
+                                                        <FaPrint />
                                                     </button>
                                                 </PermissionGuard>
 

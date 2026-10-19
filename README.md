@@ -64,6 +64,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - Track an internal preparation checklist per booking for hotels, transport, guides, itineraries, or custom tasks; assign active staff, optional due dates, task priorities, and private handoff notes
 - Record hotel stays, room and meal plans, confirmation status, and hotel references on each booking
 - Plan multiple transport legs per booking with vehicle registration, chauffeur, pickup details, and status; flag possible date overlaps for the same confirmed vehicle
+- Download a private departure handover PDF with guest contact, active hotels, transport, and open tasks; prices and private notes are excluded
 - Open a booking history to see dated staff actions across its details, preparation tasks, hotel stays, and PDFs; payment events require payment access and supplier cost changes require cost access
 - View bookings in a calendar
 - Generate booking invoices and receipts

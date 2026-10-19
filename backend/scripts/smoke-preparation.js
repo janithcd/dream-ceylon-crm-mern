@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const Admin = require("../models/Admin");
 const Booking = require("../models/Booking");
 const ActivityLog = require("../models/ActivityLog");
+const { PDFDocument } = require("pdf-lib");
 
 const main = async () => {
     if (process.env.CI_SMOKE_TESTS !== "true") {
@@ -220,6 +221,19 @@ const main = async () => {
         assert.equal(firstTransport.conflicts.length, 0);
         assert.equal((await Booking.findById(booking._id)).transportAssignments[0].registrationKey, "WPCAB1234");
 
+        const briefHotel = await request(hotelsUrl, "POST", {
+            hotelName: "CI Departure Hotel", checkInDate: dateOnly(travelStart),
+            checkOutDate: dateOnly(hotelCheckout), rooms: 1, status: "Confirmed",
+            confirmationNumber: "CI-OPS-123",
+        });
+        assert.equal(briefHotel.status, 201);
+        const briefResponse = await request(`http://127.0.0.1:5000/api/booking-pdf/operations-brief/${booking._id}`, "POST", {});
+        assert.equal(briefResponse.status, 200);
+        assert.match(briefResponse.headers.get("content-type"), /application\/pdf/);
+        assert.equal(briefResponse.headers.get("cache-control"), "no-store");
+        assert.ok((await PDFDocument.load(await briefResponse.arrayBuffer())).getPageCount() >= 1);
+        assert.ok(await ActivityLog.exists({ relatedRecordId: booking._id, "metadata.documentType": "Operations Brief" }));
+
         overlappingBooking = await Booking.create({
             customer: { fullName: "CI Second Guest", email: "second@example.invalid", whatsappNumber: "+94771234568", country: "UK" },
             travelStartDate: new Date(dateOnly(travelStart)), travelEndDate: new Date(dateOnly(travelEnd)),
@@ -270,7 +284,7 @@ const main = async () => {
         assert.equal("metadata" in paymentHistory.events[0], false);
         assert.equal((await request("http://127.0.0.1:5000/api/bookings/not-an-id/activity", "GET")).status, 400);
 
-        console.log("Booking preparation, hotel stays, transport overlaps, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
+        console.log("Booking preparation, hotel stays, transport overlaps, departure PDF, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
             await ActivityLog.deleteMany({ $or: [
