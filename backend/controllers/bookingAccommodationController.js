@@ -40,6 +40,7 @@ const addHotelStay = async (req, res) => {
         await logChange(req, booking, `Hotel stay added to booking ${booking.bookingCode}`, {
             hotelName: value.hotelName,
             status: value.status,
+            followUpDate: value.followUpDate,
         });
         return res.status(201).json({ hotelStays: booking.hotelStays });
     } catch (error) {
@@ -74,6 +75,7 @@ const updateHotelStay = async (req, res) => {
             stayId: req.params.stayId,
             hotelName: value.hotelName,
             status: value.status,
+            followUpDate: value.followUpDate,
         });
         return res.status(200).json({ hotelStays: booking.hotelStays });
     } catch (error) {

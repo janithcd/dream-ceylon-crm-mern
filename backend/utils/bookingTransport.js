@@ -37,6 +37,13 @@ const parseTransportAssignment = (body, existing = {}) => {
         return { error: "Choose valid start and end dates" };
     }
 
+    const followUpInput = body.followUpDate !== undefined ? body.followUpDate : existing.followUpDate;
+    value.followUpDate = followUpInput === "" || followUpInput == null ? null : parseDate(followUpInput);
+    if ((followUpInput !== "" && followUpInput != null && !value.followUpDate) ||
+        (value.followUpDate && value.followUpDate > value.startDate)) {
+        return { error: "Follow-up must be a valid date on or before transport starts" };
+    }
+
     value.pickupTime = body.pickupTime ?? existing.pickupTime ?? "";
     if (typeof value.pickupTime !== "string" || (value.pickupTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(value.pickupTime))) {
         return { error: "Pickup time must be in 24-hour HH:mm format" };

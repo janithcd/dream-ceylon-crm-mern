@@ -5,6 +5,7 @@ const getBookingAttentionQuery = (now = new Date()) => ({
     ...getUpcomingDepartureQuery(now),
     $or: [
         { hotelStays: { $elemMatch: { status: "Requested" } } },
+        { transportAssignments: { $elemMatch: { status: "Requested" } } },
         { preparationTasks: { $elemMatch: { completedAt: null } } },
     ],
 });
@@ -19,6 +20,7 @@ const summarizeBookingAttention = (booking, now = new Date()) => {
         customerName: booking.customer?.fullName || "",
         travelStartDate: booking.travelStartDate,
         pendingHotelCount: (booking.hotelStays || []).filter((stay) => stay.status === "Requested").length,
+        pendingTransportCount: (booking.transportAssignments || []).filter((item) => item.status === "Requested").length,
         openTaskCount: openTasks.length,
         overdueTaskCount: openTasks.filter((task) => task.dueDate && new Date(task.dueDate) < start).length,
     };

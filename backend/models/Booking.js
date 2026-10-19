@@ -85,6 +85,7 @@ const hotelStaySchema = new mongoose.Schema({
         default: "Room Only",
     },
     status: { type: String, enum: ["Requested", "Confirmed", "Cancelled"], default: "Requested" },
+    followUpDate: { type: Date, default: null },
     confirmationNumber: { type: String, trim: true, maxlength: 100, default: "" },
     notes: { type: String, trim: true, maxlength: 500, default: "" },
     createdAt: { type: Date, default: Date.now },
@@ -103,6 +104,7 @@ const transportAssignmentSchema = new mongoose.Schema({
     chauffeurName: { type: String, trim: true, maxlength: 100, default: "" },
     chauffeurPhone: { type: String, trim: true, maxlength: 32, default: "" },
     status: { type: String, enum: ["Requested", "Confirmed", "Cancelled"], default: "Requested" },
+    followUpDate: { type: Date, default: null },
     notes: { type: String, trim: true, maxlength: 500, default: "" },
     createdAt: { type: Date, default: Date.now },
 });

@@ -70,7 +70,7 @@ const logChange = async (req, booking, description, assignment) => {
         relatedModel: "Booking",
         referenceNo: booking.bookingCode,
         customerName: booking.customer?.fullName,
-        metadata: { route: assignment?.route, status: assignment?.status },
+        metadata: { route: assignment?.route, status: assignment?.status, followUpDate: assignment?.followUpDate },
     });
 };
 

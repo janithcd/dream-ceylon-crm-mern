@@ -18,10 +18,11 @@ const emptyForm = (booking) => ({
     chauffeurName: "",
     chauffeurPhone: "",
     status: "Requested",
+    followUpDate: "",
     notes: "",
 });
 
-const BookingTransportModal = ({ booking, onClose, onChanged }) => {
+const BookingTransportModal = ({ booking, onClose, onChanged, focusItemId }) => {
     const { hasPermission } = usePermissions();
     const canUpdate = hasPermission("booking.update");
     const [assignments, setAssignments] = useState(booking.transportAssignments || []);
@@ -53,6 +54,10 @@ const BookingTransportModal = ({ booking, onClose, onChanged }) => {
         return () => { active = false; };
     }, [booking._id]);
 
+    useEffect(() => {
+        if (!loading && focusItemId) document.getElementById(`transport-request-${focusItemId}`)?.scrollIntoView({ block: "nearest" });
+    }, [loading, focusItemId]);
+
     const setResult = (data) => {
         setAssignments(data.assignments || []);
         setConflicts(data.conflicts || []);
@@ -81,6 +86,7 @@ const BookingTransportModal = ({ booking, onClose, onChanged }) => {
             chauffeurName: item.chauffeurName || "",
             chauffeurPhone: item.chauffeurPhone || "",
             status: item.status || "Requested",
+            followUpDate: toCalendarDateInput(item.followUpDate),
             notes: item.notes || "",
         });
         setEditingId(item._id);
@@ -165,13 +171,14 @@ const BookingTransportModal = ({ booking, onClose, onChanged }) => {
                                         const overlaps = conflicts.find((conflict) => conflict.assignmentId === item._id)?.bookings || [];
                                         return (
                                             <div className="col-12 col-lg-6" key={item._id}>
-                                                <div className="border rounded-4 p-3 h-100">
+                                                <div id={`transport-request-${item._id}`} className={`border rounded-4 p-3 h-100 ${focusItemId === item._id ? "border-primary" : ""}`}>
                                                     <div className="d-flex justify-content-between gap-2">
                                                         <h6 className="fw-bold mb-1">{item.route}</h6>
                                                         <span className={`badge align-self-start ${item.status === "Confirmed" ? "text-bg-success" : item.status === "Cancelled" ? "text-bg-secondary" : "text-bg-warning"}`}>{item.status}</span>
                                                     </div>
                                                     <div className="small mt-2">
                                                         <div><strong>Dates:</strong> {formatCalendarDate(item.startDate)} – {formatCalendarDate(item.endDate)}</div>
+                                                        {item.status === "Requested" && <div><strong>Follow up:</strong> {item.followUpDate ? formatCalendarDate(item.followUpDate) : "Not scheduled"}</div>}
                                                         {item.pickupTime && <div><strong>Pickup time:</strong> {item.pickupTime}</div>}
                                                         {(item.pickupLocation || item.dropoffLocation) && <div><strong>Route details:</strong> {item.pickupLocation || "-"} → {item.dropoffLocation || "-"}</div>}
                                                         {item.vehicleDescription && <div><strong>Vehicle:</strong> {item.vehicleDescription}</div>}
@@ -213,6 +220,7 @@ const BookingTransportModal = ({ booking, onClose, onChanged }) => {
                                         <div className="col-md-6"><label className="form-label" htmlFor="transport-chauffeur">Chauffeur name</label><input id="transport-chauffeur" name="chauffeurName" className="form-control" value={form.chauffeurName} onChange={updateField} maxLength={100} /></div>
                                         <div className="col-md-6"><label className="form-label" htmlFor="transport-phone">Chauffeur phone</label><input id="transport-phone" name="chauffeurPhone" type="tel" className="form-control" value={form.chauffeurPhone} onChange={updateField} maxLength={32} /></div>
                                         <div className="col-md-6"><label className="form-label" htmlFor="transport-status">Status</label><select id="transport-status" name="status" className="form-select" value={form.status} onChange={updateField}>{statuses.map((status) => <option key={status}>{status}</option>)}</select></div>
+                                        <div className="col-md-6"><label className="form-label" htmlFor="transport-follow-up">Supplier follow-up date</label><input id="transport-follow-up" name="followUpDate" type="date" className="form-control" value={form.followUpDate} onChange={updateField} max={form.startDate || undefined} /><small className="text-muted">Optional. Follow up before transport starts.</small></div>
                                         <div className="col-12"><label className="form-label" htmlFor="transport-notes">Internal notes</label><textarea id="transport-notes" name="notes" rows="2" className="form-control" value={form.notes} onChange={updateField} maxLength={500} /></div>
                                     </div>
                                     <div className="d-flex justify-content-end gap-2 mt-3">
