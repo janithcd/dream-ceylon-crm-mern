@@ -25,6 +25,7 @@ const {
 } = require("../controllers/bookingTransportController");
 const { getTeamTasks } = require("../controllers/teamTasksController");
 const { getSupplierConfirmations } = require("../controllers/supplierConfirmationsController");
+const { getOutstandingBalances } = require("../controllers/outstandingBalancesController");
 const {
     addHotelStay,
     updateHotelStay,
@@ -58,6 +59,13 @@ router.get(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_VIEW),
     getSupplierConfirmations
+);
+
+router.get(
+    "/outstanding-balances",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.PAYMENT_VIEW),
+    getOutstandingBalances
 );
 
 router.get(

@@ -131,9 +131,10 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
             setError("");
 
             const response = await api.get(`/booking-payments/booking/${bookingId}`);
+            const bookingResponse = await api.get(`/bookings/${bookingId}`);
 
             setPayments(response.data.payments || []);
-            setCurrentBooking(response.data.booking || booking);
+            setCurrentBooking(bookingResponse.data);
         } catch (err) {
             setError(
                 err.response?.data?.message ||
