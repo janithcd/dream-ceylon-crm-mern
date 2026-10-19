@@ -4,6 +4,7 @@ const {
     generateBookingInvoicePdf,
     generateBookingReceiptPdf,
 } = require("../controllers/bookingPdfController");
+const { generateOperationsBriefPdf } = require("../controllers/bookingBriefPdfController");
 
 const { protect } = require("../middleware/authMiddleware");
 const {
@@ -31,6 +32,16 @@ router.post(
         PERMISSIONS.PDF_GENERATE
     ),
     generateBookingReceiptPdf
+);
+
+router.post(
+    "/operations-brief/:id",
+    protect,
+    authorizePermissions(
+        PERMISSIONS.BOOKING_VIEW,
+        PERMISSIONS.PDF_GENERATE
+    ),
+    generateOperationsBriefPdf
 );
 
 module.exports = router;
