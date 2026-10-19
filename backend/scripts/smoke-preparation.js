@@ -207,10 +207,40 @@ const main = async () => {
         assert.equal((await getMine("", otherToken)).items[0].priority, "Normal");
         assert.equal((await request(`${url}/${otherTaskId}`, "DELETE")).status, 200);
 
-        console.log("Booking preparation, hotel stays, dashboard attention, and assigned tasks smoke tests passed against MongoDB.");
+        const historyUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/activity`;
+        await ActivityLog.create({
+            action: "CREATE", module: "Payment", description: "CI payment received",
+            relatedRecordId: new mongoose.Types.ObjectId(), relatedModel: "BookingPayment",
+            metadata: { bookingId: booking._id, amount: 100 },
+        });
+        await ActivityLog.create({
+            action: "CREATE", module: "Other", description: "Supplier cost entry created for CI booking",
+            relatedRecordId: booking._id, relatedModel: "Booking",
+        });
+        const salesHistoryResponse = await request(historyUrl, "GET");
+        assert.equal(salesHistoryResponse.status, 200);
+        const salesHistory = await salesHistoryResponse.json();
+        assert.ok(salesHistory.events.some((event) => event.description.includes("Preparation task")));
+        assert.ok(salesHistory.events.some((event) => event.description.includes("Hotel")));
+        assert.equal(salesHistory.events.some((event) => event.module === "Payment"), false);
+        assert.equal(salesHistory.events.some((event) => event.module === "Other"), false);
+
+        await Admin.findByIdAndUpdate(otherAdmin._id, { $addToSet: { customPermissions: "payment.view" } });
+        const paymentHistoryResponse = await fetch(historyUrl, { headers: { Authorization: `Bearer ${otherToken}` } });
+        assert.equal(paymentHistoryResponse.status, 200);
+        const paymentHistory = await paymentHistoryResponse.json();
+        assert.ok(paymentHistory.events.some((event) => event.description === "CI payment received"));
+        assert.equal(paymentHistory.events.some((event) => event.module === "Other"), false);
+        assert.equal("metadata" in paymentHistory.events[0], false);
+        assert.equal((await request("http://127.0.0.1:5000/api/bookings/not-an-id/activity", "GET")).status, 400);
+
+        console.log("Booking preparation, hotel stays, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
-            await ActivityLog.deleteMany({ relatedRecordId: booking._id });
+            await ActivityLog.deleteMany({ $or: [
+                { relatedRecordId: booking._id },
+                { "metadata.bookingId": booking._id },
+            ] });
             await Booking.deleteOne({ _id: booking._id });
         }
         if (admin) await Admin.deleteOne({ _id: admin._id });
