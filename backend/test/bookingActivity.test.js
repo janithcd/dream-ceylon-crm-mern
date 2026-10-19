@@ -38,6 +38,9 @@ test("booking history is scoped, permission-aware, and paginated", async (t) => 
         metadata: { bookingId: new mongoose.Types.ObjectId(bookingId), amount: 900 },
         description: "Payment received", adminName: "Finance Agent", createdAt: new Date(2027, 0, 28),
     }, {
+        ...entries[0], _id: new mongoose.Types.ObjectId(), module: "Payment",
+        description: "Payment contact logged", createdAt: new Date(2027, 0, 29),
+    }, {
         ...entries[0], _id: new mongoose.Types.ObjectId(), relatedRecordId: new mongoose.Types.ObjectId(otherBookingId),
         description: "Other booking", createdAt: new Date(2027, 0, 29),
     }, {
@@ -59,7 +62,7 @@ test("booking history is scoped, permission-aware, and paginated", async (t) => 
         term.relatedModel === entry.relatedModel && (
             term.relatedModel === "Booking"
                 ? String(term.relatedRecordId) === String(entry.relatedRecordId) &&
-                    (term.module?.$ne === undefined || entry.module !== term.module.$ne)
+                    (!term.module?.$nin?.includes(entry.module))
                 : term.module === entry.module && String(term["metadata.bookingId"]) === String(entry.metadata.bookingId)
         )
     ));
@@ -106,8 +109,9 @@ test("booking history is scoped, permission-aware, and paginated", async (t) => 
     assert.equal(older.currentPage, 2);
 
     const finance = await (await request(`${bookingId}/activity`, financeId)).json();
-    assert.equal(finance.totalEvents, 28);
+    assert.equal(finance.totalEvents, 29);
     assert.equal(finance.events[0].description, "Supplier cost entry changed");
     assert.ok(finance.events.some((event) => event.description === "Payment received"));
+    assert.ok(finance.events.some((event) => event.description === "Payment contact logged"));
     assert.equal((await (await request(`${bookingId}/activity?page=bad`, salesId)).json()).currentPage, 1);
 });

@@ -72,6 +72,13 @@ const preparationTaskSchema = new mongoose.Schema({
     },
 });
 
+const paymentContactSchema = new mongoose.Schema({
+    lastContactedAt: { type: Date, required: true },
+    lastContactedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+    channel: { type: String, enum: ["WhatsApp", "Phone", "Email", "Other"], required: true },
+    nextFollowUpDate: { type: Date, default: null },
+}, { _id: false });
+
 const hotelStaySchema = new mongoose.Schema({
     hotelName: { type: String, required: true, trim: true, maxlength: 120 },
     location: { type: String, trim: true, maxlength: 120, default: "" },
@@ -176,6 +183,11 @@ const bookingSchema = new mongoose.Schema(
 
         paymentDueDate: {
             type: Date,
+            default: null,
+        },
+
+        paymentContact: {
+            type: paymentContactSchema,
             default: null,
         },
 

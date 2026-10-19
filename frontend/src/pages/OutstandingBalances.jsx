@@ -9,7 +9,7 @@ import { buildWhatsAppUrl } from "../utils/whatsappFollowUp";
 import { buildPaymentReminderMessage } from "../utils/paymentReminder";
 
 const emptyData = {
-    items: [], summary: { open: 0, departed: 0, next30: 0, later: 0, overdue: 0, due7: 0, scheduledLater: 0, unscheduled: 0 },
+    items: [], summary: { open: 0, departed: 0, next30: 0, later: 0, overdue: 0, due7: 0, scheduledLater: 0, unscheduled: 0, followUpsDue: 0 },
     total: 0, page: 1, totalPages: 1,
 };
 
@@ -34,12 +34,18 @@ const formatMoney = (amount, currency) =>
         maximumFractionDigits: 2,
     })}`;
 
+const formatContactTime = (value) => value ? new Date(value).toLocaleString("en-US", {
+    timeZone: "Asia/Colombo", year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+}) : "-";
+
 const OutstandingBalances = () => {
     const { hasPermission } = usePermissions();
     const canChangeDueDate = hasPermission("payment.update");
+    const canLogContact = hasPermission("payment.update");
     const canPrepareReminder = hasPermission("payment.create");
     const [dateFilter, setDateFilter] = useState("all");
     const [dueFilter, setDueFilter] = useState("all");
+    const [contactFilter, setContactFilter] = useState("all");
     const [page, setPage] = useState(1);
     const [reloadKey, setReloadKey] = useState(0);
     const [data, setData] = useState(emptyData);
@@ -49,13 +55,16 @@ const OutstandingBalances = () => {
     const [selected, setSelected] = useState(null);
     const [editingDue, setEditingDue] = useState(null);
     const [savingDue, setSavingDue] = useState(false);
+    const [contactForm, setContactForm] = useState(null);
+    const [savingContact, setSavingContact] = useState(false);
+    const [contactError, setContactError] = useState("");
     const [reminderLoadingId, setReminderLoadingId] = useState("");
     const [reminderDraft, setReminderDraft] = useState(null);
     const [reminderError, setReminderError] = useState("");
 
     useEffect(() => {
         let active = true;
-        api.get("/bookings/outstanding-balances", { params: { dateFilter, dueFilter, page } })
+        api.get("/bookings/outstanding-balances", { params: { dateFilter, dueFilter, contactFilter, page } })
             .then((response) => {
                 if (!active) return;
                 if (page > response.data.totalPages) {
@@ -73,7 +82,7 @@ const OutstandingBalances = () => {
                 if (active) setLoading(false);
             });
         return () => { active = false; };
-    }, [dateFilter, dueFilter, page, reloadKey]);
+    }, [dateFilter, dueFilter, contactFilter, page, reloadKey]);
 
     const refresh = () => {
         setLoading(true);
@@ -103,6 +112,26 @@ const OutstandingBalances = () => {
             setError(requestError.response?.data?.message || "Failed to update payment due date.");
         } finally {
             setSavingDue(false);
+        }
+    };
+    const saveContact = async (event) => {
+        event.preventDefault();
+        if (!contactForm || !canLogContact) return;
+        try {
+            setSavingContact(true);
+            setContactError("");
+            setSuccess("");
+            await api.patch(`/bookings/${contactForm.id}/payment-contact`, {
+                channel: contactForm.channel,
+                nextFollowUpDate: contactForm.nextFollowUpDate || null,
+            });
+            setContactForm(null);
+            setSuccess("Payment contact logged.");
+            refresh();
+        } catch (requestError) {
+            setContactError(requestError.response?.data?.message || "Failed to log payment contact.");
+        } finally {
+            setSavingContact(false);
         }
     };
     const prepareReminder = async (item) => {
@@ -191,7 +220,11 @@ const OutstandingBalances = () => {
             </div>
 
             <div className="card border-0 shadow-sm rounded-4"><div className="card-body p-4">
-                <p className="text-muted small">Balances use each booking's recorded total and paid amount. Currency is shown per booking; amounts are not combined across currencies. No due date means no agreed deadline has been recorded. Counts cover all open bookings; the two filters can be combined.</p>
+                <p className="text-muted small">Balances use each booking's recorded total and paid amount. Currency is shown per booking; amounts are not combined across currencies. No due date means no agreed deadline has been recorded. Counts cover all open bookings; the filters can be combined.</p>
+                <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Payment contact follow-up">
+                    <button type="button" className={`btn btn-sm ${contactFilter === "all" ? "btn-success" : "btn-outline-success"}`} onClick={() => chooseFilter(setContactFilter, "all")}>All balances</button>
+                    <button type="button" className={`btn btn-sm ${contactFilter === "due" ? "btn-success" : "btn-outline-success"}`} onClick={() => chooseFilter(setContactFilter, "due")}>Follow-ups due ({data.summary.followUpsDue})</button>
+                </div>
                 <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Payment due timing">
                     {dueChoices.map((choice) => (
                         <button type="button" key={choice.value} className={`btn btn-sm ${dueFilter === choice.value ? "btn-primary" : "btn-outline-primary"}`} onClick={() => chooseFilter(setDueFilter, choice.value)}>
@@ -211,7 +244,7 @@ const OutstandingBalances = () => {
                     <p className="text-muted mb-0">No bookings with an open balance in this view.</p>
                 ) : (
                     <div className="table-responsive"><table className="table align-middle mb-0">
-                        <thead><tr><th>Booking / guest</th><th>Payment due</th><th>Departure</th><th>Status</th><th className="text-end">Total</th><th className="text-end">Recorded paid</th><th className="text-end">Balance</th><th className="text-end">Action</th></tr></thead>
+                        <thead><tr><th>Booking / guest</th><th>Payment due</th><th>Contact / follow-up</th><th>Departure</th><th>Status</th><th className="text-end">Total</th><th className="text-end">Recorded paid</th><th className="text-end">Balance</th><th className="text-end">Action</th></tr></thead>
                         <tbody>{data.items.map((item) => (
                             <tr key={item._id}>
                                 <td><strong>{item.bookingCode}</strong><small className="d-block text-muted">{item.customerName || "-"}</small></td>
@@ -227,15 +260,21 @@ const OutstandingBalances = () => {
                                 ) : (
                                     <><div>{formatCalendarDate(item.paymentDueDate)}</div><span className={`badge text-bg-${paymentDueStatus(item.paymentDueDate).color}`}>{paymentDueStatus(item.paymentDueDate).label}</span></>
                                 )}</td>
+                                <td>
+                                    {item.lastContactedAt ? <><div>{item.contactChannel} · {formatContactTime(item.lastContactedAt)}</div>
+                                        <small className="text-muted">Next: {formatCalendarDate(item.nextFollowUpDate)}</small></> : <span className="text-muted">No contact logged</span>}
+                                    {item.nextFollowUpDate && toCalendarDateInput(item.nextFollowUpDate) <= today && <span className="badge text-bg-warning ms-2">Follow up due</span>}
+                                </td>
                                 <td>{formatCalendarDate(item.travelStartDate)}</td>
                                 <td><span className="badge text-bg-secondary">{item.bookingStatus}</span></td>
                                 <td className="text-end text-nowrap">{formatMoney(item.totalPrice, item.currency)}</td>
                                 <td className="text-end text-nowrap">{formatMoney(item.recordedPaid, item.currency)}</td>
                                 <td className="text-end text-nowrap fw-semibold">{formatMoney(item.balance, item.currency)}</td>
-                                <td className="text-end"><div className="d-flex justify-content-end gap-2">
+                                <td className="text-end"><div className="d-flex flex-wrap justify-content-end gap-2">
                                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelected(item)}>Payments</button>
                                     {canChangeDueDate && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setEditingDue({ id: item._id, value: toCalendarDateInput(item.paymentDueDate) })}>Due date</button>}
                                     {canPrepareReminder && <button type="button" className="btn btn-sm btn-outline-success" onClick={() => prepareReminder(item)} disabled={Boolean(reminderLoadingId)} aria-label={`Prepare WhatsApp payment reminder for ${item.bookingCode}`}><FaWhatsapp className="me-1" />{reminderLoadingId === item._id ? "Loading..." : "Reminder"}</button>}
+                                    {canLogContact && <button type="button" className="btn btn-sm btn-outline-success" onClick={() => { setContactError(""); setContactForm({ id: item._id, bookingCode: item.bookingCode, channel: item.contactChannel || "WhatsApp", nextFollowUpDate: "" }); }}>Log contact</button>}
                                     <Link className="btn btn-sm btn-outline-secondary" to={`/bookings?keyword=${encodeURIComponent(item.bookingCode)}`}>Booking</Link>
                                 </div></td>
                             </tr>
@@ -260,6 +299,36 @@ const OutstandingBalances = () => {
                     onClose={() => { setSelected(null); refresh(); }}
                     onPaymentChanged={refresh}
                 />
+            )}
+            {contactForm && (
+                <>
+                    <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="payment-contact-title">
+                        <div className="modal-dialog modal-dialog-centered">
+                            <form className="modal-content" onSubmit={saveContact}>
+                                <div className="modal-header">
+                                    <h5 id="payment-contact-title" className="modal-title">Log payment contact · {contactForm.bookingCode}</h5>
+                                    <button type="button" className="btn-close" aria-label="Close" onClick={() => setContactForm(null)} disabled={savingContact} />
+                                </div>
+                                <div className="modal-body">
+                                    <p className="text-muted">Save this only after you have actually contacted the guest. Opening a WhatsApp draft does not log contact.</p>
+                                    <label className="form-label fw-semibold" htmlFor="payment-contact-channel">Channel</label>
+                                    <select id="payment-contact-channel" className="form-select mb-3" value={contactForm.channel} onChange={(event) => setContactForm({ ...contactForm, channel: event.target.value })} disabled={savingContact}>
+                                        {["WhatsApp", "Phone", "Email", "Other"].map((channel) => <option key={channel} value={channel}>{channel}</option>)}
+                                    </select>
+                                    <label className="form-label fw-semibold" htmlFor="payment-contact-next">Next follow-up date (optional)</label>
+                                    <input id="payment-contact-next" type="date" className="form-control" value={contactForm.nextFollowUpDate} onChange={(event) => setContactForm({ ...contactForm, nextFollowUpDate: event.target.value })} disabled={savingContact} />
+                                    <small className="text-muted">Leave blank when no further contact is planned. Dates use Sri Lanka time.</small>
+                                    {contactError && <div className="alert alert-danger mt-3 mb-0" role="alert">{contactError}</div>}
+                                </div>
+                                <div className="modal-footer">
+                                    <button type="button" className="btn btn-outline-secondary" onClick={() => setContactForm(null)} disabled={savingContact}>Cancel</button>
+                                    <button type="submit" className="btn btn-success" disabled={savingContact}>{savingContact ? "Saving..." : "Log contact"}</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                    <div className="modal-backdrop fade show" />
+                </>
             )}
             {reminderDraft && (
                 <>
