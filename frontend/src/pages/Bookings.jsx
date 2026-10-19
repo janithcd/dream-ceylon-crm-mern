@@ -44,6 +44,7 @@ const initialFormState = {
     totalPrice: 0,
     currency: "USD",
     advancePayment: 0,
+    paymentDueDate: "",
     paymentStatus: "Pending",
     bookingStatus: "Pending",
     specialRequests: "",
@@ -303,6 +304,7 @@ const Bookings = () => {
             totalPrice: booking.totalPrice || 0,
             currency: booking.currency || "USD",
             advancePayment: booking.advancePayment || 0,
+            paymentDueDate: toCalendarDateInput(booking.paymentDueDate),
             paymentStatus: booking.paymentStatus || "Pending",
             bookingStatus: booking.bookingStatus || "Pending",
             specialRequests: booking.specialRequests || "",
@@ -454,6 +456,7 @@ const Bookings = () => {
                 Vehicle: booking.vehicleType || "",
                 "Total Price": booking.totalPrice || 0,
                 "Advance Payment": booking.advancePayment || 0,
+                "Payment Due Date": booking.paymentDueDate ? toCalendarDateInput(booking.paymentDueDate) : "",
                 Balance:
                     Number(booking.totalPrice || 0) - Number(booking.advancePayment || 0),
                 Currency: booking.currency || "",
@@ -742,6 +745,18 @@ const Bookings = () => {
                                     </select>
                                 </div>
 
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label fw-semibold">Payment Due Date</label>
+                                    <input
+                                        type="date"
+                                        name="paymentDueDate"
+                                        className="form-control"
+                                        value={formData.paymentDueDate}
+                                        onChange={handleChange}
+                                    />
+                                    <small className="text-muted">Optional agreed date for collecting the remaining balance.</small>
+                                </div>
+
                                 <div className="col-12 col-md-6">
                                     <label className="form-label fw-semibold">
                                         Booking Status
@@ -1011,6 +1026,7 @@ const Bookings = () => {
 
                                         <td>
                                             <PaymentBadge status={booking.paymentStatus} />
+                                            {booking.paymentDueDate && <small className="d-block text-muted mt-1">Due {formatCalendarDate(booking.paymentDueDate)}</small>}
                                         </td>
 
                                         <td>

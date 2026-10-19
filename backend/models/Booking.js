@@ -174,6 +174,11 @@ const bookingSchema = new mongoose.Schema(
             min: 0,
         },
 
+        paymentDueDate: {
+            type: Date,
+            default: null,
+        },
+
         paymentStatus: {
             type: String,
             enum: ["Pending", "Partially Paid", "Paid", "Refunded"],

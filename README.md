@@ -69,6 +69,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - View bookings in a calendar
 - Generate booking invoices and receipts
 - Track outstanding balances
+- Set an optional payment due date when creating or editing a booking; Finance can update it from Outstanding Balances
 - Record private supplier costs and compare estimated quotation profit with booked profit
 
 ### 💳 Payments and Finance
@@ -81,6 +82,8 @@ The system combines operational management, AI-powered productivity tools, brand
 - View financial reports
 - Keep cost entries visible only to admins with cost permissions
 - Export report data
+
+The **Outstanding Balances** page lists open balances by agreed payment due date, with filters for overdue dates, the next seven days, later dates, and bookings without a due date. Departure filters can be combined with payment timing. Existing bookings have no due date until staff records one; a departure date alone is not treated as a payment deadline. Payment dates use Sri Lanka calendar days, and recording a payment removes a fully paid booking from this queue.
 
 The **Cost & Profit** page is available to Super Admin and Finance accounts. Open a quotation to enter *estimated* supplier costs, or a booking to enter *actual* supplier costs. Cost entries are stored separately from client quotations and invoices, and require `cost.view` to read or `cost.manage` to change. A Super Admin can grant these permissions to another admin. Costs never appear in customer PDFs.
 
