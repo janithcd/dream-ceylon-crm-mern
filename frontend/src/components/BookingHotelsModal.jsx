@@ -3,6 +3,7 @@ import { FaEdit, FaHotel, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
+import { notifySupplierConfirmationsChanged } from "../utils/supplierEvents";
 
 const mealPlans = ["Room Only", "Bed & Breakfast", "Half Board", "Full Board", "All Inclusive", "Other"];
 const statuses = ["Requested", "Confirmed", "Cancelled"];
@@ -96,6 +97,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
             setStays(response.data.hotelStays || []);
             setSuccess(editingId ? "Hotel stay updated." : "Hotel stay added.");
             resetForm();
+            notifySupplierConfirmationsChanged();
             onChanged();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to save hotel stay.");
@@ -113,6 +115,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
             const response = await api.delete(`/bookings/${booking._id}/hotel-stays/${stay._id}`);
             setStays(response.data.hotelStays || []);
             if (editingId === stay._id) resetForm();
+            notifySupplierConfirmationsChanged();
             onChanged();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to remove hotel stay.");
