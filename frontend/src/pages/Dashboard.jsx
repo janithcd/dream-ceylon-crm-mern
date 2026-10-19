@@ -538,17 +538,20 @@ const Dashboard = () => {
                                     Bookings needing attention
                                 </h5>
                                 <p className="text-muted small mb-0">
-                                    Departures in the next 30 days with requested hotel stays or unfinished preparation tasks.
+                                    Departures in the next 30 days with requested hotels or transport, or unfinished preparation tasks.
                                 </p>
                             </div>
-                            <span className="badge bg-warning text-dark rounded-pill px-3 py-2">
-                                {stats?.bookingAttention?.total || 0} bookings
-                            </span>
+                            <div className="d-flex align-items-center gap-2">
+                                <span className="badge bg-warning text-dark rounded-pill px-3 py-2">
+                                    {stats?.bookingAttention?.total || 0} bookings
+                                </span>
+                                <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => navigate("/supplier-confirmations")}>Supplier queue</button>
+                            </div>
                         </div>
 
                         {!stats?.bookingAttention?.items?.length ? (
                             <p className="text-muted mb-0">
-                                No requested hotel stays or unfinished tasks for upcoming departures.
+                                No requested supplier arrangements or unfinished tasks for upcoming departures.
                             </p>
                         ) : (
                             <>
@@ -560,6 +563,7 @@ const Dashboard = () => {
                                                 <th>Client</th>
                                                 <th>Departure</th>
                                                 <th>Hotels awaiting confirmation</th>
+                                                <th>Transport awaiting confirmation</th>
                                                 <th>Open tasks</th>
                                                 <th>Overdue tasks</th>
                                                 <th className="text-end">Action</th>
@@ -572,6 +576,7 @@ const Dashboard = () => {
                                                     <td>{booking.customerName || "-"}</td>
                                                     <td>{formatCalendarDate(booking.travelStartDate)}</td>
                                                     <td>{booking.pendingHotelCount}</td>
+                                                    <td>{booking.pendingTransportCount || 0}</td>
                                                     <td>{booking.openTaskCount}</td>
                                                     <td>
                                                         {booking.overdueTaskCount ? (

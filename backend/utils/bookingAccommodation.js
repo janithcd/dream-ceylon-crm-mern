@@ -38,6 +38,13 @@ const parseHotelStay = (body, existing = {}) => {
         return { error: "Choose valid check-in and later check-out dates" };
     }
 
+    const followUpInput = body.followUpDate !== undefined ? body.followUpDate : existing.followUpDate;
+    value.followUpDate = followUpInput === "" || followUpInput == null ? null : dateFromInput(followUpInput);
+    if ((followUpInput !== "" && followUpInput != null && !value.followUpDate) ||
+        (value.followUpDate && value.followUpDate > value.checkInDate)) {
+        return { error: "Follow-up must be a valid date on or before check-in" };
+    }
+
     value.rooms = Number(body.rooms ?? existing.rooms ?? 1);
     if (!Number.isInteger(value.rooms) || value.rooms < 1 || value.rooms > 20) {
         return { error: "Rooms must be a whole number from 1 to 20" };

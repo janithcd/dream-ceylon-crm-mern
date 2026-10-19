@@ -16,11 +16,12 @@ const emptyForm = () => ({
     roomType: "",
     mealPlan: "Room Only",
     status: "Requested",
+    followUpDate: "",
     confirmationNumber: "",
     notes: "",
 });
 
-const BookingHotelsModal = ({ booking, onClose, onChanged }) => {
+const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
     const { hasPermission } = usePermissions();
     const canUpdate = hasPermission("booking.update");
     const [stays, setStays] = useState(booking.hotelStays || []);
@@ -47,6 +48,10 @@ const BookingHotelsModal = ({ booking, onClose, onChanged }) => {
         return () => { active = false; };
     }, [booking._id]);
 
+    useEffect(() => {
+        if (!loading && focusItemId) document.getElementById(`hotel-request-${focusItemId}`)?.scrollIntoView({ block: "nearest" });
+    }, [loading, focusItemId]);
+
     const confirmedCount = stays.filter((stay) => stay.status === "Confirmed").length;
     const requestedCount = stays.filter((stay) => stay.status === "Requested").length;
 
@@ -68,6 +73,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged }) => {
             roomType: stay.roomType || "",
             mealPlan: stay.mealPlan || "Room Only",
             status: stay.status || "Requested",
+            followUpDate: toCalendarDateInput(stay.followUpDate),
             confirmationNumber: stay.confirmationNumber || "",
             notes: stay.notes || "",
         });
@@ -150,7 +156,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged }) => {
                                 <div className="row g-3 mb-4">
                                     {stays.map((stay) => (
                                         <div key={stay._id} className="col-12 col-lg-6">
-                                            <div className="border rounded-4 p-3 h-100">
+                                            <div id={`hotel-request-${stay._id}`} className={`border rounded-4 p-3 h-100 ${focusItemId === stay._id ? "border-primary" : ""}`}>
                                                 <div className="d-flex justify-content-between align-items-start gap-2">
                                                     <div>
                                                         <h6 className="fw-bold mb-1">{stay.hotelName}</h6>
@@ -164,6 +170,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged }) => {
                                                     <div><strong>Stay:</strong> {formatCalendarDate(stay.checkInDate)} – {formatCalendarDate(stay.checkOutDate)}</div>
                                                     <div><strong>Rooms:</strong> {stay.rooms} {stay.roomType && `· ${stay.roomType}`}</div>
                                                     <div><strong>Meal plan:</strong> {stay.mealPlan}</div>
+                                                    {stay.status === "Requested" && <div><strong>Follow up:</strong> {stay.followUpDate ? formatCalendarDate(stay.followUpDate) : "Not scheduled"}</div>}
                                                     {stay.confirmationNumber && <div><strong>Confirmation:</strong> {stay.confirmationNumber}</div>}
                                                     {stay.notes && <div className="text-muted mt-2">{stay.notes}</div>}
                                                 </div>
@@ -222,6 +229,11 @@ const BookingHotelsModal = ({ booking, onClose, onChanged }) => {
                                         <div className="col-md-6">
                                             <label className="form-label" htmlFor="stay-reference">Hotel confirmation reference</label>
                                             <input id="stay-reference" name="confirmationNumber" className="form-control" value={form.confirmationNumber} onChange={updateField} maxLength={100} />
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label className="form-label" htmlFor="stay-follow-up">Supplier follow-up date</label>
+                                            <input id="stay-follow-up" name="followUpDate" type="date" className="form-control" value={form.followUpDate} onChange={updateField} max={form.checkInDate || undefined} />
+                                            <small className="text-muted">Optional. Follow up by check-in if confirmation is still pending.</small>
                                         </div>
                                         <div className="col-12">
                                             <label className="form-label" htmlFor="stay-notes">Internal notes</label>

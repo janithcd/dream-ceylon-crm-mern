@@ -71,6 +71,12 @@ const main = async () => {
             assert.equal(response.status, 200, `Team tasks: ${JSON.stringify(body)}`);
             return body;
         };
+        const getSupplierQueue = async (params = "") => {
+            const response = await request(`http://127.0.0.1:5000/api/bookings/supplier-confirmations${params}`, "GET");
+            const body = await response.json();
+            assert.equal(response.status, 200, `Supplier queue: ${JSON.stringify(body)}`);
+            return body;
+        };
 
         const assignees = await request("http://127.0.0.1:5000/api/bookings/preparation-assignees", "GET");
         assert.equal(assignees.status, 200);
@@ -181,6 +187,7 @@ const main = async () => {
             location: "Sigiriya",
             checkInDate: dateOnly(travelStart),
             checkOutDate: dateOnly(hotelCheckout),
+            followUpDate: dateOnly(new Date(Date.now() - dayMs)),
             rooms: 1,
             mealPlan: "Half Board",
         });
@@ -189,6 +196,13 @@ const main = async () => {
         const hotel = (await Booking.findById(booking._id)).hotelStays[0];
         assert.equal(hotel.hotelName, "CI Hotel");
         assert.equal((await ownAttention()).pendingHotelCount, 1);
+        const overdueSupplierQueue = await getSupplierQueue("?type=hotel&dateFilter=overdue");
+        assert.equal(overdueSupplierQueue.summary.hotels, 1);
+        assert.equal(overdueSupplierQueue.summary.overdue, 1);
+        assert.equal(overdueSupplierQueue.total, 1);
+        assert.equal(overdueSupplierQueue.items[0].bookingCode, booking.bookingCode);
+        assert.equal(overdueSupplierQueue.items[0].title, "CI Hotel");
+        assert.equal("customerEmail" in overdueSupplierQueue.items[0], false);
 
         const hotelUrl = `${hotelsUrl}/${hotel._id}`;
         const confirmed = await request(hotelUrl, "PUT", { status: "Confirmed", confirmationNumber: "CI-123" });
@@ -201,6 +215,35 @@ const main = async () => {
         assert.equal(hotelRemoved.status, 200);
         assert.equal((await Booking.findById(booking._id)).hotelStays.length, 0);
 
+        const transportUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/transport-assignments`;
+        const pendingTransport = await request(transportUrl, "POST", {
+            route: "CI Airport Transfer", startDate: dateOnly(travelStart), endDate: dateOnly(travelStart),
+            followUpDate: dateOnly(new Date()), status: "Requested",
+        });
+        assert.equal(pendingTransport.status, 201);
+        const pendingTransportId = (await pendingTransport.json()).assignments[0]._id;
+        assert.equal((await ownAttention()).pendingTransportCount, 1);
+        const unscheduledTransport = await request(transportUrl, "POST", {
+            route: "CI Unscheduled Transfer", startDate: dateOnly(travelEnd), endDate: dateOnly(travelEnd),
+            status: "Requested",
+        });
+        assert.equal(unscheduledTransport.status, 201);
+        const unscheduledTransportId = (await unscheduledTransport.json()).assignments[1]._id;
+        const noDateSupplierQueue = await getSupplierQueue("?dateFilter=noDue");
+        assert.equal(noDateSupplierQueue.summary.noDue, 1);
+        assert.equal(noDateSupplierQueue.total, 1);
+        assert.equal(noDateSupplierQueue.items[0].title, "CI Unscheduled Transfer");
+        assert.equal((await request(`${transportUrl}/${unscheduledTransportId}`, "DELETE")).status, 200);
+        const todaySupplierQueue = await getSupplierQueue("?type=transport&dateFilter=today");
+        assert.equal(todaySupplierQueue.summary.transport, 1);
+        assert.equal(todaySupplierQueue.summary.today, 1);
+        assert.equal(todaySupplierQueue.total, 1);
+        assert.equal(todaySupplierQueue.items[0].title, "CI Airport Transfer");
+        assert.equal((await request(`${transportUrl}/${pendingTransportId}`, "PUT", { status: "Confirmed" })).status, 200);
+        assert.equal((await getSupplierQueue()).total, 0);
+        assert.equal(await ownAttention(), undefined);
+        assert.equal((await request(`${transportUrl}/${pendingTransportId}`, "DELETE")).status, 200);
+
         const otherTask = await request(url, "POST", { title: "Other agent only", assignedTo: String(otherAdmin._id) });
         assert.equal(otherTask.status, 201);
         const otherTaskId = (await otherTask.json()).tasks[0]._id;
@@ -209,7 +252,6 @@ const main = async () => {
         assert.equal((await getMine("", otherToken)).items[0].priority, "Normal");
         assert.equal((await request(`${url}/${otherTaskId}`, "DELETE")).status, 200);
 
-        const transportUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/transport-assignments`;
         const firstTransportResponse = await request(transportUrl, "POST", {
             route: "Airport pickup and round tour", startDate: dateOnly(travelStart),
             endDate: dateOnly(hotelCheckout), registration: "WP-CAB 1234",
@@ -284,7 +326,7 @@ const main = async () => {
         assert.equal("metadata" in paymentHistory.events[0], false);
         assert.equal((await request("http://127.0.0.1:5000/api/bookings/not-an-id/activity", "GET")).status, 400);
 
-        console.log("Booking preparation, hotel stays, transport overlaps, departure PDF, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
+        console.log("Booking preparation, supplier confirmations, transport overlaps, departure PDF, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
             await ActivityLog.deleteMany({ $or: [

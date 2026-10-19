@@ -24,6 +24,7 @@ const {
     deleteTransportAssignment,
 } = require("../controllers/bookingTransportController");
 const { getTeamTasks } = require("../controllers/teamTasksController");
+const { getSupplierConfirmations } = require("../controllers/supplierConfirmationsController");
 const {
     addHotelStay,
     updateHotelStay,
@@ -50,6 +51,13 @@ router.get(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_VIEW),
     getTeamTasks
+);
+
+router.get(
+    "/supplier-confirmations",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW),
+    getSupplierConfirmations
 );
 
 router.get(

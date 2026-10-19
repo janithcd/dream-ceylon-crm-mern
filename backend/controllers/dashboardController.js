@@ -246,7 +246,7 @@ const getDashboardStats = async (req, res) => {
         const attentionQuery = getBookingAttentionQuery(now);
         const [attentionBookings, attentionTotal] = await Promise.all([
             Booking.find(attentionQuery)
-                .select("bookingCode customer.fullName travelStartDate hotelStays.status preparationTasks.completedAt preparationTasks.dueDate")
+                .select("bookingCode customer.fullName travelStartDate hotelStays.status transportAssignments.status preparationTasks.completedAt preparationTasks.dueDate")
                 .sort({ travelStartDate: 1, createdAt: 1 })
                 .limit(10)
                 .lean(),

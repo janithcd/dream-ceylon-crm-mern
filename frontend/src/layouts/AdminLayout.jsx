@@ -129,6 +129,13 @@ const AdminLayout = () => {
                         </NavLink>
                     </PermissionGuard>
 
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.supplierConfirmations}>
+                        <NavLink to="/supplier-confirmations">
+                            <FaClipboardCheck />
+                            Supplier Confirmations
+                        </NavLink>
+                    </PermissionGuard>
+
                     <PermissionGuard
                         permission={ROUTE_PERMISSIONS.bookingCalendar}
                     >
