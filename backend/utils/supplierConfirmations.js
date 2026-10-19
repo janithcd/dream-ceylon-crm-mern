@@ -2,7 +2,7 @@ const { getBusinessDayBounds } = require("./businessDate");
 const { ACTIVE_BOOKING_STATUSES } = require("./myTasks");
 
 const TYPES = ["all", "hotel", "transport"];
-const DATE_FILTERS = ["all", "overdue", "today", "upcoming", "noDue"];
+const DATE_FILTERS = ["all", "actionable", "overdue", "today", "upcoming", "noDue"];
 const PAGE_SIZE = 20;
 
 const pendingRequests = (field, type, title, serviceDate) => ({
@@ -32,6 +32,7 @@ const buildSupplierConfirmationsPipeline = ({ type = "all", dateFilter = "all", 
     const countIf = (condition) => ({ $sum: { $cond: [condition, 1, 0] } });
     const filter = {};
     if (type !== "all") filter.type = type;
+    if (dateFilter === "actionable") filter.followUpDate = { $ne: null, $lte: end };
     if (dateFilter === "overdue") filter.followUpDate = { $ne: null, $lt: start };
     if (dateFilter === "today") filter.followUpDate = { $gte: start, $lte: end };
     if (dateFilter === "upcoming") filter.followUpDate = { $gt: end };

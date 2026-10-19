@@ -3,6 +3,7 @@ import { FaCar, FaEdit, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
+import { notifySupplierConfirmationsChanged } from "../utils/supplierEvents";
 
 const statuses = ["Requested", "Confirmed", "Cancelled"];
 
@@ -62,6 +63,7 @@ const BookingTransportModal = ({ booking, onClose, onChanged, focusItemId }) => 
         setAssignments(data.assignments || []);
         setConflicts(data.conflicts || []);
         setConflictCheckUnavailable(Boolean(data.conflictCheckUnavailable));
+        notifySupplierConfirmationsChanged();
         onChanged();
     };
 

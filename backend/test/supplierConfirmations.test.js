@@ -38,6 +38,14 @@ test("supplier queue includes both request types with Colombo follow-up boundari
         type: "transport", followUpDate: { $ne: null, $lt: new Date("2026-10-16T18:30:00.000Z") },
     });
     assert.equal(pipeline.at(-1).$facet.items.at(-3).$skip, 20);
+
+    const dueNow = buildSupplierConfirmationsPipeline(
+        { dateFilter: "actionable" }, new Date("2026-10-16T19:00:00Z")
+    );
+    assert.deepEqual(dueNow.at(-1).$facet.items[0].$match, {
+        followUpDate: { $ne: null, $lte: new Date("2026-10-17T18:29:59.999Z") },
+    });
+    assert.deepEqual(dueNow.at(-1).$facet.total[0].$match, dueNow.at(-1).$facet.items[0].$match);
 });
 
 test("supplier queue requires booking view permission and validates filters", async (t) => {
@@ -78,4 +86,7 @@ test("supplier queue requires booking view permission and validates filters", as
     assert.equal(data.total, 1);
     assert.equal(data.items[0].title, "Hotel A");
     assert.equal(aggregateCalls, 1);
+
+    assert.equal((await request("?dateFilter=actionable", viewerId)).status, 200);
+    assert.equal(aggregateCalls, 2);
 });

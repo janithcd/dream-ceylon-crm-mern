@@ -203,6 +203,9 @@ const main = async () => {
         assert.equal(overdueSupplierQueue.items[0].bookingCode, booking.bookingCode);
         assert.equal(overdueSupplierQueue.items[0].title, "CI Hotel");
         assert.equal("customerEmail" in overdueSupplierQueue.items[0], false);
+        const dueSupplierQueue = await getSupplierQueue("?dateFilter=actionable");
+        assert.equal(dueSupplierQueue.total, 1);
+        assert.equal(dueSupplierQueue.items[0].title, "CI Hotel");
 
         const hotelUrl = `${hotelsUrl}/${hotel._id}`;
         const confirmed = await request(hotelUrl, "PUT", { status: "Confirmed", confirmationNumber: "CI-123" });
@@ -233,6 +236,7 @@ const main = async () => {
         assert.equal(noDateSupplierQueue.summary.noDue, 1);
         assert.equal(noDateSupplierQueue.total, 1);
         assert.equal(noDateSupplierQueue.items[0].title, "CI Unscheduled Transfer");
+        assert.equal((await getSupplierQueue("?dateFilter=actionable")).total, 1);
         assert.equal((await request(`${transportUrl}/${unscheduledTransportId}`, "DELETE")).status, 200);
         const todaySupplierQueue = await getSupplierQueue("?type=transport&dateFilter=today");
         assert.equal(todaySupplierQueue.summary.transport, 1);

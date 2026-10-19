@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { FaClipboardCheck, FaSyncAlt } from "react-icons/fa";
 import api from "../api/axios";
 import BookingHotelsModal from "../components/BookingHotelsModal";
@@ -13,6 +13,7 @@ const emptyData = {
 
 const dateChoices = [
     { value: "all", label: "All dates" },
+    { value: "actionable", label: "Due now" },
     { value: "overdue", label: "Overdue", count: "overdue" },
     { value: "today", label: "Due today", count: "today" },
     { value: "upcoming", label: "Upcoming" },
@@ -28,8 +29,10 @@ const followUpStatus = (followUpDate, today) => {
 };
 
 const SupplierConfirmations = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [type, setType] = useState("all");
-    const [dateFilter, setDateFilter] = useState("all");
+    const requestedDateFilter = searchParams.get("dateFilter");
+    const dateFilter = dateChoices.some((choice) => choice.value === requestedDateFilter) ? requestedDateFilter : "all";
     const [page, setPage] = useState(1);
     const [reloadKey, setReloadKey] = useState(0);
     const [data, setData] = useState(emptyData);
@@ -62,6 +65,12 @@ const SupplierConfirmations = () => {
     };
     const changeFilter = (setter, value) => {
         setter(value);
+        setPage(1);
+        setLoading(true);
+        setError("");
+    };
+    const changeDateFilter = (value) => {
+        setSearchParams(value === "all" ? {} : { dateFilter: value });
         setPage(1);
         setLoading(true);
         setError("");
@@ -122,8 +131,8 @@ const SupplierConfirmations = () => {
                 </div>
                 <div className="d-flex flex-wrap gap-2 mb-4" role="group" aria-label="Follow-up date">
                     {dateChoices.map((choice) => (
-                        <button type="button" key={choice.value} className={`btn btn-sm ${dateFilter === choice.value ? "btn-dark" : "btn-outline-secondary"}`} onClick={() => changeFilter(setDateFilter, choice.value)}>
-                            {choice.label}{choice.count ? ` (${data.summary[choice.count]})` : ""}
+                        <button type="button" key={choice.value} className={`btn btn-sm ${dateFilter === choice.value ? "btn-dark" : "btn-outline-secondary"}`} onClick={() => changeDateFilter(choice.value)}>
+                            {choice.label}{choice.count ? ` (${data.summary[choice.count]})` : choice.value === "actionable" ? ` (${data.summary.overdue + data.summary.today})` : ""}
                         </button>
                     ))}
                 </div>

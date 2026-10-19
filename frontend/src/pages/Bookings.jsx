@@ -26,6 +26,7 @@ import BookingActivityModal from "../components/BookingActivityModal";
 import BookingTransportModal from "../components/BookingTransportModal";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
+import { notifySupplierConfirmationsChanged } from "../utils/supplierEvents";
 
 const initialFormState = {
     inquiry: "",
@@ -273,6 +274,7 @@ const Bookings = () => {
             }
 
             resetForm();
+            notifySupplierConfirmationsChanged();
             fetchBookings();
             fetchInquiries();
         } catch (err) {
@@ -327,6 +329,7 @@ const Bookings = () => {
             await api.delete(`/bookings/${id}`);
 
             setSuccess("Booking deleted successfully");
+            notifySupplierConfirmationsChanged();
             fetchBookings();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to delete booking");
