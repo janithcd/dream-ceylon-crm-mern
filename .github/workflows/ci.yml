@@ -57,7 +57,9 @@ jobs:
   containers:
     name: Container build and smoke tests
     needs: [backend, frontend]
-    runs-on: ubuntu-latest
+    # MongoDB 8 currently fails to start on the 6.19+ kernels reaching newer runners.
+    # Revisit before ubuntu-22.04 retires in April 2027 (SERVER-121912).
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
       JWT_SECRET: synthetic-ci-secret-never-use-in-production
