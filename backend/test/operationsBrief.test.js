@@ -11,6 +11,7 @@ const Admin = require("../models/Admin");
 const ActivityLog = require("../models/ActivityLog");
 const CompanySetting = require("../models/CompanySetting");
 const { buildOperationsBrief } = require("../utils/operationsBrief");
+const { cleanPdfText } = require("../utils/briefPdfText");
 const { createOperationsBriefPdf } = require("../controllers/bookingBriefPdfController");
 
 const exampleBooking = () => new Booking({
@@ -61,6 +62,28 @@ test("departure brief PDF keeps sections readable across multiple pages", async 
     const document = await PDFDocument.load(bytes);
     assert.ok(document.getPageCount() >= 3);
     assert.equal(Buffer.from(bytes).subarray(0, 5).toString(), "%PDF-");
+});
+
+test("departure brief PDF keeps Sinhala, Tamil, Cyrillic, and accented names", async () => {
+    const booking = exampleBooking();
+    booking.customer.fullName = "José සිංහල தமிழ் Жанна";
+    booking.hotelStays[0].hotelName = "කොළඹ ஹோட்டல்";
+    assert.equal(cleanPdfText(booking.customer.fullName), booking.customer.fullName);
+
+    const bytes = await createOperationsBriefPdf(buildOperationsBrief(booking), { companyName: "Dream Ceylon Journeys" });
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const task = getDocument({ data: new Uint8Array(bytes), disableFontFace: true, useSystemFonts: false });
+    try {
+        const document = await task.promise;
+        assert.equal(document.numPages, 1);
+        const content = await (await document.getPage(1)).getTextContent();
+        const printed = content.items.map(({ str }) => str).join("").replace(/\s+/gu, "");
+        for (const name of ["José", "සිංහල", "தமிழ்", "Жанна"]) {
+            assert.ok(printed.includes(name), `${name} must remain searchable in the PDF`);
+        }
+    } finally {
+        await task.destroy();
+    }
 });
 
 test("departure PDF requires booking and PDF permissions and rejects cancelled trips", async (t) => {

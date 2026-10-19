@@ -14,18 +14,26 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@fontsource/noto-sans": "5.3.0",
+    "@fontsource/noto-sans-sinhala": "5.3.0",
+    "@fontsource/noto-sans-tamil": "5.3.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.2",
+    "fontkit": "2.0.4",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.7.4",
     "openai": "^6.45.0",
-    "pdf-lib": "^1.17.1"
+    "pdf-lib": "^1.17.1",
+    "pdfkit": "0.20.2"
   },
   "engines": {
     "node": ">=22.12.0"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "^6.4.299"
   }
 }
