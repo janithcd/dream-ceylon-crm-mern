@@ -16,6 +16,7 @@ const {
     deletePreparationTask,
 } = require("../controllers/bookingPreparationController");
 const { getMyTasks } = require("../controllers/myTasksController");
+const { getBookingActivity } = require("../controllers/bookingActivityController");
 const { getTeamTasks } = require("../controllers/teamTasksController");
 const {
     addHotelStay,
@@ -50,6 +51,13 @@ router.get(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
     getPreparationAssignees
+);
+
+router.get(
+    "/:id/activity",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW),
+    getBookingActivity
 );
 
 router.post(

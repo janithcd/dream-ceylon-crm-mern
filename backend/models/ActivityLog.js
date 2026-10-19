@@ -158,4 +158,7 @@ activityLogSchema.index({
     createdAt: -1,
 });
 
+activityLogSchema.index({ relatedModel: 1, relatedRecordId: 1, status: 1, createdAt: -1, _id: -1 });
+activityLogSchema.index({ module: 1, "metadata.bookingId": 1, status: 1, createdAt: -1, _id: -1 });
+
 module.exports = mongoose.model("ActivityLog", activityLogSchema);

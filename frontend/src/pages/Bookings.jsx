@@ -9,6 +9,7 @@ import {
     FaFileCsv,
     FaFileInvoiceDollar,
     FaHotel,
+    FaHistory,
     FaPlus,
     FaReceipt,
     FaSearch,
@@ -19,6 +20,7 @@ import api from "../api/axios";
 import BookingPaymentsModal from "../components/BookingPaymentsModal";
 import BookingPreparationModal from "../components/BookingPreparationModal";
 import BookingHotelsModal from "../components/BookingHotelsModal";
+import BookingActivityModal from "../components/BookingActivityModal";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 
@@ -59,6 +61,7 @@ const Bookings = () => {
     const [selectedPaymentBooking, setSelectedPaymentBooking] = useState(null);
     const [selectedPreparationBooking, setSelectedPreparationBooking] = useState(null);
     const [selectedHotelBooking, setSelectedHotelBooking] = useState(null);
+    const [selectedActivityBooking, setSelectedActivityBooking] = useState(null);
 
     const [searchInput, setSearchInput] = useState(initialKeyword);
     const [keyword, setKeyword] = useState(initialKeyword);
@@ -1016,6 +1019,15 @@ const Bookings = () => {
                                                 >
                                                     <FaClipboardCheck />
                                                 </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-secondary"
+                                                    onClick={() => setSelectedActivityBooking(booking)}
+                                                    title="Booking history"
+                                                    aria-label={`History for ${booking.bookingCode}`}
+                                                >
+                                                    <FaHistory />
+                                                </button>
                                                 <PermissionGuard all={["cost.view", "quotation.view", "booking.view"]}>
                                                     <button
                                                         className="btn btn-sm btn-outline-secondary"
@@ -1150,6 +1162,13 @@ const Bookings = () => {
                     booking={selectedHotelBooking}
                     onClose={() => setSelectedHotelBooking(null)}
                     onChanged={fetchBookings}
+                />
+            )}
+            {selectedActivityBooking && (
+                <BookingActivityModal
+                    key={selectedActivityBooking._id}
+                    booking={selectedActivityBooking}
+                    onClose={() => setSelectedActivityBooking(null)}
                 />
             )}
         </div>
