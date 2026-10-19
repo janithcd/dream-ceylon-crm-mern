@@ -5,6 +5,7 @@ import {
     FaCalendarCheck,
     FaCar,
     FaChartLine,
+    FaClipboardCheck,
     FaCog,
     FaCoins,
     FaEnvelopeOpenText,
