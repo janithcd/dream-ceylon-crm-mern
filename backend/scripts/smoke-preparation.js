@@ -300,9 +300,17 @@ const main = async () => {
         assert.equal(briefResponse.headers.get("cache-control"), "no-store");
         assert.ok((await PDFDocument.load(await briefResponse.arrayBuffer())).getPageCount() >= 1);
         assert.ok(await ActivityLog.exists({ relatedRecordId: booking._id, "metadata.documentType": "Operations Brief" }));
+        const guestItineraryUrl = `http://127.0.0.1:5000/api/booking-pdf/guest-itinerary/${booking._id}`;
+        const guestPdfResponse = await request(guestItineraryUrl, "POST", {});
+        assert.equal(guestPdfResponse.status, 200, `Guest itinerary: ${guestPdfResponse.statusText}`);
+        assert.match(guestPdfResponse.headers.get("content-type"), /application\/pdf/);
+        assert.equal(guestPdfResponse.headers.get("cache-control"), "no-store");
+        assert.ok((await PDFDocument.load(await guestPdfResponse.arrayBuffer())).getPageCount() >= 1);
+        assert.ok(await ActivityLog.exists({ relatedRecordId: booking._id, "metadata.documentType": "Guest Itinerary" }));
         assert.ok(await ActivityLog.exists({ relatedRecordId: booking._id, description: /Itinerary entry updated/ }));
         assert.equal((await request(`${itineraryUrl}/${itineraryDay._id}`, "DELETE")).status, 200);
         assert.equal((await (await request(itineraryUrl, "GET")).json()).days.length, 0);
+        assert.equal((await request(guestItineraryUrl, "POST", {})).status, 409);
 
         overlappingBooking = await Booking.create({
             customer: { fullName: "CI Second Guest", email: "second@example.invalid", whatsappNumber: "+94771234568", country: "UK" },
