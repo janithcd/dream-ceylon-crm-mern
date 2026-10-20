@@ -64,6 +64,10 @@ body {
   top: 0;
   bottom: 0;
   left: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.45) transparent;
 }
 
 .sidebar-brand {
