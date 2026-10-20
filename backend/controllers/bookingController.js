@@ -4,6 +4,7 @@ const CostEntry = require("../models/CostEntry");
 const Inquiry = require("../models/Inquiry");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { parsePaymentDueDate } = require("../utils/paymentDueDate");
+const { itineraryFitsTrip } = require("../utils/bookingItinerary");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -371,6 +372,13 @@ const updateBooking = async (req, res) => {
             const parsed = parsePaymentDueDate(req.body.paymentDueDate);
             if (parsed.error) return res.status(400).json({ message: parsed.error });
             payload.paymentDueDate = parsed.value;
+        }
+
+        if (booking.itineraryDays?.length &&
+            !itineraryFitsTrip(booking.itineraryDays, payload.travelStartDate, payload.travelEndDate)) {
+            return res.status(400).json({
+                message: "Trip dates must include every itinerary entry. Move or remove itinerary entries first.",
+            });
         }
 
         if (!payload.customer.fullName) {

@@ -49,6 +49,32 @@ test("departure brief selects operational details without prices or private note
     }
 });
 
+test("departure brief prints dated itinerary entries in order", async () => {
+    const booking = exampleBooking();
+    booking.itineraryDays.push(
+        { date: new Date("2027-03-03"), title: "Sigiriya", plan: "Climb the rock", overnightLocation: "Habarana" },
+        { date: new Date("2027-03-01"), title: "Arrival", plan: "Airport pickup" }
+    );
+    const brief = buildOperationsBrief(booking);
+    assert.equal(brief.sections[0].title, "Daily itinerary");
+    assert.match(brief.sections[0].items[0].title, /Arrival/);
+    assert.match(brief.sections[0].items[1].title, /Sigiriya/);
+    assert.deepEqual(brief.sections[0].items[1].lines, ["Plan: Climb the rock", "Overnight: Habarana"]);
+    const bytes = await createOperationsBriefPdf(brief, { companyName: "Dream Ceylon Journeys" });
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const task = getDocument({ data: new Uint8Array(bytes), disableFontFace: true, useSystemFonts: false });
+    try {
+        const document = await task.promise;
+        const content = await (await document.getPage(1)).getTextContent();
+        const printed = content.items.map(({ str }) => str).join(" ");
+        assert.match(printed, /Daily itinerary/);
+        assert.match(printed, /Airport pickup/);
+        assert.match(printed, /Overnight: Habarana/);
+    } finally {
+        await task.destroy();
+    }
+});
+
 test("departure brief PDF keeps sections readable across multiple pages", async () => {
     const booking = exampleBooking();
     for (let index = 0; index < 45; index += 1) {

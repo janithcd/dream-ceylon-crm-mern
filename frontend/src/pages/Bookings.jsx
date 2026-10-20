@@ -11,6 +11,7 @@ import {
     FaFileInvoiceDollar,
     FaHotel,
     FaHistory,
+    FaMapMarkedAlt,
     FaPlus,
     FaPrint,
     FaReceipt,
@@ -22,6 +23,7 @@ import api from "../api/axios";
 import BookingPaymentsModal from "../components/BookingPaymentsModal";
 import BookingPreparationModal from "../components/BookingPreparationModal";
 import BookingHotelsModal from "../components/BookingHotelsModal";
+import BookingItineraryModal from "../components/BookingItineraryModal";
 import BookingActivityModal from "../components/BookingActivityModal";
 import BookingTransportModal from "../components/BookingTransportModal";
 import { exportToCsv } from "../utils/csvExport";
@@ -66,6 +68,7 @@ const Bookings = () => {
     const [selectedPaymentBooking, setSelectedPaymentBooking] = useState(null);
     const [selectedPreparationBooking, setSelectedPreparationBooking] = useState(null);
     const [selectedHotelBooking, setSelectedHotelBooking] = useState(null);
+    const [selectedItineraryBooking, setSelectedItineraryBooking] = useState(null);
     const [selectedActivityBooking, setSelectedActivityBooking] = useState(null);
     const [selectedTransportBooking, setSelectedTransportBooking] = useState(null);
 
@@ -1038,6 +1041,15 @@ const Bookings = () => {
                                                 <button
                                                     type="button"
                                                     className="btn btn-sm btn-outline-primary"
+                                                    onClick={() => setSelectedItineraryBooking(booking)}
+                                                    title={`${booking.itineraryDays?.length || 0} itinerary entries`}
+                                                    aria-label={`Itinerary for ${booking.bookingCode}`}
+                                                >
+                                                    <FaMapMarkedAlt /> {booking.itineraryDays?.length || 0}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-sm btn-outline-primary"
                                                     onClick={() => setSelectedPreparationBooking(booking)}
                                                     title="Booking preparation checklist"
                                                     aria-label={`Preparation checklist for ${booking.bookingCode}`}
@@ -1199,6 +1211,13 @@ const Bookings = () => {
                 <BookingHotelsModal
                     booking={selectedHotelBooking}
                     onClose={() => setSelectedHotelBooking(null)}
+                    onChanged={fetchBookings}
+                />
+            )}
+            {selectedItineraryBooking && (
+                <BookingItineraryModal
+                    booking={selectedItineraryBooking}
+                    onClose={() => setSelectedItineraryBooking(null)}
                     onChanged={fetchBookings}
                 />
             )}
