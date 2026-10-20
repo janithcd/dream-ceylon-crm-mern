@@ -361,6 +361,21 @@ const main = async () => {
         });
         assert.equal(clearResponse.status, 200);
         assert.equal((await getBalances()).paymentDueDate, null);
+        const contactUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/payment-contact`;
+        const contacted = await fetch(contactUrl, {
+            method: "PATCH", headers: { Authorization: `Bearer ${otherToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ channel: "WhatsApp", nextFollowUpDate: overdueDate }),
+        });
+        assert.equal(contacted.status, 200, `Log payment contact: ${await contacted.text()}`);
+        const dueFollowUps = await getBalanceQueue("dateFilter=all&contactFilter=due");
+        assert.equal(dueFollowUps.summary.followUpsDue, 1);
+        assert.ok(dueFollowUps.items.some((item) => String(item._id) === String(booking._id)));
+        assert.equal((await getBalances()).contactChannel, "WhatsApp");
+        assert.equal(dateOnly(new Date((await getBalances()).nextFollowUpDate)), overdueDate);
+        assert.equal((await request(contactUrl, "PATCH", { channel: "Phone" })).status, 403);
+        assert.equal((await (await request(historyUrl, "GET")).json()).events.some((event) => event.description.includes("Payment contact")), false);
+        const contactHistory = await (await fetch(historyUrl, { headers: { Authorization: `Bearer ${otherToken}` } })).json();
+        assert.ok(contactHistory.events.some((event) => event.description.includes("Payment contact logged")));
         await Admin.findByIdAndUpdate(otherAdmin._id, { $addToSet: { customPermissions: "payment.create" } });
         for (const amount of [400, 600]) {
             const paymentResponse = await fetch("http://127.0.0.1:5000/api/booking-payments", {
@@ -372,7 +387,8 @@ const main = async () => {
             assert.equal((await getBalances())?.balance, amount === 400 ? 600 : undefined);
         }
 
-        console.log("Booking preparation, supplier confirmations, payment due dates, transport overlaps, departure PDF, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
+        assert.equal((await getBalanceQueue("dateFilter=all&contactFilter=due")).summary.followUpsDue, 0);
+        console.log("Booking preparation, supplier confirmations, payment follow-ups, transport overlaps, departure PDF, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
             await BookingPayment.deleteMany({ booking: booking._id });

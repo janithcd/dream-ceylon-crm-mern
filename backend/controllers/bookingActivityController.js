@@ -27,10 +27,10 @@ const getBookingActivity = async (req, res) => {
             : 1;
         const bookingEvents = { relatedModel: "Booking", relatedRecordId: bookingId };
 
-        // Supplier cost changes are logged under Other and require cost.view.
-        if (!req.adminPermissions.includes(PERMISSIONS.COST_VIEW)) {
-            bookingEvents.module = { $ne: "Other" };
-        }
+        const hiddenModules = [];
+        if (!req.adminPermissions.includes(PERMISSIONS.COST_VIEW)) hiddenModules.push("Other");
+        if (!req.adminPermissions.includes(PERMISSIONS.PAYMENT_VIEW)) hiddenModules.push("Payment");
+        if (hiddenModules.length) bookingEvents.module = { $nin: hiddenModules };
 
         const relatedEvents = [bookingEvents];
 

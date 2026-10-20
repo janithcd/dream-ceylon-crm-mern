@@ -2,12 +2,13 @@ const { getBusinessDayBounds } = require("./businessDate");
 
 const DATE_FILTERS = ["next30", "departed", "later", "all"];
 const DUE_FILTERS = ["all", "overdue", "due7", "later", "unscheduled"];
+const CONTACT_FILTERS = ["all", "due"];
 const PAGE_SIZE = 20;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const OPEN_BOOKING_STATUSES = ["Pending", "Confirmed", "In Progress", "Completed"];
 
-const buildOutstandingBalancesPipeline = ({ dateFilter = "next30", dueFilter = "all", page = 1 } = {}, now = new Date()) => {
-    const { start } = getBusinessDayBounds(now);
+const buildOutstandingBalancesPipeline = ({ dateFilter = "next30", dueFilter = "all", contactFilter = "all", page = 1 } = {}, now = new Date()) => {
+    const { start, end } = getBusinessDayBounds(now);
     const laterStart = new Date(start.getTime() + 30 * DAY_MS);
     const nextWeek = new Date(start.getTime() + 7 * DAY_MS);
     const departureMatch = dateFilter === "departed"
@@ -26,7 +27,10 @@ const buildOutstandingBalancesPipeline = ({ dateFilter = "next30", dueFilter = "
                 : dueFilter === "unscheduled"
                     ? [{ $match: { paymentDueDate: null } }]
                     : [];
-    const selected = [...departureMatch, ...dueMatch];
+    const contactMatch = contactFilter === "due"
+        ? [{ $match: { nextFollowUpDate: { $ne: null, $lte: end } } }]
+        : [];
+    const selected = [...departureMatch, ...dueMatch, ...contactMatch];
 
     const countIf = (condition) => ({ $sum: { $cond: [condition, 1, 0] } });
     const dueExists = { $ne: ["$paymentDueDate", null] };
@@ -43,6 +47,9 @@ const buildOutstandingBalancesPipeline = ({ dateFilter = "next30", dueFilter = "
             travelEndDate: 1,
             bookingStatus: 1,
             paymentDueDate: { $ifNull: ["$paymentDueDate", null] },
+            lastContactedAt: { $ifNull: ["$paymentContact.lastContactedAt", null] },
+            contactChannel: { $ifNull: ["$paymentContact.channel", null] },
+            nextFollowUpDate: { $ifNull: ["$paymentContact.nextFollowUpDate", null] },
             currency: 1,
             totalPrice: 1,
             recordedPaid: { $ifNull: ["$advancePayment", 0] },
@@ -63,12 +70,18 @@ const buildOutstandingBalancesPipeline = ({ dateFilter = "next30", dueFilter = "
                 due7: countIf({ $and: [dueExists, { $gte: ["$paymentDueDate", start] }, { $lt: ["$paymentDueDate", nextWeek] }] }),
                 scheduledLater: countIf({ $gte: ["$paymentDueDate", nextWeek] }),
                 unscheduled: countIf({ $eq: ["$paymentDueDate", null] }),
+                followUpsDue: countIf({ $and: [
+                    { $ne: ["$nextFollowUpDate", null] },
+                    { $lte: ["$nextFollowUpDate", end] },
+                ] }),
             } }],
             total: [...selected, { $count: "value" }],
             items: [
                 ...selected,
                 { $addFields: { dueMissing: { $cond: [{ $eq: ["$paymentDueDate", null] }, 1, 0] } } },
-                { $sort: { dueMissing: 1, paymentDueDate: 1, travelStartDate: 1, bookingCode: 1, _id: 1 } },
+                { $sort: contactFilter === "due"
+                    ? { nextFollowUpDate: 1, paymentDueDate: 1, bookingCode: 1, _id: 1 }
+                    : { dueMissing: 1, paymentDueDate: 1, travelStartDate: 1, bookingCode: 1, _id: 1 } },
                 { $skip: (page - 1) * PAGE_SIZE },
                 { $limit: PAGE_SIZE },
                 { $project: { dueMissing: 0 } },
@@ -77,4 +90,4 @@ const buildOutstandingBalancesPipeline = ({ dateFilter = "next30", dueFilter = "
     ];
 };
 
-module.exports = { buildOutstandingBalancesPipeline, DATE_FILTERS, DUE_FILTERS, PAGE_SIZE };
+module.exports = { buildOutstandingBalancesPipeline, DATE_FILTERS, DUE_FILTERS, CONTACT_FILTERS, PAGE_SIZE, OPEN_BOOKING_STATUSES };
