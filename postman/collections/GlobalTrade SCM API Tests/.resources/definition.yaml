@@ -1,0 +1,19 @@
+$kind: collection
+name: GlobalTrade SCM API Tests
+auth:
+  - id: 30cf86dd-9fee-4226-9e57-fada1da8150c
+    type: basic
+    name: Admin Auth
+    credentials:
+      username: "{{adminUsername}}"
+      password: "{{adminPassword}}"
+    rules:
+      url: localhost:8080/*
+  - id: 77c4f7d8-876d-4aa7-a9a1-9f9dd3f6b726
+    type: basic
+    name: Vendor Auth
+    credentials:
+      username: "{{vendorUsername}}"
+      password: "{{vendorPassword}}"
+    rules:
+      url: localhost:8080/*

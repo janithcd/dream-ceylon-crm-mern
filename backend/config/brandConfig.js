@@ -34,9 +34,9 @@ const brandConfig = {
     logoPath: path.join(rootPath, "assets", "brand", "logo.png"),
 
     vehicleImages: {
-        Car: path.join(rootPath, "assets", "vehicles", "car.png"),
-        SUV: path.join(rootPath, "assets", "vehicles", "suv.png"),
-        Van: path.join(rootPath, "assets", "vehicles", "van.png"),
+        Car: path.join(rootPath, "assets", "vehicles", "private-car.webp"),
+        SUV: path.join(rootPath, "assets", "vehicles", "private-suv.webp"),
+        Van: path.join(rootPath, "assets", "vehicles", "private-van.webp"),
         "Mini Bus": path.join(rootPath, "assets", "vehicles", "mini-bus.png"),
         default: path.join(rootPath, "assets", "vehicles", "default-vehicle.png"),
     },

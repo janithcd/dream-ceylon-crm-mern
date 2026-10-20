@@ -45,6 +45,7 @@ const corsOptions = {
         "Content-Disposition",
         "Content-Length",
     ],
+
     optionsSuccessStatus: 204,
 };
 

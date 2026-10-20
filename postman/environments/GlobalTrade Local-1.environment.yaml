@@ -1,0 +1,16 @@
+name: GlobalTrade Local
+values:
+  - key: baseUrl
+    value: ''
+  - key: adminUsername
+    value: ''
+  - key: adminPassword
+    value: ''
+  - key: warehouseUsername
+    value: ''
+  - key: warehousePassword
+    value: ''
+  - key: vendorUsername
+    value: ''
+  - key: vendorPassword
+    value: ''

@@ -1,4 +1,0 @@
-$kind: collection
-description: Final authentication, permission, public API and smoke tests for Dream Ceylon CRM.
-variables:
-  baseUrl: "{{baseUrl}}"
