@@ -68,6 +68,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - Record hotel stays, room and meal plans, confirmation status, and hotel references on each booking
 - Review hotel night coverage in each booking to spot missing nights, reservations awaiting confirmation, overlapping stays, and stays outside the trip dates
 - Plan multiple transport legs per booking with vehicle registration, chauffeur, pickup details, and status; flag possible date overlaps for the same confirmed vehicle
+- Attach arrival or departure flight numbers, scheduled dates and times, airports, and terminals to transfers; keep pickup time separate and include flight details in the chauffeur operations PDF (Sri Lanka time)
 - Download a private departure handover PDF with guest contact, active hotels, transport, and open tasks; prices and private notes are excluded
 - Open a booking history to see dated staff actions across its details, preparation tasks, hotel stays, and PDFs; payment events require payment access and supplier cost changes require cost access
 - View bookings in a calendar

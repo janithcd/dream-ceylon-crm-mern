@@ -121,8 +121,10 @@ const updateTransportAssignment = async (req, res) => {
 
         const { value, error } = parseTransportAssignment(req.body || {}, existing);
         if (error) return res.status(400).json({ message: error });
-        const fields = Object.fromEntries(Object.entries(value).map(([key, fieldValue]) =>
-            [`transportAssignments.$.${key}`, fieldValue]));
+        // Status-only changes must not rewrite flight details loaded before a concurrent edit.
+        const fields = Object.fromEntries(Object.entries(value)
+            .filter(([key]) => key !== "flight" || Object.hasOwn(req.body || {}, "flight"))
+            .map(([key, fieldValue]) => [`transportAssignments.$.${key}`, fieldValue]));
         const booking = await Booking.findOneAndUpdate(
             { _id: req.params.id, "transportAssignments._id": req.params.assignmentId },
             { $set: fields },

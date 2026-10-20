@@ -10,6 +10,11 @@ const Booking = require("../models/Booking");
 const ActivityLog = require("../models/ActivityLog");
 const { parseTransportAssignment } = require("../utils/bookingTransport");
 
+const validFlight = {
+    direction: "Arrival", number: "  ul504  ", date: "2027-03-01", time: "04:30",
+    airport: "  Bandaranaike International (CMB)  ", terminal: "Arrivals",
+};
+
 const validTransport = {
     route: "  Airport to Sigiriya  ",
     startDate: "2027-03-01",
@@ -31,6 +36,34 @@ test("transport input validates dates, registrations, and status", () => {
         { pickupTime: "24:00" }, { status: "Paid" }, { notes: "x".repeat(501) },
     ]) {
         assert.ok(parseTransportAssignment({ ...validTransport, ...change }).error, JSON.stringify(change));
+    }
+});
+
+test("airport flights validate local schedules, survive partial edits, and can be cleared", () => {
+    const parsed = parseTransportAssignment({ ...validTransport, flight: validFlight }).value;
+    assert.equal(parsed.flight.number, "UL504");
+    assert.equal(parsed.flight.airport, "Bandaranaike International (CMB)");
+    assert.equal(parsed.flight.date.toISOString(), "2027-03-01T00:00:00.000Z");
+    assert.equal(parsed.flight.time, "04:30");
+    assert.equal(parseTransportAssignment({ ...validTransport, flight: { ...validFlight, time: "" } }).value.flight.time, "");
+    assert.deepEqual(parseTransportAssignment({ status: "Requested" }, parsed).value.flight, parsed.flight);
+    assert.equal(parseTransportAssignment({ flight: null }, parsed).value.flight, null);
+    assert.equal(parseTransportAssignment(validTransport).value.flight, null);
+    const departure = parseTransportAssignment({
+        ...validTransport, endDate: "2027-03-01", pickupTime: "23:30",
+        flight: { ...validFlight, direction: "Departure", date: "2027-03-02", time: "02:15" },
+    }).value;
+    assert.equal(departure.pickupTime, "23:30");
+    assert.equal(departure.flight.date.toISOString().slice(0, 10), "2027-03-02");
+    assert.equal(departure.flight.time, "02:15");
+    for (const flight of [
+        [], "UL504", {}, { ...validFlight, direction: "Transit" },
+        { ...validFlight, number: " " }, { ...validFlight, number: 504 },
+        { ...validFlight, number: "x".repeat(21) }, { ...validFlight, date: "2027-02-30" },
+        { ...validFlight, time: "24:00" }, { ...validFlight, time: 430 },
+        { ...validFlight, airport: "x".repeat(121) }, { ...validFlight, terminal: "x".repeat(61) },
+    ]) {
+        assert.ok(parseTransportAssignment({ ...validTransport, flight }).error, JSON.stringify(flight));
     }
 });
 
@@ -69,6 +102,7 @@ test("transport can be maintained by booking editors and flags confirmed vehicle
             item.startDate <= filter.startDate.$lte && item.endDate >= filter.endDate.$gte &&
             other.bookingStatus !== "Cancelled") ? [other] : [];
     } }) }));
+    let lastSetFields = [];
     t.mock.method(Booking, "findOneAndUpdate", async (query, update) => {
         if (String(query._id) !== bookingId) return null;
         if (update.$push) {
@@ -78,6 +112,7 @@ test("transport can be maintained by booking editors and flags confirmed vehicle
             const item = booking.transportAssignments.id(query["transportAssignments._id"]);
             if (!item) return null;
             if (update.$set) {
+                lastSetFields = Object.keys(update.$set);
                 for (const [key, value] of Object.entries(update.$set)) {
                     item[key.replace("transportAssignments.$.", "")] = value;
                 }
@@ -103,11 +138,13 @@ test("transport can be maintained by booking editors and flags confirmed vehicle
     assert.equal((await request(url, "POST", salesId, { ...validTransport, endDate: "2027-02-28" })).status, 400);
     assert.equal((await request(url.replace(bookingId, "invalid"), "GET", salesId)).status, 400);
 
-    const created = await request(url, "POST", salesId, { ...validTransport, registration: "WP-CAB 1234" });
+    const created = await request(url, "POST", salesId, { ...validTransport, registration: "WP-CAB 1234", flight: validFlight });
     assert.equal(created.status, 201);
     const result = await created.json();
     const assignment = result.assignments[0];
     assert.equal(assignment.route, "Airport to Sigiriya");
+    assert.equal(assignment.flight.number, "UL504");
+    assert.equal(assignment.flight.date, "2027-03-01T00:00:00.000Z");
     assert.equal(result.conflicts[0].bookings[0].bookingCode, "DCJ-OTHER-TRANSPORT");
     assert.equal(result.conflicts[0].bookings[0].route, "Day tour");
     assert.equal("customer" in result.conflicts[0].bookings[0], false);
@@ -129,6 +166,13 @@ test("transport can be maintained by booking editors and flags confirmed vehicle
     assert.equal(changed.status, 200);
     assert.equal((await changed.json()).conflicts.length, 0);
     assert.equal(booking.transportAssignments[0].registrationKey, "DIFFERENT999");
+    assert.equal(lastSetFields.includes("transportAssignments.$.flight"), false);
+    assert.equal(booking.transportAssignments[0].flight.number, "UL504");
+    assert.equal((await request(itemUrl, "PUT", salesId, { flight: { ...validFlight, time: "25:00" } })).status, 400);
+    assert.equal((await request(itemUrl, "PUT", viewerId, { flight: null })).status, 403);
+    const cleared = await request(itemUrl, "PUT", salesId, { flight: null });
+    assert.equal(cleared.status, 200);
+    assert.equal((await cleared.json()).assignments[0].flight, null);
 
     const removed = await request(itemUrl, "DELETE", salesId);
     assert.equal(removed.status, 200);

@@ -60,6 +60,12 @@ const buildOperationsBrief = (booking) => {
                         `Pickup: ${display(item.pickupLocation)} | Drop-off: ${display(item.dropoffLocation)}`,
                         `Vehicle: ${display(item.vehicleDescription)} | Registration: ${display(item.registration)}`,
                         `Chauffeur: ${display(item.chauffeurName)} | Phone: ${display(item.chauffeurPhone)}`,
+                        ...(item.flight ? [
+                            item.flight.direction + " flight: " + display(item.flight.number) + " | Scheduled: " +
+                                formatDocumentDate(item.flight.date) + " " + (item.flight.time || "Time to confirm") + " (Sri Lanka, UTC+05:30)",
+                            ...(item.flight.airport ? ["Airport: " + item.flight.airport] : []),
+                            ...(item.flight.terminal ? ["Terminal: " + item.flight.terminal] : []),
+                        ] : []),
                     ],
                 })),
             },
