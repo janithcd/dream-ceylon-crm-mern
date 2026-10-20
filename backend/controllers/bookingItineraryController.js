@@ -57,7 +57,7 @@ const addItineraryDay = async (req, res) => {
                 "itineraryDays.59": { $exists: false },
             },
             { $push: { itineraryDays: value } },
-            { new: true, runValidators: true }
+            { returnDocument: "after", runValidators: true }
         );
         if (!booking) return res.status(409).json({ message: "Trip changed or itinerary is full; refresh and try again" });
         const day = booking.itineraryDays.at(-1);
@@ -89,7 +89,7 @@ const updateItineraryDay = async (req, res) => {
                 travelEndDate: current.travelEndDate,
             },
             { $set: Object.fromEntries(Object.entries(value).map(([field, entry]) => [`itineraryDays.$.${field}`, entry])) },
-            { new: true, runValidators: true }
+            { returnDocument: "after", runValidators: true }
         );
         if (!booking) return res.status(409).json({ message: "Trip or itinerary changed; refresh and try again" });
         await logChange(req, booking, "updated", booking.itineraryDays.id(req.params.dayId));
@@ -112,7 +112,7 @@ const deleteItineraryDay = async (req, res) => {
         const booking = await Booking.findOneAndUpdate(
             { _id: req.params.id, "itineraryDays._id": req.params.dayId, bookingStatus: { $ne: "Cancelled" } },
             { $pull: { itineraryDays: { _id: req.params.dayId } } },
-            { new: true }
+            { returnDocument: "after" }
         );
         if (!booking) return res.status(409).json({ message: "Itinerary changed; refresh and try again" });
         await logChange(req, booking, "removed", day);

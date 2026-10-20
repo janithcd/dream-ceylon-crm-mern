@@ -47,6 +47,16 @@ test("schema rejects more than 60 itinerary entries and trip dates that leave en
     await assert.rejects(booking.validate(), /at most 60 itinerary entries/);
 });
 
+test("atomic itinerary push validates without treating the update as a booking document", async (t) => {
+    const collectionUpdate = t.mock.method(Booking.collection, "findOneAndUpdate", async () => null);
+    await Booking.findOneAndUpdate(
+        { _id: makeBooking()._id, travelStartDate: new Date("2027-03-01"), travelEndDate: new Date("2027-03-10") },
+        { $push: { itineraryDays: { date: new Date("2027-03-01"), title: "Arrival" } } },
+        { returnDocument: "after", runValidators: true }
+    );
+    assert.equal(collectionUpdate.mock.callCount(), 1);
+});
+
 test("itinerary endpoints enforce permissions and support add, edit, list, delete and booking date guard", async (t) => {
     const booking = makeBooking();
     const salesId = "507f1f77bcf86cd799439082";

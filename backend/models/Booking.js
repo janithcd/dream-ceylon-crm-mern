@@ -233,7 +233,10 @@ const bookingSchema = new mongoose.Schema(
             validate: [
                 { validator: (days) => days.length <= 60, message: "A booking can have at most 60 itinerary entries" },
                 { validator: function (days) {
-                    return itineraryFitsTrip(days, this.travelStartDate, this.travelEndDate);
+                    // $push validators run without a booking document. The itinerary routes
+                    // check trip dates against the loaded booking and match them atomically.
+                    return !(this instanceof mongoose.Document) ||
+                        itineraryFitsTrip(days, this.travelStartDate, this.travelEndDate);
                 }, message: "Itinerary dates must stay within booking travel dates" },
             ],
         },
