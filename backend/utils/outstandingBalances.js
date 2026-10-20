@@ -7,6 +7,29 @@ const PAGE_SIZE = 20;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const OPEN_BOOKING_STATUSES = ["Pending", "Confirmed", "In Progress", "Completed"];
 
+const openBalanceStages = () => [
+    { $match: {
+        bookingStatus: { $in: OPEN_BOOKING_STATUSES },
+        totalPrice: { $gt: 0 },
+    } },
+    { $project: {
+        bookingCode: 1,
+        customerName: "$customer.fullName",
+        travelStartDate: 1,
+        travelEndDate: 1,
+        bookingStatus: 1,
+        paymentDueDate: { $ifNull: ["$paymentDueDate", null] },
+        lastContactedAt: { $ifNull: ["$paymentContact.lastContactedAt", null] },
+        contactChannel: { $ifNull: ["$paymentContact.channel", null] },
+        nextFollowUpDate: { $ifNull: ["$paymentContact.nextFollowUpDate", null] },
+        currency: 1,
+        totalPrice: 1,
+        recordedPaid: { $ifNull: ["$advancePayment", 0] },
+        balance: { $round: [{ $subtract: ["$totalPrice", { $ifNull: ["$advancePayment", 0] }] }, 2] },
+    } },
+    { $match: { balance: { $gt: 0 } } },
+];
+
 const buildOutstandingBalancesPipeline = ({ dateFilter = "next30", dueFilter = "all", contactFilter = "all", page = 1 } = {}, now = new Date()) => {
     const { start, end } = getBusinessDayBounds(now);
     const laterStart = new Date(start.getTime() + 30 * DAY_MS);
@@ -36,26 +59,7 @@ const buildOutstandingBalancesPipeline = ({ dateFilter = "next30", dueFilter = "
     const dueExists = { $ne: ["$paymentDueDate", null] };
 
     return [
-        { $match: {
-            bookingStatus: { $in: OPEN_BOOKING_STATUSES },
-            totalPrice: { $gt: 0 },
-        } },
-        { $project: {
-            bookingCode: 1,
-            customerName: "$customer.fullName",
-            travelStartDate: 1,
-            travelEndDate: 1,
-            bookingStatus: 1,
-            paymentDueDate: { $ifNull: ["$paymentDueDate", null] },
-            lastContactedAt: { $ifNull: ["$paymentContact.lastContactedAt", null] },
-            contactChannel: { $ifNull: ["$paymentContact.channel", null] },
-            nextFollowUpDate: { $ifNull: ["$paymentContact.nextFollowUpDate", null] },
-            currency: 1,
-            totalPrice: 1,
-            recordedPaid: { $ifNull: ["$advancePayment", 0] },
-            balance: { $round: [{ $subtract: ["$totalPrice", { $ifNull: ["$advancePayment", 0] }] }, 2] },
-        } },
-        { $match: { balance: { $gt: 0 } } },
+        ...openBalanceStages(),
         { $facet: {
             summary: [{ $group: {
                 _id: null,
@@ -90,4 +94,42 @@ const buildOutstandingBalancesPipeline = ({ dateFilter = "next30", dueFilter = "
     ];
 };
 
-module.exports = { buildOutstandingBalancesPipeline, DATE_FILTERS, DUE_FILTERS, CONTACT_FILTERS, PAGE_SIZE, OPEN_BOOKING_STATUSES };
+const buildPaymentAttentionPipeline = (now = new Date()) => {
+    const { start, end } = getBusinessDayBounds(now);
+    return [
+        ...openBalanceStages(),
+        { $addFields: {
+            followUpDue: { $and: [
+                { $ne: ["$nextFollowUpDate", null] },
+                { $lte: ["$nextFollowUpDate", end] },
+            ] },
+            paymentOverdue: { $and: [
+                { $ne: ["$paymentDueDate", null] },
+                { $lt: ["$paymentDueDate", start] },
+            ] },
+        } },
+        { $match: { $or: [{ followUpDue: true }, { paymentOverdue: true }] } },
+        { $facet: {
+            summary: [{ $group: {
+                _id: null,
+                total: { $sum: 1 },
+                followUpsDue: { $sum: { $cond: ["$followUpDue", 1, 0] } },
+                overdue: { $sum: { $cond: ["$paymentOverdue", 1, 0] } },
+            } }],
+            items: [
+                { $addFields: {
+                    rank: { $cond: ["$followUpDue", 0, 1] },
+                    attentionDate: { $cond: ["$followUpDue", "$nextFollowUpDate", "$paymentDueDate"] },
+                } },
+                { $sort: { rank: 1, attentionDate: 1, bookingCode: 1, _id: 1 } },
+                { $limit: 5 },
+                { $project: {
+                    bookingCode: 1, followUpDue: 1, paymentOverdue: 1,
+                    nextFollowUpDate: 1, paymentDueDate: 1,
+                } },
+            ],
+        } },
+    ];
+};
+
+module.exports = { buildOutstandingBalancesPipeline, buildPaymentAttentionPipeline, DATE_FILTERS, DUE_FILTERS, CONTACT_FILTERS, PAGE_SIZE, OPEN_BOOKING_STATUSES };

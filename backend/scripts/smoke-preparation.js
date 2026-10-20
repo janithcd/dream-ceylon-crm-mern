@@ -333,6 +333,14 @@ const main = async () => {
 
         const balancesUrl = "http://127.0.0.1:5000/api/bookings/outstanding-balances";
         assert.equal((await request(balancesUrl, "GET")).status, 403);
+        const attentionUrl = "http://127.0.0.1:5000/api/bookings/payment-attention";
+        assert.equal((await request(attentionUrl, "GET")).status, 403);
+        const getPaymentAttention = async () => {
+            const response = await fetch(attentionUrl, { headers: { Authorization: `Bearer ${otherToken}` } });
+            const body = await response.json();
+            assert.equal(response.status, 200, `Payment alerts: ${JSON.stringify(body)}`);
+            return body;
+        };
         const getBalanceQueue = async (filters = "dateFilter=next30") => {
             const response = await fetch(`${balancesUrl}?${filters}`, {
                 headers: { Authorization: `Bearer ${otherToken}` },
@@ -354,6 +362,7 @@ const main = async () => {
         assert.equal(dueResponse.status, 200, `Set payment due date: ${await dueResponse.text()}`);
         assert.ok((await getBalanceQueue("dateFilter=all&dueFilter=overdue")).items.some((item) => String(item._id) === String(booking._id)));
         assert.equal(dateOnly(new Date((await getBalances()).paymentDueDate)), overdueDate);
+        assert.equal((await getPaymentAttention()).summary.overdue, 1);
         assert.equal((await request(dueUrl, "PATCH", { paymentDueDate: null })).status, 403);
         const clearResponse = await fetch(dueUrl, {
             method: "PATCH", headers: { Authorization: `Bearer ${otherToken}`, "Content-Type": "application/json" },
@@ -369,9 +378,21 @@ const main = async () => {
         assert.equal(contacted.status, 200, `Log payment contact: ${await contacted.text()}`);
         const dueFollowUps = await getBalanceQueue("dateFilter=all&contactFilter=due");
         assert.equal(dueFollowUps.summary.followUpsDue, 1);
+        const followUpAttention = await getPaymentAttention();
+        assert.equal(followUpAttention.summary.total, 1);
+        assert.equal(followUpAttention.summary.followUpsDue, 1);
         assert.ok(dueFollowUps.items.some((item) => String(item._id) === String(booking._id)));
         assert.equal((await getBalances()).contactChannel, "WhatsApp");
         assert.equal(dateOnly(new Date((await getBalances()).nextFollowUpDate)), overdueDate);
+        const restoreDue = await fetch(dueUrl, {
+            method: "PATCH", headers: { Authorization: `Bearer ${otherToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ paymentDueDate: overdueDate }),
+        });
+        assert.equal(restoreDue.status, 200);
+        const overlappingAttention = await getPaymentAttention();
+        assert.deepEqual(overlappingAttention.summary, { total: 1, followUpsDue: 1, overdue: 1 });
+        assert.equal(overlappingAttention.items[0].followUpDue, true);
+        assert.equal(overlappingAttention.items[0].paymentOverdue, true);
         assert.equal((await request(contactUrl, "PATCH", { channel: "Phone" })).status, 403);
         assert.equal((await (await request(historyUrl, "GET")).json()).events.some((event) => event.description.includes("Payment contact")), false);
         const contactHistory = await (await fetch(historyUrl, { headers: { Authorization: `Bearer ${otherToken}` } })).json();
@@ -388,7 +409,8 @@ const main = async () => {
         }
 
         assert.equal((await getBalanceQueue("dateFilter=all&contactFilter=due")).summary.followUpsDue, 0);
-        console.log("Booking preparation, supplier confirmations, payment follow-ups, transport overlaps, departure PDF, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
+        assert.equal((await getPaymentAttention()).summary.total, 0);
+        console.log("Booking preparation, supplier confirmations, payment alerts and follow-ups, transport overlaps, departure PDF, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
             await BookingPayment.deleteMany({ booking: booking._id });

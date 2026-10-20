@@ -28,6 +28,7 @@ import { useAuth } from "../context/AuthContext";
 import PermissionGuard from "../components/PermissionGuard";
 import TaskAlert from "../components/TaskAlert";
 import SupplierAlert from "../components/SupplierAlert";
+import PaymentAlert from "../components/PaymentAlert";
 import { ROUTE_PERMISSIONS } from "../config/routePermissions";
 
 const AdminLayout = () => {
@@ -260,7 +261,10 @@ const AdminLayout = () => {
                         </small>
                     </div>
 
-                    <div className="d-flex align-items-center gap-3">
+                    <div className="d-flex align-items-center flex-wrap gap-3">
+                        <PermissionGuard all={[ROUTE_PERMISSIONS.bookings, ROUTE_PERMISSIONS.payments]}>
+                            <PaymentAlert />
+                        </PermissionGuard>
                         <PermissionGuard permission={ROUTE_PERMISSIONS.supplierConfirmations}>
                             <SupplierAlert />
                         </PermissionGuard>

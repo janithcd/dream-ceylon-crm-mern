@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { FaSyncAlt, FaWallet, FaWhatsapp } from "react-icons/fa";
 import api from "../api/axios";
 import BookingPaymentsModal from "../components/BookingPaymentsModal";
@@ -7,6 +7,7 @@ import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { buildWhatsAppUrl } from "../utils/whatsappFollowUp";
 import { buildPaymentReminderMessage } from "../utils/paymentReminder";
+import { notifyPaymentAttentionChanged } from "../utils/paymentEvents";
 
 const emptyData = {
     items: [], summary: { open: 0, departed: 0, next30: 0, later: 0, overdue: 0, due7: 0, scheduledLater: 0, unscheduled: 0, followUpsDue: 0 },
@@ -40,12 +41,15 @@ const formatContactTime = (value) => value ? new Date(value).toLocaleString("en-
 
 const OutstandingBalances = () => {
     const { hasPermission } = usePermissions();
+    const [searchParams, setSearchParams] = useSearchParams();
     const canChangeDueDate = hasPermission("payment.update");
     const canLogContact = hasPermission("payment.update");
     const canPrepareReminder = hasPermission("payment.create");
-    const [dateFilter, setDateFilter] = useState("all");
-    const [dueFilter, setDueFilter] = useState("all");
-    const [contactFilter, setContactFilter] = useState("all");
+    const requestedDateFilter = searchParams.get("dateFilter");
+    const dateFilter = dateChoices.some((choice) => choice.value === requestedDateFilter) ? requestedDateFilter : "all";
+    const requestedDueFilter = searchParams.get("dueFilter");
+    const dueFilter = dueChoices.some((choice) => choice.value === requestedDueFilter) ? requestedDueFilter : "all";
+    const contactFilter = searchParams.get("contactFilter") === "due" ? "due" : "all";
     const [page, setPage] = useState(1);
     const [reloadKey, setReloadKey] = useState(0);
     const [data, setData] = useState(emptyData);
@@ -89,8 +93,13 @@ const OutstandingBalances = () => {
         setError("");
         setReloadKey((key) => key + 1);
     };
-    const chooseFilter = (setter, value) => {
-        setter(value);
+    const chooseFilter = (name, value) => {
+        setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            if (value === "all") next.delete(name);
+            else next.set(name, value);
+            return next;
+        });
         setPage(1);
         setLoading(true);
         setError("");
@@ -107,6 +116,7 @@ const OutstandingBalances = () => {
             });
             setEditingDue(null);
             setSuccess("Payment due date updated.");
+            notifyPaymentAttentionChanged();
             refresh();
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Failed to update payment due date.");
@@ -127,6 +137,7 @@ const OutstandingBalances = () => {
             });
             setContactForm(null);
             setSuccess("Payment contact logged.");
+            notifyPaymentAttentionChanged();
             refresh();
         } catch (requestError) {
             setContactError(requestError.response?.data?.message || "Failed to log payment contact.");
@@ -222,19 +233,19 @@ const OutstandingBalances = () => {
             <div className="card border-0 shadow-sm rounded-4"><div className="card-body p-4">
                 <p className="text-muted small">Balances use each booking's recorded total and paid amount. Currency is shown per booking; amounts are not combined across currencies. No due date means no agreed deadline has been recorded. Counts cover all open bookings; the filters can be combined.</p>
                 <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Payment contact follow-up">
-                    <button type="button" className={`btn btn-sm ${contactFilter === "all" ? "btn-success" : "btn-outline-success"}`} onClick={() => chooseFilter(setContactFilter, "all")}>All balances</button>
-                    <button type="button" className={`btn btn-sm ${contactFilter === "due" ? "btn-success" : "btn-outline-success"}`} onClick={() => chooseFilter(setContactFilter, "due")}>Follow-ups due ({data.summary.followUpsDue})</button>
+                    <button type="button" className={`btn btn-sm ${contactFilter === "all" ? "btn-success" : "btn-outline-success"}`} onClick={() => chooseFilter("contactFilter", "all")}>All balances</button>
+                    <button type="button" className={`btn btn-sm ${contactFilter === "due" ? "btn-success" : "btn-outline-success"}`} onClick={() => chooseFilter("contactFilter", "due")}>Follow-ups due ({data.summary.followUpsDue})</button>
                 </div>
                 <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Payment due timing">
                     {dueChoices.map((choice) => (
-                        <button type="button" key={choice.value} className={`btn btn-sm ${dueFilter === choice.value ? "btn-primary" : "btn-outline-primary"}`} onClick={() => chooseFilter(setDueFilter, choice.value)}>
+                        <button type="button" key={choice.value} className={`btn btn-sm ${dueFilter === choice.value ? "btn-primary" : "btn-outline-primary"}`} onClick={() => chooseFilter("dueFilter", choice.value)}>
                             {choice.label} ({data.summary[choice.count]})
                         </button>
                     ))}
                 </div>
                 <div className="d-flex flex-wrap gap-2 mb-4" role="group" aria-label="Departure timing">
                     {dateChoices.map((choice) => (
-                        <button type="button" key={choice.value} className={`btn btn-sm ${dateFilter === choice.value ? "btn-dark" : "btn-outline-secondary"}`} onClick={() => chooseFilter(setDateFilter, choice.value)}>
+                        <button type="button" key={choice.value} className={`btn btn-sm ${dateFilter === choice.value ? "btn-dark" : "btn-outline-secondary"}`} onClick={() => chooseFilter("dateFilter", choice.value)}>
                             {choice.label} ({data.summary[choice.count]})
                         </button>
                     ))}
