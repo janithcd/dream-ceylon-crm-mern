@@ -62,6 +62,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - Convert accepted quotations into bookings
 - Manage booking details and status
 - Plan a dated, day-by-day itinerary for each booking, including activities and overnight locations; entries appear in the internal operations brief, and trip dates cannot exclude planned entries
+- Download a branded guest itinerary PDF from the booking itinerary planner; it uses saved trip entries and company contact details, marks pending bookings as drafts, and leaves out financial and private supplier information
 - Track an internal preparation checklist per booking for hotels, transport, guides, itineraries, or custom tasks; assign active staff, optional due dates, task priorities, and private handoff notes
 - Record hotel stays, room and meal plans, confirmation status, and hotel references on each booking
 - Plan multiple transport legs per booking with vehicle registration, chauffeur, pickup details, and status; flag possible date overlaps for the same confirmed vehicle

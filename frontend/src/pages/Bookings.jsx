@@ -1219,6 +1219,8 @@ const Bookings = () => {
                     booking={selectedItineraryBooking}
                     onClose={() => setSelectedItineraryBooking(null)}
                     onChanged={fetchBookings}
+                    onDownloadGuestPdf={() => handleDownloadBookingPdf(selectedItineraryBooking, "guest-itinerary")}
+                    downloadingGuestPdf={pdfLoadingKey === `guest-itinerary-${selectedItineraryBooking._id}`}
                 />
             )}
             {selectedActivityBooking && (

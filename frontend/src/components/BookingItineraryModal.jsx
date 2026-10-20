@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { FaEdit, FaMapMarkedAlt, FaPlus, FaTrash } from "react-icons/fa";
+import { FaEdit, FaFilePdf, FaMapMarkedAlt, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
 
 const blankDay = (date = "") => ({ date, title: "", plan: "", overnightLocation: "" });
 
-const BookingItineraryModal = ({ booking, onClose, onChanged }) => {
+const BookingItineraryModal = ({ booking, onClose, onChanged, onDownloadGuestPdf, downloadingGuestPdf }) => {
     const { hasPermission } = usePermissions();
     const [days, setDays] = useState([]);
     const [trip, setTrip] = useState({
@@ -116,7 +116,7 @@ const BookingItineraryModal = ({ booking, onClose, onChanged }) => {
                             <button type="button" className="btn-close" aria-label="Close" onClick={onClose} />
                         </div>
                         <div className="modal-body">
-                            <p className="text-muted small mb-3">Plan each travel day or add multiple activities on one date. Entries appear in the internal operations brief.</p>
+                            <p className="text-muted small mb-3">Plan each travel day or add multiple activities on one date. Titles, plans, and overnight locations appear in the guest PDF and internal operations brief. Keep private notes elsewhere.</p>
                             <p className="small"><strong>Travel dates:</strong> {formatCalendarDate(trip.travelStartDate)} – {formatCalendarDate(trip.travelEndDate)}</p>
                             {error && <div className="alert alert-danger" role="alert">{error}</div>}
                             {success && <div className="alert alert-success" role="status">{success}</div>}
@@ -181,7 +181,20 @@ const BookingItineraryModal = ({ booking, onClose, onChanged }) => {
                                 </form>
                             )}
                         </div>
-                        <div className="modal-footer"><button type="button" className="btn btn-outline-secondary" onClick={onClose}>Close</button></div>
+                        <div className="modal-footer">
+                            {hasPermission("pdf.generate") && (
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    onClick={onDownloadGuestPdf}
+                                    disabled={loading || busy || downloadingGuestPdf || days.length === 0 || trip.bookingStatus === "Cancelled"}
+                                    title={days.length === 0 ? "Add itinerary entries first" : "Download a guest-facing itinerary PDF"}
+                                >
+                                    <FaFilePdf className="me-2" />{downloadingGuestPdf ? "Preparing PDF..." : "Download guest PDF"}
+                                </button>
+                            )}
+                            <button type="button" className="btn btn-outline-secondary" onClick={onClose}>Close</button>
+                        </div>
                     </div>
                 </div>
             </div>
