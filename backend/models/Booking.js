@@ -107,6 +107,15 @@ const hotelStaySchema = new mongoose.Schema({
     createdAt: { type: Date, default: Date.now },
 });
 
+const transferFlightSchema = new mongoose.Schema({
+    direction: { type: String, enum: ["Arrival", "Departure"], required: true },
+    number: { type: String, trim: true, uppercase: true, maxlength: 20, required: true },
+    date: { type: Date, required: true },
+    time: { type: String, default: "", match: /^(?:|(?:[01]\d|2[0-3]):[0-5]\d)$/ },
+    airport: { type: String, trim: true, maxlength: 120, default: "" },
+    terminal: { type: String, trim: true, maxlength: 60, default: "" },
+}, { _id: false });
+
 const transportAssignmentSchema = new mongoose.Schema({
     route: { type: String, required: true, trim: true, maxlength: 120 },
     startDate: { type: Date, required: true },
@@ -119,6 +128,7 @@ const transportAssignmentSchema = new mongoose.Schema({
     registrationKey: { type: String, trim: true, default: "" },
     chauffeurName: { type: String, trim: true, maxlength: 100, default: "" },
     chauffeurPhone: { type: String, trim: true, maxlength: 32, default: "" },
+    flight: { type: transferFlightSchema, default: null },
     status: { type: String, enum: ["Requested", "Confirmed", "Cancelled"], default: "Requested" },
     followUpDate: { type: Date, default: null },
     notes: { type: String, trim: true, maxlength: 500, default: "" },

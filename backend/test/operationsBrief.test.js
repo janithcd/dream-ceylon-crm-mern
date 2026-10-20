@@ -75,6 +75,43 @@ test("departure brief prints dated itinerary entries in order", async () => {
     }
 });
 
+test("chauffeur PDF prints scheduled flight and pickup times separately", async () => {
+    const booking = exampleBooking();
+    const transfer = booking.transportAssignments[0];
+    transfer.route = "Hotel to airport";
+    transfer.pickupTime = "23:30";
+    transfer.flight = {
+        direction: "Departure", number: "UL503", date: new Date("2027-03-02"),
+        time: "02:15", airport: "Bandaranaike International (CMB)", terminal: "Departures",
+    };
+    const brief = buildOperationsBrief(booking);
+    const transport = brief.sections.find((section) => section.title === "Transport");
+    assert.match(transport.items[0].lines.join(" "), /Pickup 23:30/);
+    assert.match(transport.items[0].lines.join(" "), /Departure flight: UL503/);
+    assert.match(transport.items[0].lines.join(" "), /Mar 2, 2027 02:15/);
+    const bytes = await createOperationsBriefPdf(brief, { companyName: "Dream Ceylon Journeys" });
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const task = getDocument({ data: new Uint8Array(bytes), disableFontFace: true, useSystemFonts: false });
+    try {
+        const document = await task.promise;
+        const pages = [];
+        for (let page = 1; page <= document.numPages; page += 1) {
+            const content = await (await document.getPage(page)).getTextContent();
+            pages.push(content.items.map(({ str }) => str).join(" "));
+        }
+        const printed = pages.join(" ");
+        assert.match(printed, /Pickup 23:30/);
+        assert.match(printed, /Departure flight: UL503/);
+        assert.match(printed, /02:15/);
+        assert.match(printed, /UTC\+05:30/);
+        assert.match(printed, /Bandaranaike International/);
+        assert.match(printed, /Terminal: Departures/);
+        assert.doesNotMatch(printed, /PRIVATE TRANSPORT NOTE/);
+    } finally {
+        await task.destroy();
+    }
+});
+
 test("departure brief PDF keeps sections readable across multiple pages", async () => {
     const booking = exampleBooking();
     for (let index = 0; index < 45; index += 1) {

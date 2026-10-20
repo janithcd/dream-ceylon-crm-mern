@@ -21,6 +21,13 @@ const emptyForm = (booking) => ({
     status: "Requested",
     followUpDate: "",
     notes: "",
+    includeFlight: false,
+    flightDirection: "Arrival",
+    flightNumber: "",
+    flightDate: "",
+    flightTime: "",
+    flightAirport: "",
+    flightTerminal: "",
 });
 
 const BookingTransportModal = ({ booking, onClose, onChanged, focusItemId }) => {
@@ -90,6 +97,13 @@ const BookingTransportModal = ({ booking, onClose, onChanged, focusItemId }) => 
             status: item.status || "Requested",
             followUpDate: toCalendarDateInput(item.followUpDate),
             notes: item.notes || "",
+            includeFlight: Boolean(item.flight),
+            flightDirection: item.flight?.direction || "Arrival",
+            flightNumber: item.flight?.number || "",
+            flightDate: toCalendarDateInput(item.flight?.date),
+            flightTime: item.flight?.time || "",
+            flightAirport: item.flight?.airport || "",
+            flightTerminal: item.flight?.terminal || "",
         });
         setEditingId(item._id);
         setShowForm(true);
@@ -103,9 +117,17 @@ const BookingTransportModal = ({ booking, onClose, onChanged, focusItemId }) => 
             setError("");
             setSuccess("");
             const url = `/bookings/${booking._id}/transport-assignments`;
+            const { includeFlight, flightDirection, flightNumber, flightDate, flightTime, flightAirport, flightTerminal, ...transport } = form;
+            const payload = {
+                ...transport,
+                flight: includeFlight ? {
+                    direction: flightDirection, number: flightNumber, date: flightDate,
+                    time: flightTime, airport: flightAirport, terminal: flightTerminal,
+                } : null,
+            };
             const response = editingId
-                ? await api.put(`${url}/${editingId}`, form)
-                : await api.post(url, form);
+                ? await api.put(`${url}/${editingId}`, payload)
+                : await api.post(url, payload);
             setResult(response.data);
             setSuccess(editingId ? "Transport updated." : "Transport added.");
             resetForm();
@@ -187,6 +209,14 @@ const BookingTransportModal = ({ booking, onClose, onChanged, focusItemId }) => 
                                                         {item.registration && <div><strong>Registration:</strong> {item.registration}</div>}
                                                         {item.chauffeurName && <div><strong>Chauffeur:</strong> {item.chauffeurName}</div>}
                                                         {item.chauffeurPhone && <div><strong>Phone:</strong> {item.chauffeurPhone}</div>}
+                                                        {item.flight && (
+                                                            <div className="border-top pt-2 mt-2">
+                                                                <div><strong>{item.flight.direction} flight:</strong> {item.flight.number}</div>
+                                                                <div><strong>Scheduled:</strong> {formatCalendarDate(item.flight.date)} · {item.flight.time || "Time to confirm"} (Sri Lanka)</div>
+                                                                {item.flight.airport && <div><strong>Airport:</strong> {item.flight.airport}</div>}
+                                                                {item.flight.terminal && <div><strong>Terminal:</strong> {item.flight.terminal}</div>}
+                                                            </div>
+                                                        )}
                                                         {item.notes && <div className="text-muted mt-2">{item.notes}</div>}
                                                     </div>
                                                     {overlaps.length > 0 && (
@@ -225,6 +255,30 @@ const BookingTransportModal = ({ booking, onClose, onChanged, focusItemId }) => 
                                         <div className="col-md-6"><label className="form-label" htmlFor="transport-follow-up">Supplier follow-up date</label><input id="transport-follow-up" name="followUpDate" type="date" className="form-control" value={form.followUpDate} onChange={updateField} max={form.startDate || undefined} /><small className="text-muted">Optional. Follow up before transport starts.</small></div>
                                         <div className="col-12"><label className="form-label" htmlFor="transport-notes">Internal notes</label><textarea id="transport-notes" name="notes" rows="2" className="form-control" value={form.notes} onChange={updateField} maxLength={500} /></div>
                                     </div>
+                                    <fieldset className="border rounded-3 p-3 mt-3" disabled={busy}>
+                                        <legend className="float-none w-auto fs-6 px-2">Airport transfer flight</legend>
+                                        <div className="form-check">
+                                            <input id="transport-has-flight" type="checkbox" className="form-check-input" checked={form.includeFlight}
+                                                onChange={(event) => {
+                                                    const checked = event.target.checked;
+                                                    setForm((previous) => ({ ...previous, includeFlight: checked, flightDate: previous.flightDate || previous.startDate }));
+                                                }} />
+                                            <label className="form-check-label" htmlFor="transport-has-flight">Include flight details</label>
+                                        </div>
+                                        {form.includeFlight && (
+                                            <>
+                                                <p className="text-muted small mt-2 mb-2">Use the scheduled arrival or departure at the Sri Lankan airport. Flight and pickup times are separate; enter both in Sri Lanka time (UTC+05:30).</p>
+                                                <div className="row g-3">
+                                                    <div className="col-md-3"><label className="form-label" htmlFor="transport-flight-direction">Flight type</label><select id="transport-flight-direction" name="flightDirection" className="form-select" value={form.flightDirection} onChange={updateField}><option>Arrival</option><option>Departure</option></select></div>
+                                                    <div className="col-md-3"><label className="form-label" htmlFor="transport-flight-number">Flight number *</label><input id="transport-flight-number" name="flightNumber" className="form-control" value={form.flightNumber} onChange={updateField} maxLength={20} placeholder="e.g. UL504" required /></div>
+                                                    <div className="col-md-3"><label className="form-label" htmlFor="transport-flight-date">Scheduled date *</label><input id="transport-flight-date" name="flightDate" type="date" className="form-control" value={form.flightDate} onChange={updateField} required /></div>
+                                                    <div className="col-md-3"><label className="form-label" htmlFor="transport-flight-time">Scheduled time (if known)</label><input id="transport-flight-time" name="flightTime" type="time" className="form-control" value={form.flightTime} onChange={updateField} /></div>
+                                                    <div className="col-md-8"><label className="form-label" htmlFor="transport-flight-airport">Airport</label><input id="transport-flight-airport" name="flightAirport" className="form-control" value={form.flightAirport} onChange={updateField} maxLength={120} placeholder="e.g. Bandaranaike International (CMB)" /></div>
+                                                    <div className="col-md-4"><label className="form-label" htmlFor="transport-flight-terminal">Terminal</label><input id="transport-flight-terminal" name="flightTerminal" className="form-control" value={form.flightTerminal} onChange={updateField} maxLength={60} /></div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </fieldset>
                                     <div className="d-flex justify-content-end gap-2 mt-3">
                                         <button type="button" className="btn btn-outline-secondary" disabled={busy} onClick={resetForm}>Cancel</button>
                                         <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Saving..." : editingId ? "Save changes" : "Add transport"}</button>

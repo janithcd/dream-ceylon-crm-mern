@@ -283,11 +283,19 @@ const main = async () => {
             route: "Airport pickup and round tour", startDate: dateOnly(travelStart),
             endDate: dateOnly(hotelCheckout), registration: "WP-CAB 1234",
             vehicleDescription: "KDH van", chauffeurName: "CI Chauffeur", status: "Confirmed",
+            flight: { direction: "Arrival", number: "ul504", date: dateOnly(travelStart), time: "04:30", airport: "CMB", terminal: "Arrivals" },
         });
         const firstTransportText = await firstTransportResponse.text();
         assert.equal(firstTransportResponse.status, 201, `Add transport: ${firstTransportText}`);
         const firstTransport = JSON.parse(firstTransportText);
         assert.equal(firstTransport.conflicts.length, 0);
+        assert.equal(firstTransport.assignments[0].flight.number, "UL504");
+        const savedFlight = (await Booking.findById(booking._id)).transportAssignments[0].flight;
+        assert.equal(savedFlight.time, "04:30");
+        assert.equal(dateOnly(savedFlight.date), dateOnly(travelStart));
+        const flightPreserved = await request(`${transportUrl}/${firstTransport.assignments[0]._id}`, "PUT", { chauffeurPhone: "+94771111111" });
+        assert.equal(flightPreserved.status, 200, "Updating transport should preserve flight details");
+        assert.equal((await flightPreserved.json()).assignments[0].flight.number, "UL504");
         assert.equal((await Booking.findById(booking._id)).transportAssignments[0].registrationKey, "WPCAB1234");
 
         const briefHotel = await request(hotelsUrl, "POST", {
@@ -363,6 +371,9 @@ const main = async () => {
         assert.equal(editedTransport.status, 200);
         assert.equal((await editedTransport.json()).conflicts.length, 0);
         assert.equal((await (await request(transportUrl, "GET")).json()).conflicts.length, 0);
+        const flightCleared = await request(`${transportUrl}/${firstTransport.assignments[0]._id}`, "PUT", { flight: null });
+        assert.equal(flightCleared.status, 200);
+        assert.equal((await flightCleared.json()).assignments[0].flight, null);
         assert.equal((await request(`${transportUrl}/${firstTransport.assignments[0]._id}`, "DELETE")).status, 200);
 
         const historyUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/activity`;
