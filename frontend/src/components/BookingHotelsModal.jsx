@@ -3,10 +3,12 @@ import { FaEdit, FaHotel, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
+import { getHotelNightCoverage } from "../utils/hotelNightCoverage";
 import { notifySupplierConfirmationsChanged } from "../utils/supplierEvents";
 
 const mealPlans = ["Room Only", "Bed & Breakfast", "Half Board", "Full Board", "All Inclusive", "Other"];
 const statuses = ["Requested", "Confirmed", "Cancelled"];
+const formatNightRange = ({ from, to }) => from === to ? formatCalendarDate(from) : formatCalendarDate(from) + " – " + formatCalendarDate(to);
 
 const emptyForm = () => ({
     hotelName: "",
@@ -55,6 +57,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
 
     const confirmedCount = stays.filter((stay) => stay.status === "Confirmed").length;
     const requestedCount = stays.filter((stay) => stay.status === "Requested").length;
+    const coverage = getHotelNightCoverage(booking, stays);
 
     const resetForm = () => {
         setForm(emptyForm());
@@ -152,6 +155,29 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
                                     </button>
                                 )}
                             </div>
+
+                            {!loading && coverage && coverage.activeStays > 0 && (
+                                <section className="border rounded-3 p-3 mb-3" aria-label="Hotel night coverage">
+                                    <h6 className="fw-bold mb-2">Hotel night coverage</h6>
+                                    <p className="small mb-2">{coverage.confirmedNights} of {coverage.totalNights} trip nights have a confirmed stay.</p>
+                                    <div className="d-flex flex-wrap gap-2 mb-2">
+                                        <span className="badge text-bg-success">{coverage.confirmedNights} confirmed</span>
+                                        {coverage.requestedOnlyNights > 0 && <span className="badge text-bg-warning">{coverage.requestedOnlyNights} requested only</span>}
+                                        {coverage.missingNights > 0 && <span className="badge text-bg-danger">{coverage.missingNights} without a stay</span>}
+                                        {coverage.multipleStayNights > 0 && <span className="badge text-bg-info">{coverage.multipleStayNights} with multiple stays</span>}
+                                    </div>
+                                    {coverage.missingRanges.length > 0 && <p className="small mb-1"><strong>No stay recorded:</strong> {coverage.missingRanges.map(formatNightRange).join(", ")}</p>}
+                                    {coverage.requestedOnlyRanges.length > 0 && <p className="small mb-1"><strong>Confirmation pending:</strong> {coverage.requestedOnlyRanges.map(formatNightRange).join(", ")}</p>}
+                                    {coverage.multipleStayRanges.length > 0 && <p className="small mb-1"><strong>Multiple stays to review:</strong> {coverage.multipleStayRanges.map(formatNightRange).join(", ")}</p>}
+                                    {coverage.outsideTrip.length > 0 && (
+                                        <p className="small mb-1"><strong>Outside travel dates:</strong> {coverage.outsideTrip.map((stay) => stay.hotelName + " (" + formatCalendarDate(stay.checkInDate) + " – " + formatCalendarDate(stay.checkOutDate) + ")").join("; ")}</p>
+                                    )}
+                                    <small className="text-muted">This checks dates, not room capacity. Multiple stays may be intentional for split groups.</small>
+                                </section>
+                            )}
+                            {!loading && coverage?.activeStays === 0 && stays.length > 0 && (
+                                <div className="alert alert-secondary py-2 small">Only cancelled stays are recorded. Add an active stay if this booking includes accommodation.</div>
+                            )}
 
                             {loading ? <p className="text-muted">Loading hotel stays...</p> : stays.length === 0 ? (
                                 <div className="border rounded-3 p-3 text-muted mb-3">No hotel stays recorded. Transport-only bookings can leave this empty.</div>
