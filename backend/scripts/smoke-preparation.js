@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const Admin = require("../models/Admin");
 const Booking = require("../models/Booking");
 const BookingPayment = require("../models/BookingPayment");
+const TourPackage = require("../models/TourPackage");
 const ActivityLog = require("../models/ActivityLog");
 const { PDFDocument } = require("pdf-lib");
 
@@ -17,6 +18,7 @@ const main = async () => {
     let otherAdmin;
     let booking;
     let overlappingBooking;
+    let tourPackage;
 
     try {
         const dayMs = 24 * 60 * 60 * 1000;
@@ -310,6 +312,35 @@ const main = async () => {
         assert.ok(await ActivityLog.exists({ relatedRecordId: booking._id, description: /Itinerary entry updated/ }));
         assert.equal((await request(`${itineraryUrl}/${itineraryDay._id}`, "DELETE")).status, 200);
         assert.equal((await (await request(itineraryUrl, "GET")).json()).days.length, 0);
+        tourPackage = await TourPackage.create({
+            title: `CI Package Import ${Date.now()}`, overview: "CI itinerary import fixture", priceFrom: 100,
+            durationDays: 3, itinerary: [
+                { day: 3, title: "CI Temple visit", description: "Visit the temple" },
+                { day: 1, title: "CI Arrival", description: "Airport pickup" },
+            ],
+        });
+        await Booking.updateOne({ _id: booking._id }, { $set: { selectedPackage: tourPackage._id } });
+        const previewUrl = `${itineraryUrl}/package-preview?startDate=${dateOnly(travelStart)}`;
+        const packagePreview = await request(previewUrl, "GET");
+        assert.equal(packagePreview.status, 200, `Package preview: ${await packagePreview.clone().text()}`);
+        const preview = await packagePreview.json();
+        assert.deepEqual(preview.days.map((day) => day.title), ["CI Arrival", "CI Temple visit"]);
+        const packageImport = await request(`${itineraryUrl}/import-package`, "POST", {
+            startDate: dateOnly(travelStart), previewToken: preview.previewToken,
+        });
+        assert.equal(packageImport.status, 201, `Package import: ${await packageImport.clone().text()}`);
+        assert.equal((await packageImport.json()).importedCount, 2);
+        assert.equal((await Booking.findById(booking._id)).itineraryDays.length, 2);
+        assert.ok(await ActivityLog.exists({ relatedRecordId: booking._id, description: /Package itinerary imported/ }));
+        assert.equal((await request(`${itineraryUrl}/import-package`, "POST", {
+            startDate: dateOnly(travelStart), previewToken: preview.previewToken,
+        })).status, 409);
+        const importedPdf = await request(guestItineraryUrl, "POST", {});
+        assert.equal(importedPdf.status, 200, `Imported guest itinerary: ${importedPdf.statusText}`);
+        assert.match(importedPdf.headers.get("content-type"), /application\/pdf/);
+        assert.ok((await PDFDocument.load(await importedPdf.arrayBuffer())).getPageCount() >= 1);
+        const importedDays = (await (await request(itineraryUrl, "GET")).json()).days;
+        for (const day of importedDays) assert.equal((await request(`${itineraryUrl}/${day._id}`, "DELETE")).status, 200);
         assert.equal((await request(guestItineraryUrl, "POST", {})).status, 409);
 
         overlappingBooking = await Booking.create({
@@ -441,7 +472,7 @@ const main = async () => {
 
         assert.equal((await getBalanceQueue("dateFilter=all&contactFilter=due")).summary.followUpsDue, 0);
         assert.equal((await getPaymentAttention()).summary.total, 0);
-        console.log("Booking preparation, supplier confirmations, payment alerts and follow-ups, transport overlaps, departure PDF, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
+        console.log("Booking preparation, package itinerary import, supplier confirmations, payment alerts and follow-ups, transport overlaps, PDFs, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
             await BookingPayment.deleteMany({ booking: booking._id });
@@ -455,6 +486,7 @@ const main = async () => {
             await ActivityLog.deleteMany({ relatedRecordId: overlappingBooking._id });
             await Booking.deleteOne({ _id: overlappingBooking._id });
         }
+        if (tourPackage) await TourPackage.deleteOne({ _id: tourPackage._id });
         if (admin) await Admin.deleteOne({ _id: admin._id });
         if (otherAdmin) await Admin.deleteOne({ _id: otherAdmin._id });
         await mongoose.disconnect();
