@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { itineraryFitsTrip } = require("../utils/bookingItinerary");
 
 const customerSchema = new mongoose.Schema(
     {
@@ -70,6 +71,14 @@ const preparationTaskSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+});
+
+const itineraryDaySchema = new mongoose.Schema({
+    date: { type: Date, required: true },
+    title: { type: String, required: true, trim: true, maxlength: 120 },
+    plan: { type: String, trim: true, maxlength: 800, default: "" },
+    overnightLocation: { type: String, trim: true, maxlength: 120, default: "" },
+    createdAt: { type: Date, default: Date.now },
 });
 
 const paymentContactSchema = new mongoose.Schema({
@@ -216,6 +225,17 @@ const bookingSchema = new mongoose.Schema(
         preparationTasks: {
             type: [preparationTaskSchema],
             default: [],
+        },
+
+        itineraryDays: {
+            type: [itineraryDaySchema],
+            default: [],
+            validate: [
+                { validator: (days) => days.length <= 60, message: "A booking can have at most 60 itinerary entries" },
+                { validator: function (days) {
+                    return itineraryFitsTrip(days, this.travelStartDate, this.travelEndDate);
+                }, message: "Itinerary dates must stay within booking travel dates" },
+            ],
         },
 
         hotelStays: {

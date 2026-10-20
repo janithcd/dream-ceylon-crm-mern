@@ -100,6 +100,26 @@ const main = async () => {
         const bookingView = await request(`http://127.0.0.1:5000/api/bookings/${booking._id}`, "GET");
         assert.equal(bookingView.status, 200);
         assert.equal((await bookingView.json()).preparationTasks[0].assignedTo.name, "CI Booking Test");
+
+        const itineraryUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/itinerary`;
+        const itineraryAdded = await request(itineraryUrl, "POST", {
+            date: dateOnly(travelStart), title: "Arrival", plan: "Airport pickup", overnightLocation: "Colombo",
+        });
+        assert.equal(itineraryAdded.status, 201, `Add itinerary: ${await itineraryAdded.clone().text()}`);
+        const itineraryDay = (await itineraryAdded.json()).days[0];
+        assert.equal(itineraryDay.title, "Arrival");
+        assert.equal((await (await request(itineraryUrl, "GET")).json()).days.length, 1);
+        assert.equal((await request(itineraryUrl, "POST", {
+            date: dateOnly(new Date(Date.now() + 20 * dayMs)), title: "Outside trip",
+        })).status, 400);
+        const itineraryUpdated = await request(`${itineraryUrl}/${itineraryDay._id}`, "PUT", {
+            date: dateOnly(travelStart), title: "Airport arrival", plan: "Meet driver at arrivals", overnightLocation: "Colombo",
+        });
+        assert.equal(itineraryUpdated.status, 200, `Edit itinerary: ${await itineraryUpdated.clone().text()}`);
+        assert.equal((await Booking.findById(booking._id)).itineraryDays[0].title, "Airport arrival");
+        assert.equal((await request(`http://127.0.0.1:5000/api/bookings/${booking._id}`, "PUT", {
+            travelStartDate: dateOnly(new Date(Date.now() + 8 * dayMs)),
+        })).status, 400);
         assert.equal((await ownAttention()).openTaskCount, 1);
         assert.equal((await ownAttention()).overdueTaskCount, 1);
         const overdueMine = await getMine("?dateFilter=overdue");
@@ -280,6 +300,9 @@ const main = async () => {
         assert.equal(briefResponse.headers.get("cache-control"), "no-store");
         assert.ok((await PDFDocument.load(await briefResponse.arrayBuffer())).getPageCount() >= 1);
         assert.ok(await ActivityLog.exists({ relatedRecordId: booking._id, "metadata.documentType": "Operations Brief" }));
+        assert.ok(await ActivityLog.exists({ relatedRecordId: booking._id, description: /Itinerary entry updated/ }));
+        assert.equal((await request(`${itineraryUrl}/${itineraryDay._id}`, "DELETE")).status, 200);
+        assert.equal((await (await request(itineraryUrl, "GET")).json()).days.length, 0);
 
         overlappingBooking = await Booking.create({
             customer: { fullName: "CI Second Guest", email: "second@example.invalid", whatsappNumber: "+94771234568", country: "UK" },

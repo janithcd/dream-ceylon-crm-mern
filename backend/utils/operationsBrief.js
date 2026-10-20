@@ -7,6 +7,7 @@ const byDate = (field) => (left, right) =>
 
 // Select only dispatch information. Private notes and financial fields never enter the PDF renderer.
 const buildOperationsBrief = (booking) => {
+    const itinerary = [...(booking.itineraryDays || [])].sort(byDate("date"));
     const hotelStays = (booking.hotelStays || [])
         .filter((stay) => stay.status !== "Cancelled")
         .sort(byDate("checkInDate"));
@@ -27,6 +28,16 @@ const buildOperationsBrief = (booking) => {
             `Travelers: ${display(booking.numberOfTravelers)} | Country: ${display(booking.customer?.country)}`,
         ],
         sections: [
+            ...(itinerary.length ? [{
+                title: "Daily itinerary",
+                items: itinerary.map((day) => ({
+                    title: `${formatDocumentDate(day.date)} - ${display(day.title)}`,
+                    lines: [
+                        ...(day.plan ? [`Plan: ${day.plan}`] : []),
+                        ...(day.overnightLocation ? [`Overnight: ${day.overnightLocation}`] : []),
+                    ],
+                })),
+            }] : []),
             {
                 title: "Accommodation",
                 empty: "No hotel stays recorded. Confirm whether this is a transport-only booking.",
