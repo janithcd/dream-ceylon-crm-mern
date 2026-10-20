@@ -8,7 +8,7 @@ const app = require("../app");
 const Booking = require("../models/Booking");
 const Admin = require("../models/Admin");
 const ActivityLog = require("../models/ActivityLog");
-const { buildOutstandingBalancesPipeline } = require("../utils/outstandingBalances");
+const { buildOutstandingBalancesPipeline, buildPaymentAttentionPipeline } = require("../utils/outstandingBalances");
 const { parseCalendarDate, parsePaymentDueDate } = require("../utils/paymentDueDate");
 
 test("payment due dates validate calendar days and can be cleared", () => {
@@ -67,6 +67,61 @@ test("open balances use recorded amounts and Sri Lanka payment days without expo
     assert.deepEqual(followUps[3].$facet.total.slice(0, 2), followUps[3].$facet.items.slice(0, 2));
     assert.equal(followUps[3].$facet.items[3].$sort.nextFollowUpDate, 1);
     assert.equal(followUps[3].$facet.summary[0].$group.followUpsDue.$sum.$cond[0].$and[1].$lte[1].toISOString(), "2026-10-17T18:29:59.999Z");
+});
+
+test("payment alerts count distinct open balances and classify Colombo follow-up and overdue days", () => {
+    const now = new Date("2026-10-16T19:00:00Z"); // Oct 17 in Colombo
+    const pipeline = buildPaymentAttentionPipeline(now);
+    assert.deepEqual(pipeline.slice(0, 3), buildOutstandingBalancesPipeline({ dateFilter: "all" }, now).slice(0, 3));
+    assert.deepEqual(pipeline[3].$addFields.followUpDue.$and, [
+        { $ne: ["$nextFollowUpDate", null] },
+        { $lte: ["$nextFollowUpDate", new Date("2026-10-17T18:29:59.999Z")] },
+    ]);
+    assert.deepEqual(pipeline[3].$addFields.paymentOverdue.$and, [
+        { $ne: ["$paymentDueDate", null] },
+        { $lt: ["$paymentDueDate", new Date("2026-10-16T18:30:00Z")] },
+    ]);
+    assert.deepEqual(pipeline[4].$match.$or, [{ followUpDue: true }, { paymentOverdue: true }]);
+    assert.equal(pipeline[5].$facet.summary[0].$group.total.$sum, 1);
+    assert.equal(pipeline[5].$facet.items[2].$limit, 5);
+    assert.deepEqual(Object.keys(pipeline[5].$facet.items[3].$project).sort(), [
+        "bookingCode", "followUpDue", "nextFollowUpDate", "paymentDueDate", "paymentOverdue",
+    ].sort());
+});
+
+test("payment alert endpoint requires booking and payment view and returns limited attention data", async (t) => {
+    const financeId = "507f1f77bcf86cd7994390b1";
+    const salesId = "507f1f77bcf86cd7994390b2";
+    let aggregateCalls = 0;
+    t.mock.method(Admin, "findById", (id) => ({ select: async () => ({
+        _id: id, role: String(id) === salesId ? "Sales" : "Finance", status: "Active", tokenVersion: 0,
+    }) }));
+    t.mock.method(Booking, "aggregate", async (pipeline) => {
+        aggregateCalls += 1;
+        assert.deepEqual(pipeline[4].$match.$or, [{ followUpDue: true }, { paymentOverdue: true }]);
+        return [{ summary: [{ total: 2, followUpsDue: 2, overdue: 1 }], items: [{
+            _id: "507f1f77bcf86cd7994390b3", bookingCode: "DCJ-ALERT", followUpDue: true,
+            paymentOverdue: true, nextFollowUpDate: "2026-10-17T00:00:00.000Z",
+        }] }];
+    });
+
+    const server = app.listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const url = `http://127.0.0.1:${server.address().port}/api/bookings/payment-attention`;
+    const request = (id) => fetch(url, {
+        headers: id ? { Authorization: `Bearer ${jwt.sign({ id }, process.env.JWT_SECRET)}` } : {},
+    });
+
+    assert.equal((await request()).status, 401);
+    assert.equal((await request(salesId)).status, 403);
+    assert.equal(aggregateCalls, 0);
+    const response = await request(financeId);
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.deepEqual(data.summary, { total: 2, followUpsDue: 2, overdue: 1 });
+    assert.equal(data.items[0].bookingCode, "DCJ-ALERT");
+    assert.equal(aggregateCalls, 1);
 });
 
 test("balance queue requires booking and payment view and validates filters", async (t) => {

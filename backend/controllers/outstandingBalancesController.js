@@ -2,7 +2,7 @@ const Booking = require("../models/Booking");
 const mongoose = require("mongoose");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { parseCalendarDate, parsePaymentDueDate } = require("../utils/paymentDueDate");
-const { buildOutstandingBalancesPipeline, DATE_FILTERS, DUE_FILTERS, CONTACT_FILTERS, PAGE_SIZE, OPEN_BOOKING_STATUSES } = require("../utils/outstandingBalances");
+const { buildOutstandingBalancesPipeline, buildPaymentAttentionPipeline, DATE_FILTERS, DUE_FILTERS, CONTACT_FILTERS, PAGE_SIZE, OPEN_BOOKING_STATUSES } = require("../utils/outstandingBalances");
 
 const CONTACT_CHANNELS = ["WhatsApp", "Phone", "Email", "Other"];
 
@@ -38,6 +38,24 @@ const getOutstandingBalances = async (req, res) => {
     } catch (error) {
         console.error("Outstanding balance queue failed:", error.message);
         return res.status(500).json({ message: "Failed to load outstanding balances" });
+    }
+};
+
+const getPaymentAttention = async (req, res) => {
+    try {
+        const [result] = await Booking.aggregate(buildPaymentAttentionPipeline());
+        const summary = result?.summary?.[0] || {};
+        return res.status(200).json({
+            summary: {
+                total: summary.total || 0,
+                followUpsDue: summary.followUpsDue || 0,
+                overdue: summary.overdue || 0,
+            },
+            items: result?.items || [],
+        });
+    } catch (error) {
+        console.error("Payment attention failed:", error.message);
+        return res.status(500).json({ message: "Failed to load payment alerts" });
     }
 };
 
@@ -131,4 +149,4 @@ const logPaymentContact = async (req, res) => {
     }
 };
 
-module.exports = { getOutstandingBalances, updatePaymentDueDate, logPaymentContact };
+module.exports = { getOutstandingBalances, getPaymentAttention, updatePaymentDueDate, logPaymentContact };

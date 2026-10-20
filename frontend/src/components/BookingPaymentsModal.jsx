@@ -11,6 +11,7 @@ import {
 import api from "../api/axios";
 import PermissionGuard from "./PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
+import { notifyPaymentAttentionChanged } from "../utils/paymentEvents";
 
 const initialPaymentForm = () => ({
     amount: "",
@@ -241,6 +242,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
             setCurrentBooking(response.data.booking || currentBooking);
             resetForm();
             fetchPaymentHistory();
+            notifyPaymentAttentionChanged();
 
             if (onPaymentChanged) {
                 onPaymentChanged();
@@ -275,6 +277,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
             setSuccess("Payment deleted successfully.");
             setCurrentBooking(response.data.booking || currentBooking);
             fetchPaymentHistory();
+            notifyPaymentAttentionChanged();
 
             if (onPaymentChanged) {
                 onPaymentChanged();
