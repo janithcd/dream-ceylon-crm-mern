@@ -18,6 +18,7 @@ const {
 const { getMyTasks } = require("../controllers/myTasksController");
 const { getBookingActivity } = require("../controllers/bookingActivityController");
 const { getItinerary, addItineraryDay, updateItineraryDay, deleteItineraryDay } = require("../controllers/bookingItineraryController");
+const { previewPackageItinerary, importPackageItinerary } = require("../controllers/bookingPackageImportController");
 const {
     getTransportAssignments,
     addTransportAssignment,
@@ -106,6 +107,8 @@ router.get(
 
 router.get("/:id/itinerary", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getItinerary);
 router.post("/:id/itinerary", protect, authorizePermissions(PERMISSIONS.BOOKING_UPDATE), addItineraryDay);
+router.get("/:id/itinerary/package-preview", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.PACKAGE_VIEW), previewPackageItinerary);
+router.post("/:id/itinerary/import-package", protect, authorizePermissions(PERMISSIONS.BOOKING_UPDATE, PERMISSIONS.PACKAGE_VIEW), importPackageItinerary);
 router.put("/:id/itinerary/:dayId", protect, authorizePermissions(PERMISSIONS.BOOKING_UPDATE), updateItineraryDay);
 router.delete("/:id/itinerary/:dayId", protect, authorizePermissions(PERMISSIONS.BOOKING_UPDATE), deleteItineraryDay);
 

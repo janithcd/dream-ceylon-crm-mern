@@ -21,7 +21,12 @@ const BookingItineraryModal = ({ booking, onClose, onChanged, onDownloadGuestPdf
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [importStartDate, setImportStartDate] = useState(toCalendarDateInput(booking.travelStartDate));
+    const [importPreview, setImportPreview] = useState(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [importLoading, setImportLoading] = useState(false);
     const canEdit = hasPermission("booking.update") && trip.bookingStatus !== "Cancelled";
+    const canImport = canEdit && hasPermission("package.view") && booking.selectedPackage && days.length === 0;
     const start = toCalendarDateInput(trip.travelStartDate);
     const end = toCalendarDateInput(trip.travelEndDate);
 
@@ -75,6 +80,7 @@ const BookingItineraryModal = ({ booking, onClose, onChanged, onDownloadGuestPdf
             setDays(data.days || []);
             setTrip(data);
             resetForm();
+            setImportPreview(null);
             setSuccess(editingId ? "Itinerary entry updated." : "Itinerary entry added.");
             onChanged?.();
         } catch (err) {
@@ -93,6 +99,7 @@ const BookingItineraryModal = ({ booking, onClose, onChanged, onDownloadGuestPdf
             const { data } = await api.delete(`/bookings/${booking._id}/itinerary/${day._id}`);
             setDays(data.days || []);
             setTrip(data);
+            setImportPreview(null);
             if (editingId === day._id) resetForm();
             setSuccess("Itinerary entry removed.");
             onChanged?.();
@@ -100,6 +107,46 @@ const BookingItineraryModal = ({ booking, onClose, onChanged, onDownloadGuestPdf
             setError(err.response?.data?.message || "Failed to remove the itinerary entry.");
         } finally {
             setBusy(false);
+        }
+    };
+
+    const previewPackage = async () => {
+        setPreviewLoading(true);
+        setImportPreview(null);
+        setError("");
+        setSuccess("");
+        try {
+            const { data } = await api.get(`/bookings/${booking._id}/itinerary/package-preview`, {
+                params: { startDate: importStartDate },
+            });
+            setImportPreview(data);
+        } catch (err) {
+            setError(err.response?.data?.message || "Failed to preview the package plan.");
+        } finally {
+            setPreviewLoading(false);
+        }
+    };
+
+    const importPackage = async () => {
+        if (!importPreview || importLoading) return;
+        setImportLoading(true);
+        setError("");
+        setSuccess("");
+        try {
+            const { data } = await api.post(`/bookings/${booking._id}/itinerary/import-package`, {
+                startDate: importStartDate,
+                previewToken: importPreview.previewToken,
+            });
+            setDays(data.days || []);
+            setTrip(data);
+            setImportPreview(null);
+            setSuccess(`${data.importedCount} package ${data.importedCount === 1 ? "entry" : "entries"} imported. Review and personalize the plan before sharing it.`);
+            onChanged?.();
+        } catch (err) {
+            setImportPreview(null);
+            setError(err.response?.data?.message || "Failed to import the package plan. Preview again to retry.");
+        } finally {
+            setImportLoading(false);
         }
     };
 
@@ -123,7 +170,7 @@ const BookingItineraryModal = ({ booking, onClose, onChanged, onDownloadGuestPdf
                             <div className="d-flex align-items-center justify-content-between gap-2 mb-3">
                                 <h6 className="mb-0">{days.length} {days.length === 1 ? "entry" : "entries"}</h6>
                                 {canEdit && !loading && !showForm && (
-                                    <button type="button" className="btn btn-sm btn-primary" disabled={busy || days.length >= 60} onClick={() => { setForm(blankDay(start)); setEditingId(""); setShowForm(true); setError(""); setSuccess(""); }}>
+                                    <button type="button" className="btn btn-sm btn-primary" disabled={busy || previewLoading || importLoading || days.length >= 60} onClick={() => { setForm(blankDay(start)); setEditingId(""); setShowForm(true); setError(""); setSuccess(""); }}>
                                         <FaPlus className="me-2" />Add entry
                                     </button>
                                 )}
@@ -150,6 +197,39 @@ const BookingItineraryModal = ({ booking, onClose, onChanged, onDownloadGuestPdf
                                             {day.overnightLocation && <small className="text-muted">Overnight: {day.overnightLocation}</small>}
                                         </div>
                                     ))}
+                                </div>
+                            )}
+
+                            {canImport && !loading && !showForm && (
+                                <div className="border rounded-3 p-3 mb-4">
+                                    <h6 className="fw-bold">Start from {booking.selectedPackage?.title || "the selected package"}</h6>
+                                    <p className="small text-muted">Preview the package day plan on this booking's dates. Import fills an empty itinerary; you can edit every entry afterward.</p>
+                                    <div className="d-flex align-items-end flex-wrap gap-2">
+                                        <div>
+                                            <label className="form-label" htmlFor="package-import-start">First package day</label>
+                                            <input id="package-import-start" type="date" className="form-control" min={start} max={end} value={importStartDate}
+                                                onChange={(event) => { setImportStartDate(event.target.value); setImportPreview(null); }} disabled={previewLoading || importLoading} />
+                                        </div>
+                                        <button type="button" className="btn btn-outline-primary" onClick={previewPackage} disabled={!importStartDate || previewLoading || importLoading || busy}>
+                                            {previewLoading ? "Loading plan..." : "Preview package plan"}
+                                        </button>
+                                    </div>
+                                    {importPreview && (
+                                        <div className="mt-3">
+                                            <p className="fw-semibold mb-2">{importPreview.packageTitle} · {importPreview.days.length} {importPreview.days.length === 1 ? "entry" : "entries"}</p>
+                                            <div className="border rounded-3 p-2 mb-3" style={{ maxHeight: 240, overflowY: "auto" }}>
+                                                {importPreview.days.map((day, index) => (
+                                                    <div key={`${day.date}-${index}`} className="small py-2 border-bottom">
+                                                        <strong>{formatCalendarDate(day.date)} · {day.title}</strong>
+                                                        {day.plan && <div className="text-muted" style={{ whiteSpace: "pre-wrap" }}>{day.plan}</div>}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <button type="button" className="btn btn-primary btn-sm" onClick={importPackage} disabled={importLoading || busy}>
+                                                {importLoading ? "Importing..." : `Import ${importPreview.days.length} ${importPreview.days.length === 1 ? "entry" : "entries"}`}
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
@@ -187,7 +267,7 @@ const BookingItineraryModal = ({ booking, onClose, onChanged, onDownloadGuestPdf
                                     type="button"
                                     className="btn btn-primary"
                                     onClick={onDownloadGuestPdf}
-                                    disabled={loading || busy || downloadingGuestPdf || days.length === 0 || trip.bookingStatus === "Cancelled"}
+                                    disabled={loading || busy || importLoading || downloadingGuestPdf || days.length === 0 || trip.bookingStatus === "Cancelled"}
                                     title={days.length === 0 ? "Add itinerary entries first" : "Download a guest-facing itinerary PDF"}
                                 >
                                     <FaFilePdf className="me-2" />{downloadingGuestPdf ? "Preparing PDF..." : "Download guest PDF"}
