@@ -298,6 +298,66 @@ const main = async () => {
         assert.equal((await flightPreserved.json()).assignments[0].flight.number, "UL504");
         assert.equal((await Booking.findById(booking._id)).transportAssignments[0].registrationKey, "WPCAB1234");
 
+        // A late-night pickup belongs to the pickup day, even when the flight is next morning.
+        const transferId = firstTransport.assignments[0]._id;
+        const nextFlightDay = dateOnly(new Date(travelStart.getTime() + dayMs));
+        const overnightFlight = await request(`${transportUrl}/${transferId}`, "PUT", {
+            pickupTime: "23:00", notes: "Private transfer note",
+            flight: { direction: "Departure", number: "UL505", date: nextFlightDay, time: "02:00", airport: "CMB" },
+        });
+        assert.equal(overnightFlight.status, 200);
+        const getTransfers = async (start, end = start, extra = "") => {
+            const response = await request(`http://127.0.0.1:5000/api/bookings/airport-transfers?startDate=${start}&endDate=${end}${extra}`, "GET");
+            const body = await response.json();
+            assert.equal(response.status, 200, JSON.stringify(body));
+            return body;
+        };
+        const pickupSchedule = await getTransfers(dateOnly(travelStart));
+        const pickupItem = pickupSchedule.items.find((item) => item._id === transferId);
+        assert.ok(pickupItem, "Overnight departure must appear on its pickup date");
+        assert.equal(pickupItem.flight.date.slice(0, 10), nextFlightDay);
+        assert.equal(pickupItem.pickupTime, "23:00");
+        assert.equal(pickupItem.chauffeurPhone, "+94771111111");
+        for (const field of ["notes", "totalPrice", "customer", "transportAssignments"]) assert.equal(pickupItem[field], undefined);
+        assert.ok(!(await getTransfers(nextFlightDay)).items.some((item) => item._id === transferId));
+        assert.ok(!(await getTransfers(dateOnly(travelStart), dateOnly(travelStart), "&direction=Arrival")).items.some((item) => item._id === transferId));
+        assert.ok(!(await getTransfers(dateOnly(travelStart), dateOnly(travelStart), "&chauffeur=missing")).items.some((item) => item._id === transferId));
+
+        // Fixtures exercise sorting, missing details, filtering, and pagination in real MongoDB.
+        const scheduleFixtures = Array.from({ length: 22 }, (_, index) => ({
+            _id: new mongoose.Types.ObjectId(), route: "CI Schedule " + index,
+            startDate: new Date(dateOnly(travelStart)), endDate: new Date(dateOnly(travelStart)),
+            status: "Requested", pickupTime: index === 0 ? "06:00" : "",
+            chauffeurName: "", notes: "Private fixture note",
+            flight: { direction: "Arrival", number: "CI" + index, date: new Date(dateOnly(travelStart)), time: "05:00" },
+        }));
+        const cancelledFixture = { ...scheduleFixtures[0], _id: new mongoose.Types.ObjectId(), status: "Cancelled" };
+        const noFlightFixture = { ...scheduleFixtures[0], _id: new mongoose.Types.ObjectId(), flight: null };
+        const fixtureIds = [...scheduleFixtures, cancelledFixture, noFlightFixture].map((item) => item._id);
+        await Booking.updateOne({ _id: booking._id }, { $push: { transportAssignments: { $each: [...scheduleFixtures, cancelledFixture, noFlightFixture] } } });
+        const requestedSchedule = await getTransfers(dateOnly(travelStart), dateOnly(travelStart), "&status=Requested&chauffeur=missing");
+        assert.equal(requestedSchedule.total, 22);
+        assert.equal(requestedSchedule.items.length, 20);
+        assert.equal(requestedSchedule.totalPages, 2);
+        assert.equal(requestedSchedule.summary.missingChauffeur, 22);
+        assert.equal(requestedSchedule.summary.missingPickupTime, 21);
+        assert.equal(requestedSchedule.items[0]._id, String(scheduleFixtures[0]._id), "Known pickup times sort before missing times");
+        const schedulePage2 = await getTransfers(dateOnly(travelStart), dateOnly(travelStart), "&status=Requested&chauffeur=missing&page=2");
+        assert.equal(schedulePage2.items.length, 2);
+        assert.equal(new Set([...requestedSchedule.items, ...schedulePage2.items].map((item) => item._id)).size, 22);
+        const combinedSchedule = await getTransfers(dateOnly(travelStart), dateOnly(travelStart));
+        assert.equal(combinedSchedule.total, 23, "Cancelled assignments and assignments without flights stay out of the schedule");
+        assert.equal(combinedSchedule.items[1]._id, transferId, "Pickups sort by pickup time");
+        const originalStatus = (await Booking.findById(booking._id)).bookingStatus;
+        for (const hiddenStatus of ["Completed", "Cancelled"]) {
+            await Booking.updateOne({ _id: booking._id }, { $set: { bookingStatus: hiddenStatus } });
+            assert.ok(!(await getTransfers(dateOnly(travelStart))).items.some((item) => item.bookingId === String(booking._id)));
+        }
+        await Booking.updateOne({ _id: booking._id }, {
+            $set: { bookingStatus: originalStatus },
+            $pull: { transportAssignments: { _id: { $in: fixtureIds } } },
+        });
+
         const briefHotel = await request(hotelsUrl, "POST", {
             hotelName: "CI Departure Hotel", checkInDate: dateOnly(travelStart),
             checkOutDate: dateOnly(hotelCheckout), rooms: 1, status: "Confirmed",

@@ -15,6 +15,7 @@ import {
     FaMapMarkedAlt,
     FaMoneyBillWave,
     FaRoute,
+    FaPlane,
     FaTasks,
     FaClipboardList,
     FaSignOutAlt,
@@ -130,6 +131,13 @@ const AdminLayout = () => {
                         <NavLink to="/team-tasks">
                             <FaClipboardList />
                             Team Tasks
+                        </NavLink>
+                    </PermissionGuard>
+
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.airportTransfers}>
+                        <NavLink to="/airport-transfers">
+                            <FaPlane />
+                            Airport Transfers
                         </NavLink>
                     </PermissionGuard>
 
