@@ -364,6 +364,14 @@ const main = async () => {
             confirmationNumber: "CI-OPS-123",
         });
         assert.equal(briefHotel.status, 201);
+        const voucherStay = (await briefHotel.json()).hotelStays.find((stay) => stay.confirmationNumber === "CI-OPS-123");
+        assert.ok(voucherStay);
+        const voucherResponse = await request(`http://127.0.0.1:5000/api/booking-pdf/hotel-voucher/${booking._id}/${voucherStay._id}`, "POST", {});
+        assert.equal(voucherResponse.status, 200, `Hotel voucher: ${voucherResponse.statusText}`);
+        assert.match(voucherResponse.headers.get("content-type"), /application\/pdf/);
+        assert.equal(voucherResponse.headers.get("cache-control"), "no-store");
+        assert.equal((await PDFDocument.load(await voucherResponse.arrayBuffer())).getPageCount(), 1);
+        assert.ok(await ActivityLog.exists({ relatedRecordId: booking._id, "metadata.documentType": "Hotel Voucher", "metadata.stayId": voucherStay._id }));
         const briefResponse = await request(`http://127.0.0.1:5000/api/booking-pdf/operations-brief/${booking._id}`, "POST", {});
         assert.equal(briefResponse.status, 200);
         assert.match(briefResponse.headers.get("content-type"), /application\/pdf/);
