@@ -61,6 +61,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - Generate branded quotation PDFs
 - Convert accepted quotations into bookings
 - Manage booking details and status
+- Open **Bookings → Readiness review** on an active booking to check the latest saved guest details, itinerary day coverage, hotel night coverage, transport confirmations and pickup details, and open/overdue/unassigned preparation tasks. Each area links to its existing editor. Empty plans show **Not assessed** rather than a pass; hotels may be guest-arranged, and overlapping stays may be intentional. Flight and pickup times remain separate. The review uses Sri Lanka calendar dates, excludes financial checks, and does not change any booking, task, or contact record. Reopen or refresh it after saving changes; completed/cancelled bookings are not assessed.
 - Plan a dated, day-by-day itinerary for each booking, including activities and overnight locations; entries appear in the internal operations brief, and trip dates cannot exclude planned entries
 - Preview and import the selected tour package's day plan into an empty booking itinerary, starting on a chosen trip date; personalize imported entries before sharing
 - Download a branded guest itinerary PDF from the booking itinerary planner; it uses saved trip entries and company contact details, marks pending bookings as drafts, and leaves out financial and private supplier information
