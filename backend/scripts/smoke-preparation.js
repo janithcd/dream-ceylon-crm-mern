@@ -306,6 +306,19 @@ const main = async () => {
             flight: { direction: "Departure", number: "UL505", date: nextFlightDay, time: "02:00", airport: "CMB" },
         });
         assert.equal(overnightFlight.status, 200);
+        const guestMessageUrl = `${transportUrl}/${transferId}/guest-message`;
+        const contactLogCount = await ActivityLog.countDocuments({ relatedRecordId: booking._id });
+        const guestMessageResponse = await request(guestMessageUrl, "GET");
+        assert.equal(guestMessageResponse.status, 200);
+        assert.equal(guestMessageResponse.headers.get("cache-control"), "no-store");
+        const guestMessage = await guestMessageResponse.json();
+        assert.equal(guestMessage.number, "+94771234567");
+        assert.match(guestMessage.message, /Pickup time: 23:00/);
+        assert.match(guestMessage.message, /Departure flight: UL505/);
+        assert.match(guestMessage.message, /Chauffeur phone: \+94771111111/);
+        assert.ok(guestMessage.missingDetails.includes("Meeting point"));
+        assert.equal(JSON.stringify(guestMessage).includes("Private transfer note"), false);
+        assert.equal(await ActivityLog.countDocuments({ relatedRecordId: booking._id }), contactLogCount, "A draft must not log guest contact");
         const getTransfers = async (start, end = start, extra = "") => {
             const response = await request(`http://127.0.0.1:5000/api/bookings/airport-transfers?startDate=${start}&endDate=${end}${extra}`, "GET");
             const body = await response.json();

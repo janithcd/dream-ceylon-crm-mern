@@ -71,6 +71,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - Plan multiple transport legs per booking with vehicle registration, chauffeur, pickup details, and status; flag possible date overlaps for the same confirmed vehicle
 - Attach arrival or departure flight numbers, scheduled dates and times, airports, and terminals to transfers; keep pickup time separate and include flight details in the chauffeur operations PDF (Sri Lanka time)
 - Use **Airport Transfers** to review pickups across active bookings, filter arrivals/departures or missing chauffeurs, and open transport details directly; the next seven days are shown by default, with date ranges up to 31 days. The schedule uses each transport leg’s start date as its pickup date, shows flight times separately, and includes requested/confirmed legs with saved flight details. Cancelled transfers and completed/cancelled bookings are excluded. All times are in Sri Lanka time.
+- Prepare a **Guest message** from a confirmed airport transfer. The CRM reloads saved pickup, flight, chauffeur, and vehicle details into an editable WhatsApp draft, highlights missing details, and lets staff copy the text or open WhatsApp with a reviewed international recipient number. Private notes and financial information are excluded. Staff send the message themselves; drafting or opening WhatsApp does not log contact, mark a message sent, or change the booking.
 - Download a private departure handover PDF with guest contact, active hotels, transport, and open tasks; prices and private notes are excluded
 - Open a booking history to see dated staff actions across its details, preparation tasks, hotel stays, and PDFs; payment events require payment access and supplier cost changes require cost access
 - View bookings in a calendar
@@ -441,6 +442,8 @@ Example response:
 ---
 
 ## 🔌 Main API Modules
+
+Guest pickup drafts use `GET /api/bookings/:id/transport-assignments/:assignmentId/guest-message` with both `booking.view` and `booking.update` permissions. The transfer must belong to the booking and be confirmed; the booking must be pending, confirmed, or in progress. The response contains only the guest name/number, booking reference, message, and missing-detail labels, and disables caching. Invalid IDs return 400, missing records return 404, and inactive bookings or unconfirmed transfers return 409. The endpoint is read-only and does not contact WhatsApp or send messages.
 
 Hotel vouchers use `POST /api/booking-pdf/hotel-voucher/:id/:stayId` with `booking.view` and `pdf.generate` permissions. The hotel stay must belong to the booking and be confirmed. The response is a non-cacheable PDF attachment; missing records return 404 and an unconfirmed stay or cancelled booking returns 409. The existing hotel confirmation is independent of the tour's overall status, so confirmed stays can be printed while the tour is pending or reprinted after completion. No automatic email is sent.
 
