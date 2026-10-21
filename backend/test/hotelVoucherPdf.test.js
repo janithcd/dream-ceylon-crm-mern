@@ -21,7 +21,7 @@ const exampleBooking = () => new Booking({
         { _id: "507f1f77bcf86cd799439092", hotelName: "Sample Lagoon Hotel", location: "Negombo",
             checkInDate: new Date("2027-03-01"), checkOutDate: new Date("2027-03-03"), rooms: 1,
             roomType: "Superior double", mealPlan: "Bed & Breakfast", status: "Confirmed",
-            confirmationNumber: "HOTEL-REF-456", notes: "PRIVATE SUPPLIER NOTE" },
+            confirmationNumber: "HOTEL-REF-456", supplierEmail: "supplier-private@hotel.example", notes: "PRIVATE SUPPLIER NOTE" },
         { hotelName: "PRIVATE OTHER HOTEL", checkInDate: new Date("2027-03-03"), checkOutDate: new Date("2027-03-04") },
     ],
 });
@@ -58,7 +58,7 @@ test("hotel voucher selects one confirmed stay, counts Sri Lanka nights and excl
     }
     const searchable = printed.replace(/\s+/gu, "");
     for (const name of ["José", "සිංහල", "தமிழ்", "Жанна"]) assert.ok(searchable.includes(name), name);
-    for (const privateValue of ["PRIVATE", "54321", "12345", "private@example.invalid", "+94770000000"]) {
+    for (const privateValue of ["PRIVATE", "54321", "12345", "private@example.invalid", "supplier-private@hotel.example", "+94770000000"]) {
         assert.equal(JSON.stringify(voucher).includes(privateValue), false, privateValue);
         assert.equal(printed.includes(privateValue), false, privateValue);
     }

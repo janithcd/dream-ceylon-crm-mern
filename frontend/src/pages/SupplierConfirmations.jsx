@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { FaClipboardCheck, FaSyncAlt } from "react-icons/fa";
+import { FaClipboardCheck, FaEnvelope, FaSyncAlt } from "react-icons/fa";
 import api from "../api/axios";
 import BookingHotelsModal from "../components/BookingHotelsModal";
+import HotelSupplierEmailModal from "../components/HotelSupplierEmailModal";
 import BookingTransportModal from "../components/BookingTransportModal";
+import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 
 const emptyData = {
@@ -29,6 +31,7 @@ const followUpStatus = (followUpDate, today) => {
 };
 
 const SupplierConfirmations = () => {
+    const { hasPermission } = usePermissions();
     const [searchParams, setSearchParams] = useSearchParams();
     const [type, setType] = useState("all");
     const requestedDateFilter = searchParams.get("dateFilter");
@@ -39,6 +42,7 @@ const SupplierConfirmations = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [selected, setSelected] = useState(null);
+    const [selectedEmail, setSelectedEmail] = useState(null);
 
     useEffect(() => {
         let active = true;
@@ -161,6 +165,7 @@ const SupplierConfirmations = () => {
                                     <td className="text-end">
                                         <div className="d-flex justify-content-end gap-2 flex-wrap">
                                             <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelected(item)}>Review</button>
+                                            {item.type === "hotel" && hasPermission("booking.update") && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelectedEmail({ bookingId: item.bookingId, stayId: item._id })}><FaEnvelope className="me-1" />Prepare email</button>}
                                             <Link className="btn btn-sm btn-outline-secondary" to={`/bookings?keyword=${encodeURIComponent(item.bookingCode)}`}>Booking</Link>
                                         </div>
                                     </td>
@@ -181,8 +186,9 @@ const SupplierConfirmations = () => {
                 )}
             </div></div>
 
-            {selected?.type === "hotel" && <BookingHotelsModal booking={selectedBooking} focusItemId={selected._id} onClose={() => { setSelected(null); refresh(); }} onChanged={afterChange} />}
+            {selected?.type === "hotel" && <BookingHotelsModal booking={selectedBooking} focusItemId={selected._id} onClose={() => { setSelected(null); refresh(); }} onChanged={afterChange} onPrepareEmail={(stayId) => { setSelectedEmail({ bookingId: selected.bookingId, stayId }); setSelected(null); }} />}
             {selected?.type === "transport" && <BookingTransportModal booking={selectedBooking} focusItemId={selected._id} onClose={() => { setSelected(null); refresh(); }} onChanged={afterChange} />}
+            {selectedEmail && <HotelSupplierEmailModal key={`${selectedEmail.bookingId}-${selectedEmail.stayId}`} bookingId={selectedEmail.bookingId} stayId={selectedEmail.stayId} onClose={() => setSelectedEmail(null)} />}
         </div>
     );
 };

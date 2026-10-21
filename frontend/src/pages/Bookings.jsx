@@ -23,6 +23,7 @@ import api from "../api/axios";
 import BookingPaymentsModal from "../components/BookingPaymentsModal";
 import BookingPreparationModal from "../components/BookingPreparationModal";
 import BookingHotelsModal from "../components/BookingHotelsModal";
+import HotelSupplierEmailModal from "../components/HotelSupplierEmailModal";
 import BookingItineraryModal from "../components/BookingItineraryModal";
 import BookingActivityModal from "../components/BookingActivityModal";
 import BookingTransportModal from "../components/BookingTransportModal";
@@ -69,6 +70,7 @@ const Bookings = () => {
     const [selectedPaymentBooking, setSelectedPaymentBooking] = useState(null);
     const [selectedPreparationBooking, setSelectedPreparationBooking] = useState(null);
     const [selectedHotelBooking, setSelectedHotelBooking] = useState(null);
+    const [selectedHotelEmail, setSelectedHotelEmail] = useState(null);
     const [selectedItineraryBooking, setSelectedItineraryBooking] = useState(null);
     const [selectedActivityBooking, setSelectedActivityBooking] = useState(null);
     const [selectedTransportBooking, setSelectedTransportBooking] = useState(null);
@@ -1237,8 +1239,18 @@ const Bookings = () => {
                     booking={selectedHotelBooking}
                     onClose={() => setSelectedHotelBooking(null)}
                     onChanged={fetchBookings}
+                    onPrepareEmail={(stayId) => {
+                        setSelectedHotelEmail({ bookingId: selectedHotelBooking._id, stayId });
+                        setSelectedHotelBooking(null);
+                    }}
                 />
             )}
+            {selectedHotelEmail && <HotelSupplierEmailModal
+                key={`${selectedHotelEmail.bookingId}-${selectedHotelEmail.stayId}`}
+                bookingId={selectedHotelEmail.bookingId}
+                stayId={selectedHotelEmail.stayId}
+                onClose={() => setSelectedHotelEmail(null)}
+            />}
             {selectedItineraryBooking && (
                 <BookingItineraryModal
                     booking={selectedItineraryBooking}

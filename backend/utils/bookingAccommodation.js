@@ -7,6 +7,7 @@ const MEAL_PLANS = [
     "Other",
 ];
 const STAY_STATUSES = ["Requested", "Confirmed", "Cancelled"];
+const validSupplierEmail = (value) => /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(value);
 
 const dateFromInput = (value) => {
     if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -31,6 +32,16 @@ const parseHotelStay = (body, existing = {}) => {
     }
 
     if (!value.hotelName) return { error: "Property name is required" };
+
+    const emailInput = body.supplierEmail !== undefined ? body.supplierEmail : existing.supplierEmail;
+    if (emailInput !== undefined && emailInput !== null && typeof emailInput !== "string") {
+        return { error: "supplierEmail must be text" };
+    }
+    value.supplierEmail = (emailInput || "").trim().toLowerCase();
+    if (value.supplierEmail.length > 254 ||
+        (value.supplierEmail && !validSupplierEmail(value.supplierEmail))) {
+        return { error: "Enter a valid supplier email address" };
+    }
 
     value.checkInDate = dateFromInput(body.checkInDate ?? existing.checkInDate);
     value.checkOutDate = dateFromInput(body.checkOutDate ?? existing.checkOutDate);
