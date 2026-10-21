@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { FaPlane, FaSyncAlt } from "react-icons/fa";
+import { FaPlane, FaSyncAlt, FaWhatsapp } from "react-icons/fa";
 import api from "../api/axios";
 import BookingTransportModal from "../components/BookingTransportModal";
+import GuestTransferMessageModal from "../components/GuestTransferMessageModal";
+import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, todayCalendarDate } from "../utils/calendarDate";
 
 const initialFilters = () => {
@@ -12,12 +14,15 @@ const initialFilters = () => {
 };
 
 const AirportTransfers = () => {
+    const { hasPermission } = usePermissions();
+    const canPrepareMessage = hasPermission("booking.update") && hasPermission("booking.view");
     const [filters, setFilters] = useState(initialFilters);
     const [form, setForm] = useState(filters);
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [selected, setSelected] = useState(null);
+    const [messageTarget, setMessageTarget] = useState(null);
 
     useEffect(() => {
         let active = true;
@@ -161,6 +166,10 @@ const AirportTransfers = () => {
                                                 <span className={"badge " + (item.status === "Confirmed" ? "text-bg-success" : "text-bg-warning")}>{item.status}</span>
                                                 <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelected(item)}
                                                     aria-label={"Review transport for " + item.bookingCode}>Review transport</button>
+                                                {canPrepareMessage && item.status === "Confirmed" && (
+                                                    <button type="button" className="btn btn-sm btn-outline-success" onClick={() => setMessageTarget(item)}
+                                                        aria-label={"Prepare guest pickup message for " + item.bookingCode}><FaWhatsapp className="me-1" />Guest message</button>
+                                                )}
                                             </div>
                                         </div>
                                         <div className="row g-3">
@@ -207,6 +216,8 @@ const AirportTransfers = () => {
 
             {selected && <BookingTransportModal booking={selectedBooking} focusItemId={selected._id}
                 onChanged={refresh} onClose={() => { setSelected(null); refresh(); }} />}
+            {messageTarget && <GuestTransferMessageModal bookingId={messageTarget.bookingId} assignmentId={messageTarget._id}
+                onClose={() => setMessageTarget(null)} />}
         </div>
     );
 };

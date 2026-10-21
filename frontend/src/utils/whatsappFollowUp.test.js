@@ -55,3 +55,13 @@ test("the draft refers to the linked record but omits private notes and financia
         /Hello there,.*booking B-7/
     );
 });
+
+test("multiline guest pickup drafts preserve dates, international names and punctuation in the WhatsApp link", () => {
+    const message = "Hello José & Ava,\nPickup: Mar 1 at 23:00\nFlight: Mar 2 at 02:00\nMeeting point: Gate #2 + arrivals";
+    const link = new URL(buildWhatsAppUrl("+44 (7700) 900-123", message));
+    assert.equal(link.origin, "https://wa.me");
+    assert.equal(link.pathname, "/447700900123");
+    assert.equal(link.searchParams.get("text"), message);
+    assert.equal(buildWhatsAppUrl("0044 7700 900123", message), "");
+    assert.equal(buildWhatsAppUrl("+44 7700 900123?text=injected", message), "");
+});
