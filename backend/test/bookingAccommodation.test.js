@@ -37,6 +37,12 @@ test("hotel stay dates, status and rooms are validated before saving", () => {
         assert.ok(parseHotelStay({ ...validStay, ...changes }).error, JSON.stringify(changes));
     }
     assert.equal(parseHotelStay({ status: "Confirmed", confirmationNumber: "HV-123" }, parseHotelStay(validStay).value).value.confirmationNumber, "HV-123");
+    assert.equal(parseHotelStay({ ...validStay, supplierEmail: "  Reservations+SriLanka@Hotel.COM  " }).value.supplierEmail, "reservations+srilanka@hotel.com");
+    for (const supplierEmail of ["bad address@example.com", "first@example.com,second@example.com", "hotel@example.com\r\nBcc:other@example.com", "hotel.example.com", "x".repeat(255)]) {
+        assert.match(parseHotelStay({ ...validStay, supplierEmail }).error, /valid supplier email/);
+    }
+    assert.equal(parseHotelStay({ ...validStay, supplierEmail: 123 }).error, "supplierEmail must be text");
+    assert.equal(parseHotelStay({ supplierEmail: "" }, parseHotelStay({ ...validStay, supplierEmail: "hotel@example.com" }).value).value.supplierEmail, "");
 });
 
 test("hotel stays require booking edit permission and can be added, confirmed and removed", async (t) => {
@@ -99,16 +105,18 @@ test("hotel stays require booking edit permission and can be added, confirmed an
     assert.equal((await request(url, "POST", viewerId, validStay)).status, 403);
     assert.equal((await request(url, "POST", salesId, { ...validStay, checkOutDate: "2027-02-27" })).status, 400);
 
-    const created = await request(url, "POST", salesId, validStay);
+    const created = await request(url, "POST", salesId, { ...validStay, supplierEmail: "Reception@Pelwehera.COM" });
     assert.equal(created.status, 201);
     const stay = (await created.json()).hotelStays[0];
     assert.equal(stay.hotelName, "Pelwehera Village");
     assert.equal(stay.mealPlan, "Half Board");
+    assert.equal(stay.supplierEmail, "reception@pelwehera.com");
 
     const stayUrl = `${url}/${stay._id}`;
     const updated = await request(stayUrl, "PUT", salesId, { status: "Confirmed", confirmationNumber: "HV-123" });
     assert.equal(updated.status, 200);
     assert.equal((await updated.json()).hotelStays[0].confirmationNumber, "HV-123");
+    assert.equal(booking.hotelStays[0].supplierEmail, "reception@pelwehera.com");
     assert.equal((await request(stayUrl, "PUT", viewerId, { status: "Cancelled" })).status, 403);
 
     assert.equal((await request(stayUrl, "DELETE", salesId)).status, 200);

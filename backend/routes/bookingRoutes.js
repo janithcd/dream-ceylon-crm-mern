@@ -29,6 +29,7 @@ const { getTeamTasks } = require("../controllers/teamTasksController");
 const { getSupplierConfirmations } = require("../controllers/supplierConfirmationsController");
 const { getAirportTransfers } = require("../controllers/airportTransfersController");
 const { getGuestTransferMessage } = require("../controllers/guestTransferMessageController");
+const { getHotelConfirmationDraft } = require("../controllers/hotelConfirmationDraftController");
 const { getOutstandingBalances, getPaymentAttention, updatePaymentDueDate, logPaymentContact } = require("../controllers/outstandingBalancesController");
 const {
     addHotelStay,
@@ -161,6 +162,13 @@ router.post(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
     addHotelStay
+);
+
+router.get(
+    "/:id/hotel-stays/:stayId/confirmation-draft",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE),
+    getHotelConfirmationDraft
 );
 
 router.put(

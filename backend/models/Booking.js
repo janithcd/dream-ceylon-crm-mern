@@ -91,6 +91,7 @@ const paymentContactSchema = new mongoose.Schema({
 const hotelStaySchema = new mongoose.Schema({
     hotelName: { type: String, required: true, trim: true, maxlength: 120 },
     location: { type: String, trim: true, maxlength: 120, default: "" },
+    supplierEmail: { type: String, trim: true, lowercase: true, maxlength: 254, default: "" },
     checkInDate: { type: Date, required: true },
     checkOutDate: { type: Date, required: true },
     rooms: { type: Number, min: 1, max: 20, default: 1 },

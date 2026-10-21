@@ -208,6 +208,7 @@ const main = async () => {
         const hotelAdded = await request(hotelsUrl, "POST", {
             hotelName: "CI Hotel",
             location: "Sigiriya",
+            supplierEmail: "Reservations@Hotel.example",
             checkInDate: dateOnly(travelStart),
             checkOutDate: dateOnly(hotelCheckout),
             followUpDate: dateOnly(new Date(Date.now() - dayMs)),
@@ -218,6 +219,7 @@ const main = async () => {
         assert.equal(hotelAdded.status, 201, `Add hotel stay: ${hotelAddedBody}`);
         const hotel = (await Booking.findById(booking._id)).hotelStays[0];
         assert.equal(hotel.hotelName, "CI Hotel");
+        assert.equal(hotel.supplierEmail, "reservations@hotel.example");
         assert.equal((await ownAttention()).pendingHotelCount, 1);
         const overdueSupplierQueue = await getSupplierQueue("?type=hotel&dateFilter=overdue");
         assert.equal(overdueSupplierQueue.summary.hotels, 1);
@@ -231,9 +233,20 @@ const main = async () => {
         assert.equal(dueSupplierQueue.items[0].title, "CI Hotel");
 
         const hotelUrl = `${hotelsUrl}/${hotel._id}`;
+        const draftLogCount = await ActivityLog.countDocuments({ relatedRecordId: booking._id });
+        const hotelDraftResponse = await request(`${hotelUrl}/confirmation-draft`, "GET");
+        assert.equal(hotelDraftResponse.status, 200);
+        assert.equal(hotelDraftResponse.headers.get("cache-control"), "no-store");
+        const hotelDraft = await hotelDraftResponse.json();
+        assert.equal(hotelDraft.recipient, "reservations@hotel.example");
+        assert.match(hotelDraft.body, /CI Hotel/);
+        assert.match(hotelDraft.body, /Half Board/);
+        assert.equal(JSON.stringify(hotelDraft).includes("cost"), false);
+        assert.equal(await ActivityLog.countDocuments({ relatedRecordId: booking._id }), draftLogCount, "A draft must not log supplier contact");
         const confirmed = await request(hotelUrl, "PUT", { status: "Confirmed", confirmationNumber: "CI-123" });
         const confirmedBody = await confirmed.text();
         assert.equal(confirmed.status, 200, `Confirm hotel stay: ${confirmedBody}`);
+        assert.equal((await request(`${hotelUrl}/confirmation-draft`, "GET")).status, 409);
         assert.equal((await Booking.findById(booking._id)).hotelStays[0].confirmationNumber, "CI-123");
         assert.equal(await ownAttention(), undefined);
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FaEdit, FaFilePdf, FaHotel, FaPlus, FaTrash } from "react-icons/fa";
+import { FaEdit, FaEnvelope, FaFilePdf, FaHotel, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
@@ -13,6 +13,7 @@ const formatNightRange = ({ from, to }) => from === to ? formatCalendarDate(from
 const emptyForm = () => ({
     hotelName: "",
     location: "",
+    supplierEmail: "",
     checkInDate: "",
     checkOutDate: "",
     rooms: 1,
@@ -24,7 +25,7 @@ const emptyForm = () => ({
     notes: "",
 });
 
-const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
+const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, focusItemId }) => {
     const { hasPermission } = usePermissions();
     const canUpdate = hasPermission("booking.update");
     const canDownloadVoucher = hasPermission("booking.view") && hasPermission("pdf.generate");
@@ -117,6 +118,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
         setForm({
             hotelName: stay.hotelName || "",
             location: stay.location || "",
+            supplierEmail: stay.supplierEmail || "",
             checkInDate: toCalendarDateInput(stay.checkInDate),
             checkOutDate: toCalendarDateInput(stay.checkOutDate),
             rooms: stay.rooms || 1,
@@ -248,6 +250,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
                                                     <div><strong>Meal plan:</strong> {stay.mealPlan}</div>
                                                     {stay.status === "Requested" && <div><strong>Follow up:</strong> {stay.followUpDate ? formatCalendarDate(stay.followUpDate) : "Not scheduled"}</div>}
                                                     {stay.confirmationNumber && <div><strong>Confirmation:</strong> {stay.confirmationNumber}</div>}
+                                                    {stay.supplierEmail && <div><strong>Supplier email:</strong> {stay.supplierEmail}</div>}
                                                     {stay.notes && <div className="text-muted mt-2">{stay.notes}</div>}
                                                 </div>
                                                 {(canUpdate || (canDownloadVoucher && stay.status === "Confirmed" && trip.bookingStatus !== "Cancelled")) && (
@@ -255,6 +258,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
                                                         {canUpdate && <>
                                                             <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => editStay(stay)} disabled={busy}><FaEdit className="me-1" />Edit</button>
                                                             <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => removeStay(stay)} disabled={busy}><FaTrash className="me-1" />Remove</button>
+                                                            {stay.status === "Requested" && trip.bookingStatus !== "Cancelled" && trip.bookingStatus !== "Completed" && onPrepareEmail && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onPrepareEmail(stay._id)} disabled={busy || showForm}><FaEnvelope className="me-1" />Prepare email</button>}
                                                         </>}
                                                         {canDownloadVoucher && stay.status === "Confirmed" && trip.bookingStatus !== "Cancelled" && (
                                                             <button type="button" className="btn btn-sm btn-outline-success" onClick={() => downloadVoucher(stay)} disabled={busy || showForm}>
@@ -280,6 +284,11 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
                                         <div className="col-md-6">
                                             <label className="form-label" htmlFor="stay-location">Location</label>
                                             <input id="stay-location" name="location" className="form-control" value={form.location} onChange={updateField} maxLength={120} placeholder="e.g. Sigiriya" />
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label className="form-label" htmlFor="stay-supplier-email">Supplier email</label>
+                                            <input id="stay-supplier-email" name="supplierEmail" type="email" className="form-control" value={form.supplierEmail} onChange={updateField} maxLength={254} placeholder="reservations@hotel.com" />
+                                            <small className="text-muted">Optional; used in confirmation drafts. Guest contact remains separate.</small>
                                         </div>
                                         <div className="col-md-4">
                                             <label className="form-label" htmlFor="stay-check-in">Check-in *</label>
