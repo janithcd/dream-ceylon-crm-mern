@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FaEdit, FaHotel, FaPlus, FaTrash } from "react-icons/fa";
+import { FaEdit, FaFilePdf, FaHotel, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
@@ -27,6 +27,8 @@ const emptyForm = () => ({
 const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
     const { hasPermission } = usePermissions();
     const canUpdate = hasPermission("booking.update");
+    const canDownloadVoucher = hasPermission("booking.view") && hasPermission("pdf.generate");
+    const [trip, setTrip] = useState(booking);
     const [stays, setStays] = useState(booking.hotelStays || []);
     const [form, setForm] = useState(emptyForm);
     const [editingId, setEditingId] = useState("");
@@ -35,12 +37,16 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [downloadingStayId, setDownloadingStayId] = useState("");
 
     useEffect(() => {
         let active = true;
         api.get(`/bookings/${booking._id}`)
             .then((response) => {
-                if (active) setStays(response.data.hotelStays || []);
+                if (active) {
+                    setTrip(response.data);
+                    setStays(response.data.hotelStays || []);
+                }
             })
             .catch((err) => {
                 if (active) setError(err.response?.data?.message || "Failed to load hotel stays.");
@@ -57,7 +63,47 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
 
     const confirmedCount = stays.filter((stay) => stay.status === "Confirmed").length;
     const requestedCount = stays.filter((stay) => stay.status === "Requested").length;
-    const coverage = getHotelNightCoverage(booking, stays);
+    const coverage = getHotelNightCoverage(trip, stays);
+
+    const downloadVoucher = async (stay) => {
+        if (busy || showForm) return;
+        setBusy(true);
+        setDownloadingStayId(stay._id);
+        setError("");
+        setSuccess("");
+        try {
+            const response = await api.post(`/booking-pdf/hotel-voucher/${booking._id}/${stay._id}`, {}, { responseType: "blob" });
+            const fileUrl = window.URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+            const link = document.createElement("a");
+            const safeCode = String(trip.bookingCode || "booking").replace(/[^a-zA-Z0-9-]/g, "-");
+            try {
+                link.href = fileUrl;
+                link.download = `dream-ceylon-hotel-voucher-${safeCode}-${stay._id}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+            } finally {
+                link.remove();
+                window.setTimeout(() => window.URL.revokeObjectURL(fileUrl), 1000);
+            }
+            setSuccess(`Hotel voucher downloaded for ${stay.hotelName}.`);
+        } catch (err) {
+            let message = "Failed to download hotel voucher.";
+            if (err.response?.data instanceof Blob) {
+                try {
+                    const detail = JSON.parse(await err.response.data.text());
+                    message = detail.message || message;
+                } catch {
+                    // Keep a readable fallback for non-JSON proxy/server errors.
+                }
+            } else if (err.response?.data?.message) {
+                message = err.response.data.message;
+            }
+            setError(message);
+        } finally {
+            setDownloadingStayId("");
+            setBusy(false);
+        }
+    };
 
     const resetForm = () => {
         setForm(emptyForm());
@@ -144,6 +190,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
 
                         <div className="modal-body">
                             <p className="text-muted small">Internal stay details for this booking. Record supplier costs separately in Cost & Profit.</p>
+                            {canDownloadVoucher && <p className="text-muted small">Confirmed stays have a guest hotel voucher with saved reservation details. Supplier prices and internal notes are excluded. Save or cancel edits before downloading.</p>}
                             {error && <div className="alert alert-danger" role="alert">{error}</div>}
                             {success && <div className="alert alert-success" role="status">{success}</div>}
 
@@ -203,10 +250,17 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, focusItemId }) => {
                                                     {stay.confirmationNumber && <div><strong>Confirmation:</strong> {stay.confirmationNumber}</div>}
                                                     {stay.notes && <div className="text-muted mt-2">{stay.notes}</div>}
                                                 </div>
-                                                {canUpdate && (
-                                                    <div className="d-flex gap-2 mt-3">
-                                                        <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => editStay(stay)} disabled={busy}><FaEdit className="me-1" />Edit</button>
-                                                        <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => removeStay(stay)} disabled={busy}><FaTrash className="me-1" />Remove</button>
+                                                {(canUpdate || (canDownloadVoucher && stay.status === "Confirmed" && trip.bookingStatus !== "Cancelled")) && (
+                                                    <div className="d-flex flex-wrap gap-2 mt-3">
+                                                        {canUpdate && <>
+                                                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => editStay(stay)} disabled={busy}><FaEdit className="me-1" />Edit</button>
+                                                            <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => removeStay(stay)} disabled={busy}><FaTrash className="me-1" />Remove</button>
+                                                        </>}
+                                                        {canDownloadVoucher && stay.status === "Confirmed" && trip.bookingStatus !== "Cancelled" && (
+                                                            <button type="button" className="btn btn-sm btn-outline-success" onClick={() => downloadVoucher(stay)} disabled={busy || showForm}>
+                                                                <FaFilePdf className="me-1" />{downloadingStayId === stay._id ? "Preparing PDF..." : "Hotel voucher"}
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 )}
                                             </div>

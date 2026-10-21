@@ -66,6 +66,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - Download a branded guest itinerary PDF from the booking itinerary planner; it uses saved trip entries and company contact details, marks pending bookings as drafts, and leaves out financial and private supplier information
 - Track an internal preparation checklist per booking for hotels, transport, guides, itineraries, or custom tasks; assign active staff, optional due dates, task priorities, and private handoff notes
 - Record hotel stays, room and meal plans, confirmation status, and hotel references on each booking
+- Download a branded hotel voucher from each confirmed stay in **Bookings → Hotels**. It includes the lead guest, property, check-in/out dates, nights, rooms, meal plan, hotel reference, and company contact details. Missing optional details are labelled “Not supplied”; supplier prices, payments, guest contact details, and internal notes are excluded. The voucher is not a payment receipt. Cancelled stays/bookings cannot generate vouchers, and each download is recorded in booking history.
 - Review hotel night coverage in each booking to spot missing nights, reservations awaiting confirmation, overlapping stays, and stays outside the trip dates
 - Plan multiple transport legs per booking with vehicle registration, chauffeur, pickup details, and status; flag possible date overlaps for the same confirmed vehicle
 - Attach arrival or departure flight numbers, scheduled dates and times, airports, and terminals to transfers; keep pickup time separate and include flight details in the chauffeur operations PDF (Sri Lanka time)
@@ -440,6 +441,8 @@ Example response:
 ---
 
 ## 🔌 Main API Modules
+
+Hotel vouchers use `POST /api/booking-pdf/hotel-voucher/:id/:stayId` with `booking.view` and `pdf.generate` permissions. The hotel stay must belong to the booking and be confirmed. The response is a non-cacheable PDF attachment; missing records return 404 and an unconfirmed stay or cancelled booking returns 409. The existing hotel confirmation is independent of the tour's overall status, so confirmed stays can be printed while the tour is pending or reprinted after completion. No automatic email is sent.
 
 | Module | Base Route |
 |---|---|

@@ -6,6 +6,7 @@ const {
 } = require("../controllers/bookingPdfController");
 const { generateOperationsBriefPdf } = require("../controllers/bookingBriefPdfController");
 const { generateGuestItineraryPdf } = require("../controllers/guestItineraryPdfController");
+const { generateHotelVoucherPdf } = require("../controllers/hotelVoucherPdfController");
 
 const { protect } = require("../middleware/authMiddleware");
 const {
@@ -50,6 +51,13 @@ router.post(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.PDF_GENERATE),
     generateGuestItineraryPdf
+);
+
+router.post(
+    "/hotel-voucher/:id/:stayId",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.PDF_GENERATE),
+    generateHotelVoucherPdf
 );
 
 module.exports = router;
