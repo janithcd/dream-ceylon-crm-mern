@@ -26,6 +26,7 @@ import BookingHotelsModal from "../components/BookingHotelsModal";
 import BookingItineraryModal from "../components/BookingItineraryModal";
 import BookingActivityModal from "../components/BookingActivityModal";
 import BookingTransportModal from "../components/BookingTransportModal";
+import BookingReadinessModal from "../components/BookingReadinessModal";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 import { notifySupplierConfirmationsChanged } from "../utils/supplierEvents";
@@ -71,6 +72,7 @@ const Bookings = () => {
     const [selectedItineraryBooking, setSelectedItineraryBooking] = useState(null);
     const [selectedActivityBooking, setSelectedActivityBooking] = useState(null);
     const [selectedTransportBooking, setSelectedTransportBooking] = useState(null);
+    const [selectedReadinessBooking, setSelectedReadinessBooking] = useState(null);
 
     const [searchInput, setSearchInput] = useState(initialKeyword);
     const [keyword, setKeyword] = useState(initialKeyword);
@@ -970,6 +972,14 @@ const Bookings = () => {
                                                 <small className="d-block text-muted">
                                                     Preparation: {(booking.preparationTasks || []).filter((task) => task.completedAt).length}/{booking.preparationTasks?.length || 0}
                                                 </small>
+                                                {!["Completed", "Cancelled"].includes(booking.bookingStatus) && <button
+                                                    type="button"
+                                                    className="btn btn-link btn-sm p-0 text-start d-block mb-1"
+                                                    onClick={() => setSelectedReadinessBooking(booking)}
+                                                    aria-label={`Readiness review for ${booking.bookingCode}`}
+                                                >
+                                                    <FaClipboardCheck className="me-1" />Readiness review
+                                                </button>}
                                                 <button
                                                     type="button"
                                                     className="btn btn-link btn-sm p-0 text-start d-block"
@@ -1200,6 +1210,21 @@ const Bookings = () => {
                     />
                 )}
             </PermissionGuard>
+            {selectedReadinessBooking && (
+                <BookingReadinessModal
+                    key={selectedReadinessBooking._id}
+                    bookingId={selectedReadinessBooking._id}
+                    onClose={() => setSelectedReadinessBooking(null)}
+                    onOpenSection={(section, booking) => {
+                        setSelectedReadinessBooking(null);
+                        if (section === "booking") handleEdit(booking);
+                        if (section === "itinerary") setSelectedItineraryBooking(booking);
+                        if (section === "hotels") setSelectedHotelBooking(booking);
+                        if (section === "transport") setSelectedTransportBooking(booking);
+                        if (section === "tasks") setSelectedPreparationBooking(booking);
+                    }}
+                />
+            )}
             {selectedPreparationBooking && (
                 <BookingPreparationModal
                     booking={selectedPreparationBooking}
