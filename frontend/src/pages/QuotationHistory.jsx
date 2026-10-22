@@ -12,10 +12,12 @@ import {
     FaFileCsv,
     FaCoins,
     FaCopy,
+    FaExchangeAlt,
 } from "react-icons/fa";
 import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
+import QuotationComparisonModal from "../components/QuotationComparisonModal";
 const statusOptions = ["Draft", "Sent", "Accepted", "Rejected", "Expired"];
 const currencyOptions = ["USD", "LKR", "EUR", "GBP"];
 const validityOptions = [
@@ -140,6 +142,8 @@ const QuotationHistory = () => {
     const [statusLoadingId, setStatusLoadingId] = useState("");
     const [convertLoadingId, setConvertLoadingId] = useState("");
     const [revisionLoadingId, setRevisionLoadingId] = useState("");
+    const [comparisonLoadingId, setComparisonLoadingId] = useState("");
+    const [comparison, setComparison] = useState(null);
     const [deleteLoadingId, setDeleteLoadingId] = useState("");
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
@@ -386,6 +390,29 @@ const QuotationHistory = () => {
             setError(err.response?.data?.message || "Failed to create a revised draft.");
         } finally {
             setRevisionLoadingId("");
+        }
+    };
+
+    const handleCompare = async (quotation) => {
+        const sourceId = getIdValue(quotation.revisionOf);
+        if (!sourceId) return;
+        try {
+            setComparisonLoadingId(quotation._id);
+            setComparison(null);
+            setError("");
+            const [sourceResponse, revisionResponse] = await Promise.all([
+                api.get("/quotations/" + sourceId),
+                api.get("/quotations/" + quotation._id),
+            ]);
+            if (getIdValue(revisionResponse.data.revisionOf) !== sourceId) {
+                setError("This quotation's source changed. Refresh the list and try again.");
+                return;
+            }
+            setComparison({ source: sourceResponse.data, revision: revisionResponse.data });
+        } catch (err) {
+            setError(err.response?.data?.message || "Could not compare these quotations.");
+        } finally {
+            setComparisonLoadingId("");
         }
     };
 
@@ -734,7 +761,7 @@ const QuotationHistory = () => {
                                         </td>
 
                                         <td>
-                                            <div className="d-flex justify-content-end gap-2">
+                                            <div className="d-flex justify-content-end flex-wrap gap-2">
                                                 <PermissionGuard all={["cost.view", "quotation.view", "booking.view"]}>
                                                     <button
                                                         className="btn btn-sm btn-outline-secondary"
@@ -786,6 +813,20 @@ const QuotationHistory = () => {
                                                         <FaCopy />
                                                     </button>
                                                 </PermissionGuard>
+
+                                                {(quotation.revisionSourceNo || quotation.revisionOf) && (
+                                                    <PermissionGuard permission="quotation.view">
+                                                        <button type="button" className="btn btn-sm btn-outline-info"
+                                                            onClick={() => handleCompare(quotation)}
+                                                            disabled={!getIdValue(quotation.revisionOf) || comparisonLoadingId === quotation._id}
+                                                            title={getIdValue(quotation.revisionOf)
+                                                                ? "Compare with previous quotation"
+                                                                : "Previous quotation was removed"}
+                                                            aria-label={"Compare " + quotation.quotationNo + " with its source"}>
+                                                            <FaExchangeAlt />
+                                                        </button>
+                                                    </PermissionGuard>
+                                                )}
 
                                                 <PermissionGuard permission="quotation.convert">
                                                     <button
@@ -853,6 +894,10 @@ const QuotationHistory = () => {
                     </div>
                 )}
             </div>
+            {comparison && (
+                <QuotationComparisonModal source={comparison.source} revision={comparison.revision}
+                    onClose={() => setComparison(null)} />
+            )}
         </div>
     );
 };
