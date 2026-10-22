@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { FaClipboardCheck, FaEnvelope, FaSyncAlt } from "react-icons/fa";
+import { FaClipboardCheck, FaEnvelope, FaHistory, FaSyncAlt } from "react-icons/fa";
 import api from "../api/axios";
 import BookingHotelsModal from "../components/BookingHotelsModal";
 import HotelSupplierEmailModal from "../components/HotelSupplierEmailModal";
+import SupplierContactModal from "../components/SupplierContactModal";
 import BookingTransportModal from "../components/BookingTransportModal";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
@@ -43,6 +44,7 @@ const SupplierConfirmations = () => {
     const [error, setError] = useState("");
     const [selected, setSelected] = useState(null);
     const [selectedEmail, setSelectedEmail] = useState(null);
+    const [selectedContact, setSelectedContact] = useState(null);
 
     useEffect(() => {
         let active = true;
@@ -161,10 +163,14 @@ const SupplierConfirmations = () => {
                                         {formatCalendarDate(item.serviceDate)}{item.endDate && ` – ${formatCalendarDate(item.endDate)}`}
                                         {servicePassed && <span className="badge text-bg-danger d-block mt-1" style={{ width: "fit-content" }}>Service date passed</span>}
                                     </td>
-                                    <td><div>{formatCalendarDate(item.followUpDate)}</div><span className={`badge text-bg-${due.color}`}>{due.label}</span></td>
+                                    <td>
+                                        <div>{formatCalendarDate(item.followUpDate)}</div><span className={`badge text-bg-${due.color}`}>{due.label}</span>
+                                        {item.lastContactedAt && <small className="d-block text-muted mt-1">Last contacted {formatCalendarDate(item.lastContactedAt)} · {item.lastContactChannel}</small>}
+                                    </td>
                                     <td className="text-end">
                                         <div className="d-flex justify-content-end gap-2 flex-wrap">
                                             <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelected(item)}>Review</button>
+                                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelectedContact({ bookingId: item.bookingId, type: item.type, itemId: item._id })}><FaHistory className="me-1" />{hasPermission("booking.update") ? "Log contact" : "History"}</button>
                                             {item.type === "hotel" && hasPermission("booking.update") && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelectedEmail({ bookingId: item.bookingId, stayId: item._id })}><FaEnvelope className="me-1" />Prepare email</button>}
                                             <Link className="btn btn-sm btn-outline-secondary" to={`/bookings?keyword=${encodeURIComponent(item.bookingCode)}`}>Booking</Link>
                                         </div>
@@ -186,9 +192,10 @@ const SupplierConfirmations = () => {
                 )}
             </div></div>
 
-            {selected?.type === "hotel" && <BookingHotelsModal booking={selectedBooking} focusItemId={selected._id} onClose={() => { setSelected(null); refresh(); }} onChanged={afterChange} onPrepareEmail={(stayId) => { setSelectedEmail({ bookingId: selected.bookingId, stayId }); setSelected(null); }} />}
-            {selected?.type === "transport" && <BookingTransportModal booking={selectedBooking} focusItemId={selected._id} onClose={() => { setSelected(null); refresh(); }} onChanged={afterChange} />}
+            {selected?.type === "hotel" && <BookingHotelsModal booking={selectedBooking} focusItemId={selected._id} onClose={() => { setSelected(null); refresh(); }} onChanged={afterChange} onPrepareEmail={(stayId) => { setSelectedEmail({ bookingId: selected.bookingId, stayId }); setSelected(null); }} onOpenContacts={(stayId) => { setSelectedContact({ bookingId: selected.bookingId, type: "hotel", itemId: stayId }); setSelected(null); }} />}
+            {selected?.type === "transport" && <BookingTransportModal booking={selectedBooking} focusItemId={selected._id} onClose={() => { setSelected(null); refresh(); }} onChanged={afterChange} onOpenContacts={(itemId) => { setSelectedContact({ bookingId: selected.bookingId, type: "transport", itemId }); setSelected(null); }} />}
             {selectedEmail && <HotelSupplierEmailModal key={`${selectedEmail.bookingId}-${selectedEmail.stayId}`} bookingId={selectedEmail.bookingId} stayId={selectedEmail.stayId} onClose={() => setSelectedEmail(null)} />}
+            {selectedContact && <SupplierContactModal key={`${selectedContact.bookingId}-${selectedContact.itemId}`} {...selectedContact} onClose={() => { setSelectedContact(null); refresh(); }} onChanged={refresh} />}
         </div>
     );
 };

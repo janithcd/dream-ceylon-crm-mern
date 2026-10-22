@@ -21,6 +21,7 @@ const pendingRequests = (field, type, title, serviceDate) => ({
             endDate: type === "hotel" ? "$$request.checkOutDate" : "$$request.endDate",
             detail: type === "hotel" ? "$$request.location" : "$$request.pickupLocation",
             followUpDate: { $ifNull: ["$$request.followUpDate", null] },
+            lastContact: { $arrayElemAt: [{ $ifNull: ["$$request.contacts", []] }, -1] },
             createdAt: "$$request.createdAt",
         },
     },
@@ -64,6 +65,8 @@ const buildSupplierConfirmationsPipeline = ({ type = "all", dateFilter = "all", 
             serviceDate: "$requests.serviceDate", endDate: "$requests.endDate",
             detail: { $ifNull: ["$requests.detail", ""] },
             followUpDate: "$requests.followUpDate", createdAt: "$requests.createdAt",
+            lastContactedAt: { $ifNull: ["$requests.lastContact.contactedAt", null] },
+            lastContactChannel: { $ifNull: ["$requests.lastContact.channel", ""] },
         } },
         { $facet: {
             summary: [{ $group: {

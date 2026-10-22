@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FaCar, FaEdit, FaPlus, FaTrash } from "react-icons/fa";
+import { FaCar, FaEdit, FaHistory, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
@@ -30,7 +30,7 @@ const emptyForm = (booking) => ({
     flightTerminal: "",
 });
 
-const BookingTransportModal = ({ booking, onClose, onChanged, focusItemId }) => {
+const BookingTransportModal = ({ booking, onClose, onChanged, onOpenContacts, focusItemId }) => {
     const { hasPermission } = usePermissions();
     const canUpdate = hasPermission("booking.update");
     const [assignments, setAssignments] = useState(booking.transportAssignments || []);
@@ -224,12 +224,13 @@ const BookingTransportModal = ({ booking, onClose, onChanged, focusItemId }) => 
                                                             Possible vehicle overlap: {overlaps.map((match) => `${match.bookingCode} (${formatCalendarDate(match.startDate)} – ${formatCalendarDate(match.endDate)})`).join(", ")}. Check the schedule before dispatch.
                                                         </div>
                                                     )}
-                                                    {canUpdate && (
-                                                        <div className="d-flex gap-2 mt-3">
+                                                    {(canUpdate || onOpenContacts) && <div className="d-flex flex-wrap gap-2 mt-3">
+                                                        {onOpenContacts && <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy || showForm} onClick={() => onOpenContacts(item._id)}><FaHistory className="me-1" />{canUpdate && item.status === "Requested" ? "Log contact" : "Contact history"}</button>}
+                                                        {canUpdate && <>
                                                             <button type="button" className="btn btn-sm btn-outline-primary" disabled={busy} onClick={() => editAssignment(item)}><FaEdit className="me-1" />Edit</button>
                                                             <button type="button" className="btn btn-sm btn-outline-danger" disabled={busy} onClick={() => removeAssignment(item)}><FaTrash className="me-1" />Remove</button>
-                                                        </div>
-                                                    )}
+                                                        </>}
+                                                    </div>}
                                                 </div>
                                             </div>
                                         );

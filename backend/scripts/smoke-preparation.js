@@ -243,10 +243,35 @@ const main = async () => {
         assert.match(hotelDraft.body, /Half Board/);
         assert.equal(JSON.stringify(hotelDraft).includes("cost"), false);
         assert.equal(await ActivityLog.countDocuments({ relatedRecordId: booking._id }), draftLogCount, "A draft must not log supplier contact");
+        const hotelContactUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/supplier-contacts/hotel/${hotel._id}`;
+        assert.equal((await request(hotelContactUrl, "GET")).status, 200);
+        assert.equal((await request(hotelContactUrl, "POST", {
+            channel: "Email", note: "Private supplier reply", nextFollowUpDate: dateOnly(new Date(Date.now() + 15 * dayMs)),
+        })).status, 400, "A follow-up cannot be after check-in");
+        const loggedHotel = await request(hotelContactUrl, "POST", {
+            channel: "Email", note: "  Private supplier reply  ", nextFollowUpDate: dateOnly(new Date()),
+        });
+        assert.equal(loggedHotel.status, 200, `Hotel contact: ${await loggedHotel.clone().text()}`);
+        assert.equal(loggedHotel.headers.get("cache-control"), "no-store");
+        const hotelHistory = await loggedHotel.json();
+        assert.equal(hotelHistory.contacts.length, 1);
+        assert.equal(hotelHistory.contacts[0].note, "Private supplier reply");
+        assert.equal(hotelHistory.contacts[0].contactedBy, "CI Booking Test");
+        assert.equal(dateOnly(new Date(hotelHistory.followUpDate)), dateOnly(new Date()));
+        assert.equal((await getSupplierQueue("?type=hotel&dateFilter=today")).items[0].lastContactChannel, "Email");
+        const queueHotel = (await getSupplierQueue()).items[0];
+        assert.ok(queueHotel.lastContactedAt);
+        assert.equal("contacts" in queueHotel, false);
+        assert.equal(JSON.stringify(queueHotel).includes("Private supplier reply"), false);
+        const hotelContactActivity = await ActivityLog.findOne({ relatedRecordId: booking._id, description: /Hotel supplier contact logged/ });
+        assert.ok(hotelContactActivity);
+        assert.equal(JSON.stringify(hotelContactActivity).includes("Private supplier reply"), false);
         const confirmed = await request(hotelUrl, "PUT", { status: "Confirmed", confirmationNumber: "CI-123" });
         const confirmedBody = await confirmed.text();
         assert.equal(confirmed.status, 200, `Confirm hotel stay: ${confirmedBody}`);
         assert.equal((await request(`${hotelUrl}/confirmation-draft`, "GET")).status, 409);
+        assert.equal((await request(hotelContactUrl, "POST", { channel: "Phone", nextFollowUpDate: null })).status, 409);
+        assert.equal((await (await request(hotelContactUrl, "GET")).json()).contacts.length, 1);
         assert.equal((await Booking.findById(booking._id)).hotelStays[0].confirmationNumber, "CI-123");
         assert.equal(await ownAttention(), undefined);
 
@@ -279,7 +304,17 @@ const main = async () => {
         assert.equal(todaySupplierQueue.summary.today, 1);
         assert.equal(todaySupplierQueue.total, 1);
         assert.equal(todaySupplierQueue.items[0].title, "CI Airport Transfer");
+        const transportContactUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/supplier-contacts/transport/${pendingTransportId}`;
+        const loggedTransport = await request(transportContactUrl, "POST", {
+            channel: "WhatsApp", note: "Chauffeur details pending", nextFollowUpDate: null,
+        });
+        assert.equal(loggedTransport.status, 200, `Transport contact: ${await loggedTransport.clone().text()}`);
+        assert.equal((await loggedTransport.json()).contacts[0].channel, "WhatsApp");
+        assert.equal((await getSupplierQueue("?type=transport&dateFilter=noDue")).items[0].lastContactChannel, "WhatsApp");
+        assert.equal((await getSupplierQueue("?type=transport&dateFilter=today")).total, 0);
+        assert.equal((await Booking.findById(booking._id)).transportAssignments.id(pendingTransportId).followUpDate, null);
         assert.equal((await request(`${transportUrl}/${pendingTransportId}`, "PUT", { status: "Confirmed" })).status, 200);
+        assert.equal((await request(transportContactUrl, "POST", { channel: "Email", nextFollowUpDate: null })).status, 409);
         assert.equal((await getSupplierQueue()).total, 0);
         assert.equal(await ownAttention(), undefined);
         assert.equal((await request(`${transportUrl}/${pendingTransportId}`, "DELETE")).status, 200);

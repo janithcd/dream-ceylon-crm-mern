@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FaEdit, FaEnvelope, FaFilePdf, FaHotel, FaPlus, FaTrash } from "react-icons/fa";
+import { FaEdit, FaEnvelope, FaFilePdf, FaHistory, FaHotel, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
@@ -25,7 +25,7 @@ const emptyForm = () => ({
     notes: "",
 });
 
-const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, focusItemId }) => {
+const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onOpenContacts, focusItemId }) => {
     const { hasPermission } = usePermissions();
     const canUpdate = hasPermission("booking.update");
     const canDownloadVoucher = hasPermission("booking.view") && hasPermission("pdf.generate");
@@ -253,8 +253,9 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, focus
                                                     {stay.supplierEmail && <div><strong>Supplier email:</strong> {stay.supplierEmail}</div>}
                                                     {stay.notes && <div className="text-muted mt-2">{stay.notes}</div>}
                                                 </div>
-                                                {(canUpdate || (canDownloadVoucher && stay.status === "Confirmed" && trip.bookingStatus !== "Cancelled")) && (
+                                                {(canUpdate || onOpenContacts || (canDownloadVoucher && stay.status === "Confirmed" && trip.bookingStatus !== "Cancelled")) && (
                                                     <div className="d-flex flex-wrap gap-2 mt-3">
+                                                        {onOpenContacts && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onOpenContacts(stay._id)} disabled={busy || showForm}><FaHistory className="me-1" />{canUpdate && stay.status === "Requested" ? "Log contact" : "Contact history"}</button>}
                                                         {canUpdate && <>
                                                             <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => editStay(stay)} disabled={busy}><FaEdit className="me-1" />Edit</button>
                                                             <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => removeStay(stay)} disabled={busy}><FaTrash className="me-1" />Remove</button>
