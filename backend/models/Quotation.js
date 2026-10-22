@@ -185,6 +185,11 @@ const quotationSchema = new mongoose.Schema(
             default: "Draft",
         },
 
+        validUntil: {
+            type: Date,
+            default: null,
+        },
+
         sentDate: {
             type: Date,
             default: null,
@@ -204,5 +209,7 @@ const quotationSchema = new mongoose.Schema(
         timestamps: true,
     }
 );
+
+quotationSchema.index({ status: 1, validUntil: 1 });
 
 module.exports = mongoose.model("Quotation", quotationSchema);

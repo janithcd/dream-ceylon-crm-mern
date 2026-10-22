@@ -1,4 +1,4 @@
-import { formatCalendarDate, todayCalendarDate } from "../utils/calendarDate";
+import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -17,6 +17,12 @@ import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 const statusOptions = ["Draft", "Sent", "Accepted", "Rejected", "Expired"];
 const currencyOptions = ["USD", "LKR", "EUR", "GBP"];
+const validityOptions = [
+    { value: "", label: "All validity dates" },
+    { value: "pastDue", label: "Past validity · sent" },
+    { value: "dueSoon", label: "Ends within 7 days · sent" },
+    { value: "noDate", label: "No date · sent" },
+];
 
 const formatMoney = (amount, currency = "USD") => {
     const number = Number(amount);
@@ -103,6 +109,9 @@ const buildQuotationPayload = (quotation, overrides = {}) => {
         notes: quotation.notes || "",
 
         status: quotation.status || "Draft",
+        validUntil: toCalendarDateInput(quotation.validUntil) || null,
+        quotationNo: quotation.quotationNo,
+        quotationDate: quotation.createdAt,
         adminNotes: quotation.adminNotes || "",
 
         ...overrides,
@@ -116,6 +125,7 @@ const QuotationHistory = () => {
     const [keyword, setKeyword] = useState("");
     const [status, setStatus] = useState("");
     const [currency, setCurrency] = useState("");
+    const [validity, setValidity] = useState("");
     const [page, setPage] = useState(1);
     const [exportLoading, setExportLoading] = useState(false);
     const [pagination, setPagination] = useState({
@@ -137,6 +147,7 @@ const QuotationHistory = () => {
                                        keywordValue = keyword,
                                        statusValue = status,
                                        currencyValue = currency,
+                                       validityValue = validity,
                                    } = {}) => {
         try {
             setLoading(true);
@@ -158,6 +169,7 @@ const QuotationHistory = () => {
             if (currencyValue) {
                 params.currency = currencyValue;
             }
+            if (validityValue) params.validity = validityValue;
 
             const response = await api.get("/quotations", { params });
 
@@ -181,7 +193,7 @@ const QuotationHistory = () => {
     useEffect(() => {
         fetchQuotations({ pageValue: page });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, status, currency]);
+    }, [page, status, currency, validity]);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -192,6 +204,7 @@ const QuotationHistory = () => {
             keywordValue: keyword,
             statusValue: status,
             currencyValue: currency,
+            validityValue: validity,
         });
     };
 
@@ -199,6 +212,7 @@ const QuotationHistory = () => {
         setKeyword("");
         setStatus("");
         setCurrency("");
+        setValidity("");
         setPage(1);
 
         fetchQuotations({
@@ -206,6 +220,7 @@ const QuotationHistory = () => {
             keywordValue: "",
             statusValue: "",
             currencyValue: "",
+            validityValue: "",
         });
     };
 
@@ -407,6 +422,7 @@ const QuotationHistory = () => {
             if (currency) {
                 params.currency = currency;
             }
+            if (validity) params.validity = validity;
 
             const response = await api.get("/quotations", { params });
             const exportQuotations = response.data.quotations || [];
@@ -432,6 +448,7 @@ const QuotationHistory = () => {
                 "Balance Payment": quotation.totals?.balancePayment || 0,
                 Currency: quotation.currency || "",
                 Status: quotation.status || "",
+                "Valid Until": quotation.validUntil ? formatCalendarDate(quotation.validUntil) : "",
                 Converted: quotation.booking ? "Yes" : "No",
                 "Created Date": formatCalendarDate(quotation.createdAt),
             }));
@@ -514,6 +531,7 @@ const QuotationHistory = () => {
                                     value={status}
                                     onChange={(e) => {
                                         setStatus(e.target.value);
+                                        if (e.target.value && e.target.value !== "Sent") setValidity("");
                                         setPage(1);
                                     }}
                                 >
@@ -545,14 +563,25 @@ const QuotationHistory = () => {
                                 </select>
                             </div>
 
-                            <div className="col-lg-3 col-md-4 d-flex gap-2">
-                                <button type="submit" className="btn btn-success w-100">
+                            <div className="col-lg-3 col-md-4">
+                                <label className="form-label" htmlFor="quotation-validity-filter">Offer validity</label>
+                                <select id="quotation-validity-filter" className="form-select" value={validity} onChange={(e) => {
+                                    setValidity(e.target.value);
+                                    if (e.target.value) setStatus("Sent");
+                                    setPage(1);
+                                }}>
+                                    {validityOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                                </select>
+                            </div>
+
+                            <div className="col-12 d-flex justify-content-end gap-2">
+                                <button type="submit" className="btn btn-success">
                                     Search
                                 </button>
 
                                 <button
                                     type="button"
-                                    className="btn btn-outline-secondary w-100"
+                                    className="btn btn-outline-secondary"
                                     onClick={handleResetFilters}
                                 >
                                     Reset
@@ -587,7 +616,7 @@ const QuotationHistory = () => {
                                     <th>Tour</th>
                                     <th>Total</th>
                                     <th>Status</th>
-                                    <th>Created</th>
+                                    <th>Created / validity</th>
                                     <th className="text-end">Actions</th>
                                 </tr>
                                 </thead>
@@ -677,6 +706,12 @@ const QuotationHistory = () => {
                                             <small className="text-muted">
                                                 Travel: {formatCalendarDate(quotation.travelStartDate)}
                                             </small>
+                                            <div className="small mt-1">Valid until: {quotation.validUntil ? formatCalendarDate(quotation.validUntil) : "Not set"}</div>
+                                            {quotation.status === "Sent" && quotation.validUntil &&
+                                                (toCalendarDateInput(quotation.validUntil) < todayCalendarDate()
+                                                    ? <span className="badge text-bg-danger mt-1">Validity passed · review rates</span>
+                                                    : toCalendarDateInput(quotation.validUntil) <= toCalendarDateInput(new Date(Date.now() + 6 * 86400000))
+                                                        ? <span className="badge text-bg-warning mt-1">Ends within 7 days</span> : null)}
                                         </td>
 
                                         <td>

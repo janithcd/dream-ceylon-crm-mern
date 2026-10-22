@@ -39,6 +39,7 @@ const initialFormState = {
     advancePayment: "0",
     currency: "USD",
     status: "Draft",
+    validUntil: "",
     inclusionsText:
         "Private air-conditioned car\nProfessional chauffeur guide\nAirport pickup and drop-off\nCustomized route planning\nWater bottles during transfers",
     exclusionsText:
@@ -110,6 +111,7 @@ const mapQuotationToForm = (quotation) => {
         advancePayment: quotation.advancePayment ?? "0",
         currency: quotation.currency || "USD",
         status: quotation.status || "Draft",
+        validUntil: toCalendarDateInput(quotation.validUntil),
         inclusionsText: arrayToText(quotation.inclusions),
         exclusionsText: arrayToText(quotation.exclusions),
         notes: quotation.notes || "",
@@ -170,6 +172,8 @@ const Quotations = () => {
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [quotationNo, setQuotationNo] = useState("");
+    const [quotationDate, setQuotationDate] = useState("");
+    const [editedSinceSave, setEditedSinceSave] = useState(false);
 
     const isEditMode = Boolean(editId);
 
@@ -237,6 +241,8 @@ const Quotations = () => {
 
                 setFormData(mapQuotationToForm(quotation));
                 setQuotationNo(quotation.quotationNo || "");
+                setQuotationDate(quotation.createdAt || "");
+                setEditedSinceSave(false);
             } catch (err) {
                 setError(
                     err.response?.data?.message ||
@@ -359,6 +365,8 @@ const Quotations = () => {
             advancePayment: numberValue(formData.advancePayment),
             currency: formData.currency,
             status: formData.status,
+            validUntil: formData.validUntil || null,
+            ...(editId && quotationNo && !editedSinceSave ? { quotationNo, quotationDate } : {}),
             inclusions: splitLines(formData.inclusionsText),
             exclusions: splitLines(formData.exclusionsText),
             notes: formData.notes,
@@ -382,6 +390,7 @@ const Quotations = () => {
 
     const handleChange = (e) => {
         const { name, value } = e.target;
+        setEditedSinceSave(true);
 
         if (name === "vehicleType") {
             setFormData((previous) => ({
@@ -410,6 +419,8 @@ const Quotations = () => {
         setError("");
         setSuccess("");
         setQuotationNo("");
+        setQuotationDate("");
+        setEditedSinceSave(false);
         setSearchParams({});
     };
 
@@ -431,6 +442,8 @@ const Quotations = () => {
                     `Quotation updated successfully. Quotation No: ${response.data.quotation.quotationNo}`
                 );
                 setQuotationNo(response.data.quotation.quotationNo || quotationNo);
+                setQuotationDate(response.data.quotation.createdAt || quotationDate);
+                setEditedSinceSave(false);
             } else {
                 const response = await api.post("/quotations", buildPayload());
 
@@ -438,6 +451,8 @@ const Quotations = () => {
                     `Quotation saved successfully. Quotation No: ${response.data.quotation.quotationNo}`
                 );
                 setQuotationNo(response.data.quotation.quotationNo || "");
+                setQuotationDate(response.data.quotation.createdAt || "");
+                setEditedSinceSave(false);
                 setSearchParams({ edit: response.data.quotation._id });
             }
         } catch (err) {
@@ -680,6 +695,12 @@ const Quotations = () => {
                                             <option value="Rejected">Rejected</option>
                                             <option value="Expired">Expired</option>
                                         </select>
+                                    </div>
+                                    <div className="col-md-4">
+                                        <label className="form-label" htmlFor="quotation-valid-until">Valid until (optional)</label>
+                                        <input id="quotation-valid-until" type="date" name="validUntil" className="form-control"
+                                            value={formData.validUntil} onChange={handleChange} />
+                                        <small className="text-muted">Printed on the PDF. Review prices when the date passes.</small>
                                     </div>
                                 </div>
                             </div>
