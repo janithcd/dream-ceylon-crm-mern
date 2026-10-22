@@ -105,16 +105,38 @@ const main = async () => {
         assert.equal(payables.find((item) => item._id === localCostId).remaining, 15000);
         assert.equal(payables.find((item) => item._id === localCostId).currency, "LKR");
         const costItemUrl = `http://127.0.0.1:5000/api/finance/costs/${costId}`;
+        const supplierPaymentUrl = `${costItemUrl}/payments`;
+        assert.equal((await request(supplierPaymentUrl, "POST", { amount: 1 })).status, 403, "Sales cannot record supplier payments");
+        assert.equal((await financeRequest(supplierPaymentUrl, "POST", {
+            amount: 151, paymentDate: dateOnly(new Date()), method: "Bank transfer",
+        })).status, 400, "Supplier payments cannot exceed the remaining balance");
+        assert.equal((await financeRequest(supplierPaymentUrl, "POST", {
+            amount: 1, paymentDate: "2027-02-30", method: "Bank transfer",
+        })).status, 400);
         assert.equal((await financeRequest(costItemUrl, "PUT", { ...supplierCost, currency: "GBP", paidAmount: 0, conversionRate: 1.2 })).status, 400);
-        const fullyPaid = await financeRequest(costItemUrl, "PUT", { ...supplierCost, paidAmount: 200 });
-        assert.equal(fullyPaid.status, 200, `Settle supplier cost: ${await fullyPaid.clone().text()}`);
+        const correction = await financeRequest(costItemUrl, "PUT", { ...supplierCost, paidAmount: 60, adjustmentNote: "Correct opening balance" });
+        assert.equal(correction.status, 200, `Correct supplier cost: ${await correction.clone().text()}`);
+        const fullyPaid = await financeRequest(supplierPaymentUrl, "POST", {
+            amount: 140, paymentDate: dateOnly(new Date()), method: "Bank transfer",
+            reference: "CI-TRANSFER-1", note: "Final payment",
+        });
+        assert.equal(fullyPaid.status, 201, `Settle supplier cost: ${await fullyPaid.clone().text()}`);
+        assert.equal((await fullyPaid.json()).paidAmount, 200);
         const remainingData = await (await financeRequest(payablesUrl)).json();
         const remainingPayables = remainingData.items;
         assert.equal(remainingData.summary.overdue, 0);
         assert.equal(remainingData.summary.upcoming, 1);
         assert.equal(remainingPayables.some((item) => item._id === costId), false);
         assert.equal(remainingPayables.some((item) => item._id === localCostId), true);
-        assert.equal((await (await financeRequest(costUrl)).json()).items.find((item) => item._id === costId).paidAmount, 200);
+        const paidCost = (await (await financeRequest(costUrl)).json()).items.find((item) => item._id === costId);
+        assert.equal(paidCost.paidAmount, 200);
+        assert.deepEqual(paidCost.paymentHistory.map((entry) => [entry.kind, entry.amount, entry.paidAmountAfter]), [
+            ["adjustment", 10, 60], ["payment", 140, 200],
+        ]);
+        assert.equal(paidCost.paymentHistory[1].reference, "CI-TRANSFER-1");
+        assert.equal(paidCost.paymentHistory[1].recordedByName, financeAdmin.name);
+        assert.equal((await financeRequest(costItemUrl, "PUT", { ...supplierCost, paidAmount: 0, currency: "GBP", conversionRate: 1.2 })).status, 400);
+        assert.equal((await financeRequest(costItemUrl, "DELETE")).status, 409, "Recorded payments cannot be deleted with the cost");
         const getAttention = async () => {
             const response = await request("http://127.0.0.1:5000/api/dashboard/stats", "GET");
             const body = await response.json();

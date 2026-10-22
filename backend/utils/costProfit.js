@@ -43,8 +43,8 @@ const parseCostPayload = (body, targetCurrency, recordType = "Quotation", existi
     }
     const value = { category, description, amount, currency, conversionRate, targetCurrency };
     if (recordType === "Booking") {
-        if (existing && (existing.paidAmount ?? 0) > 0 && existing.currency !== currency) {
-            return { error: "Clear the recorded supplier payment before changing its currency." };
+        if (existing && ((existing.paidAmount ?? 0) > 0 || existing.paymentHistory?.length > 0) && existing.currency !== currency) {
+            return { error: "A cost with supplier payment history cannot change currency." };
         }
         const rawPaid = body?.paidAmount === undefined ? (existing?.paidAmount ?? 0) : body.paidAmount;
         const paidAmount = Number(rawPaid);

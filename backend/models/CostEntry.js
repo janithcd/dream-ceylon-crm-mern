@@ -1,5 +1,18 @@
 const mongoose = require("mongoose");
 
+const paymentHistorySchema = new mongoose.Schema({
+    kind: { type: String, enum: ["payment", "adjustment"], required: true },
+    amount: { type: Number, required: true }, // Signed change in the supplier's currency.
+    paidAmountAfter: { type: Number, required: true, min: 0 },
+    paymentDate: { type: Date, default: null },
+    method: { type: String, enum: ["Bank transfer", "Cash", "Card", "Other", null], default: null },
+    reference: { type: String, trim: true, maxlength: 100, default: "" },
+    note: { type: String, trim: true, maxlength: 300, default: "" },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+    recordedByName: { type: String, trim: true, maxlength: 100, required: true },
+    recordedAt: { type: Date, default: Date.now },
+});
+
 const costEntrySchema = new mongoose.Schema(
     {
         recordType: { type: String, enum: ["Quotation", "Booking"], required: true },
@@ -24,9 +37,11 @@ const costEntrySchema = new mongoose.Schema(
             },
         },
         paymentDueDate: { type: Date, default: null },
+        // Older paidAmount values are opening balances; later changes are recorded here.
+        paymentHistory: { type: [paymentHistorySchema], default: [] },
         createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
     },
-    { timestamps: true }
+    { timestamps: true, optimisticConcurrency: true }
 );
 
 costEntrySchema.index({ recordType: 1, recordId: 1, createdAt: -1 });

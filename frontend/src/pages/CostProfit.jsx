@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { FaEdit, FaPlus, FaSearch, FaTrash } from "react-icons/fa";
+import { FaEdit, FaHistory, FaMoneyBillWave, FaPlus, FaSearch, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import PermissionGuard from "../components/PermissionGuard";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
@@ -10,11 +10,15 @@ const categories = ["Hotel", "Transport", "Guide", "Activities", "Entrance Fees"
 const currencies = ["USD", "LKR", "EUR", "GBP"];
 const blankCost = (currency = "USD") => ({
     category: "Hotel", description: "", amount: "", currency, conversionRate: "1",
-    paidAmount: "0", paymentDueDate: "",
+    paidAmount: "0", paymentDueDate: "", adjustmentNote: "",
 });
+const blankPayment = () => ({ amount: "", paymentDate: todayCalendarDate(), method: "Bank transfer", reference: "", note: "" });
 const formatMoney = (amount, currency) => amount === null || amount === undefined
     ? "—"
     : `${currency} ${Number(amount).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const formatRecordedAt = (value) => new Date(value).toLocaleString("en-US", {
+    timeZone: "Asia/Colombo", dateStyle: "medium", timeStyle: "short",
+});
 
 const CostProfit = () => {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -25,6 +29,10 @@ const CostProfit = () => {
     const [loadedOverview, setLoadedOverview] = useState({ key: "", data: null });
     const [form, setForm] = useState(blankCost());
     const [editingId, setEditingId] = useState("");
+    const [paymentCostId, setPaymentCostId] = useState("");
+    const paymentPanelRef = useRef(null);
+    const [paymentForm, setPaymentForm] = useState(blankPayment);
+    const [paymentSaving, setPaymentSaving] = useState(false);
     const [listBusy, setListBusy] = useState(false);
     const [saving, setSaving] = useState(false);
     const [reloadKey, setReloadKey] = useState(0);
@@ -99,10 +107,15 @@ const CostProfit = () => {
         return () => { cancelled = true; };
     }, [type, reloadKey]);
 
+    useEffect(() => {
+        if (paymentCostId) paymentPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, [paymentCostId]);
+
     const selectRecord = (nextType, nextId = "") => {
         setError("");
         setSuccess("");
         setEditingId("");
+        setPaymentCostId("");
         if (nextType !== type) setRecords([]);
         setSearchInput("");
         setSearchParams(nextId ? { type: nextType, id: nextId } : { type: nextType });
@@ -149,10 +162,34 @@ const CostProfit = () => {
         }
     };
 
+    const recordPayment = async (event) => {
+        event.preventDefault();
+        if (!paymentCostId) return;
+        try {
+            setPaymentSaving(true);
+            setError("");
+            setSuccess("");
+            await api.post(`/finance/costs/${paymentCostId}/payments`, paymentForm);
+            setSuccess("Supplier payment recorded.");
+            setPaymentForm(blankPayment());
+            setReloadKey((value) => value + 1);
+            notifySupplierPayablesChanged();
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Could not record supplier payment.");
+        } finally {
+            setPaymentSaving(false);
+        }
+    };
+
     const saleCurrency = overview?.record?.currency || "USD";
     const foreignCurrency = form.currency !== saleCurrency;
     const summary = overview?.summary;
     const today = todayCalendarDate();
+    const paymentCost = type === "booking" ? overview?.items.find((item) => item._id === paymentCostId) : null;
+    const editingCost = overview?.items.find((item) => item._id === editingId);
+    const correctingPaidTotal = type === "booking" && editingCost && Number(form.paidAmount) !== (editingCost.paidAmount ?? 0);
+    const openingPaidCents = paymentCost ? Math.round((paymentCost.paidAmount ?? 0) * 100) -
+        (paymentCost.paymentHistory || []).reduce((sum, entry) => sum + Math.round(entry.amount * 100), 0) : 0;
     const supplierBalances = type === "booking" && overview
         ? Object.entries(overview.items.reduce((totals, item) => {
             const remainingCents = Math.round((item.amount - (item.paidAmount ?? 0)) * 100);
@@ -283,15 +320,15 @@ const CostProfit = () => {
                                     <div className="col-md-2">
                                         <label className="form-label" htmlFor="cost-currency">Currency</label>
                                         <select id="cost-currency" className="form-select" value={form.currency}
-                                            disabled={Boolean(editingId && overview.items.find((item) => item._id === editingId && (item.paidAmount ?? 0) > 0))}
+                                            disabled={Boolean(editingCost && ((editingCost.paidAmount ?? 0) > 0 || editingCost.paymentHistory?.length))}
                                             onChange={(event) => {
                                                 const currency = event.target.value;
                                                 setForm({ ...form, currency, conversionRate: currency === saleCurrency ? "1" : "" });
                                             }}>
                                             {currencies.map((currency) => <option key={currency}>{currency}</option>)}
                                         </select>
-                                        {editingId && overview.items.some((item) => item._id === editingId && (item.paidAmount ?? 0) > 0) &&
-                                            <small className="text-muted">Clear the recorded payment and save before changing currency.</small>}
+                                        {editingCost && ((editingCost.paidAmount ?? 0) > 0 || editingCost.paymentHistory?.length) &&
+                                            <small className="text-muted">Costs with supplier payments keep their original currency.</small>}
                                     </div>
                                     {foreignCurrency && <div className="col-md-5">
                                         <label className="form-label" htmlFor="cost-rate">1 {form.currency} equals how many {saleCurrency}?</label>
@@ -299,17 +336,22 @@ const CostProfit = () => {
                                         <small className="text-muted">Saved with this entry; existing costs are not recalculated automatically.</small>
                                     </div>}
                                     {type === "booking" && <>
-                                        <div className="col-md-3">
-                                            <label className="form-label" htmlFor="cost-paid">Paid to supplier ({form.currency})</label>
+                                        {editingId && <div className="col-md-3">
+                                            <label className="form-label" htmlFor="cost-paid">Correct paid total ({form.currency})</label>
                                             <input id="cost-paid" className="form-control" type="number" min="0" max={form.amount || undefined} step="0.01" required
                                                 value={form.paidAmount} onChange={(event) => setForm({ ...form, paidAmount: event.target.value })} />
-                                        </div>
+                                        </div>}
                                         <div className="col-md-3">
                                             <label className="form-label" htmlFor="cost-due">Supplier payment due</label>
                                             <input id="cost-due" className="form-control" type="date" value={form.paymentDueDate}
                                                 onChange={(event) => setForm({ ...form, paymentDueDate: event.target.value })} />
                                         </div>
-                                        <div className="col-12"><small className="text-muted">Record the total paid so far, including deposits. Edit it after another payment; verify the running amount against your bank records.</small></div>
+                                        {correctingPaidTotal && <div className="col-md-6">
+                                            <label className="form-label" htmlFor="cost-adjustment-note">Reason for correction</label>
+                                            <input id="cost-adjustment-note" className="form-control" maxLength={300} value={form.adjustmentNote}
+                                                onChange={(event) => setForm({ ...form, adjustmentNote: event.target.value })} placeholder="e.g. Corrected bank reconciliation" />
+                                        </div>}
+                                        <div className="col-12"><small className="text-muted">After adding the cost, use Payments below to record each deposit. Correct paid total only to fix an earlier entry; the change remains in its history.</small></div>
                                     </>}
                                     <div className="col-12 d-flex gap-2">
                                         <button type="submit" className="btn btn-primary" disabled={saving}><FaPlus className="me-2" />{saving ? "Saving..." : editingId ? "Save changes" : "Add cost"}</button>
@@ -338,13 +380,52 @@ const CostProfit = () => {
                                         </>}
                                         <td>{item.targetCurrency === saleCurrency ? item.conversionRate : `Old target: ${item.targetCurrency}`}</td>
                                         <td>{item.targetCurrency === saleCurrency ? formatMoney(Math.round(item.amount * item.conversionRate * 100) / 100, saleCurrency) : "Revalue required"}</td>
-                                        <td className="text-end"><PermissionGuard permission="cost.manage"><div className="d-flex justify-content-end gap-2">
-                                            <button type="button" className="btn btn-sm btn-outline-primary" title="Edit cost" onClick={() => { setEditingId(item._id); setForm({ category: item.category, description: item.description, amount: String(item.amount), currency: item.currency, conversionRate: String(item.conversionRate), paidAmount: String(item.paidAmount ?? 0), paymentDueDate: toCalendarDateInput(item.paymentDueDate) }); document.getElementById("cost-description")?.focus(); }}><FaEdit /></button>
-                                            <button type="button" className="btn btn-sm btn-outline-danger" title="Delete cost" onClick={() => void deleteCost(item)}><FaTrash /></button>
-                                        </div></PermissionGuard></td>
+                                        <td className="text-end"><div className="d-flex justify-content-end gap-2">
+                                            {type === "booking" && <button type="button" className="btn btn-sm btn-outline-secondary" aria-label={`Payments for ${item.description}`} aria-expanded={paymentCostId === item._id} aria-controls="supplier-payment-history" onClick={() => { setPaymentCostId(paymentCostId === item._id ? "" : item._id); setPaymentForm(blankPayment()); }}><FaHistory className="me-1" />Payments</button>}
+                                            <PermissionGuard permission="cost.manage"><div className="d-flex justify-content-end gap-2">
+                                            <button type="button" className="btn btn-sm btn-outline-primary" title="Edit cost" aria-label={`Edit ${item.description}`} onClick={() => { setEditingId(item._id); setForm({ category: item.category, description: item.description, amount: String(item.amount), currency: item.currency, conversionRate: String(item.conversionRate), paidAmount: String(item.paidAmount ?? 0), paymentDueDate: toCalendarDateInput(item.paymentDueDate), adjustmentNote: "" }); document.getElementById("cost-description")?.focus(); }}><FaEdit /></button>
+                                            <button type="button" className="btn btn-sm btn-outline-danger" title={(item.paidAmount ?? 0) > 0 || item.paymentHistory?.length ? "Costs with recorded supplier payments cannot be deleted" : "Delete cost"} aria-label={`Delete ${item.description}`} disabled={(item.paidAmount ?? 0) > 0 || Boolean(item.paymentHistory?.length)} onClick={() => void deleteCost(item)}><FaTrash /></button>
+                                            </div></PermissionGuard>
+                                        </div></td>
                                     </tr>)}</tbody>
                                 </table></div>
                             )}
+                            {paymentCost && <div id="supplier-payment-history" ref={paymentPanelRef} className="border rounded p-3 mt-3" role="region" aria-label={`Payments for ${paymentCost.description}`}>
+                                <div className="d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <h6 className="fw-bold mb-1">Payments · {paymentCost.description}</h6>
+                                        <p className="text-muted small mb-3">{formatMoney(paymentCost.paidAmount ?? 0, paymentCost.currency)} paid · {formatMoney(Math.max(0, Math.round((paymentCost.amount - (paymentCost.paidAmount ?? 0)) * 100) / 100), paymentCost.currency)} remaining</p>
+                                    </div>
+                                    <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setPaymentCostId("")}>Close</button>
+                                </div>
+                                <PermissionGuard permission="cost.manage">
+                                    {(paymentCost.paidAmount ?? 0) < paymentCost.amount && <form className="row g-3 mb-4" onSubmit={recordPayment}>
+                                        <div className="col-md-2"><label className="form-label" htmlFor="supplier-payment-amount">Amount ({paymentCost.currency})</label>
+                                            <input id="supplier-payment-amount" className="form-control" type="number" min="0.01" max={Math.round((paymentCost.amount - (paymentCost.paidAmount ?? 0)) * 100) / 100} step="0.01" required value={paymentForm.amount} onChange={(event) => setPaymentForm({ ...paymentForm, amount: event.target.value })} /></div>
+                                        <div className="col-md-2"><label className="form-label" htmlFor="supplier-payment-date">Date paid</label>
+                                            <input id="supplier-payment-date" className="form-control" type="date" max={today} required value={paymentForm.paymentDate} onChange={(event) => setPaymentForm({ ...paymentForm, paymentDate: event.target.value })} /></div>
+                                        <div className="col-md-2"><label className="form-label" htmlFor="supplier-payment-method">Method</label>
+                                            <select id="supplier-payment-method" className="form-select" value={paymentForm.method} onChange={(event) => setPaymentForm({ ...paymentForm, method: event.target.value })}>
+                                                {["Bank transfer", "Cash", "Card", "Other"].map((method) => <option key={method}>{method}</option>)}
+                                            </select></div>
+                                        <div className="col-md-3"><label className="form-label" htmlFor="supplier-payment-reference">Reference (optional)</label>
+                                            <input id="supplier-payment-reference" className="form-control" maxLength={100} value={paymentForm.reference} onChange={(event) => setPaymentForm({ ...paymentForm, reference: event.target.value })} placeholder="Bank transfer reference" /></div>
+                                        <div className="col-md-3"><label className="form-label" htmlFor="supplier-payment-note">Note (optional)</label>
+                                            <input id="supplier-payment-note" className="form-control" maxLength={300} value={paymentForm.note} onChange={(event) => setPaymentForm({ ...paymentForm, note: event.target.value })} /></div>
+                                        <div className="col-12"><button type="submit" className="btn btn-primary btn-sm" disabled={paymentSaving}><FaMoneyBillWave className="me-2" />{paymentSaving ? "Recording..." : "Record payment"}</button></div>
+                                    </form>}
+                                </PermissionGuard>
+                                <h6 className="fw-semibold">Payment history</h6>
+                                {openingPaidCents > 0 && <p className="small text-muted mb-2">Previously recorded paid total: {formatMoney(openingPaidCents / 100, paymentCost.currency)}. Individual deposits before this history were not recorded.</p>}
+                                {(paymentCost.paymentHistory || []).length === 0 ? <p className="text-muted small mb-0">No individual payment changes recorded yet.</p> :
+                                    <div className="list-group list-group-flush">{paymentCost.paymentHistory.slice().reverse().map((entry) =>
+                                        <div className="list-group-item px-0" key={entry._id}>
+                                            <div className="d-flex justify-content-between gap-2"><strong className="small">{entry.kind === "payment" ? "Payment" : "Paid total correction"} · {formatMoney(entry.amount, paymentCost.currency)}</strong><span className="small text-muted">{formatRecordedAt(entry.recordedAt)}</span></div>
+                                            <div className="small text-muted">{entry.kind === "payment" ? `${formatCalendarDate(entry.paymentDate)} · ${entry.method}` : "Manual correction"} · {entry.recordedByName} · Total after: {formatMoney(entry.paidAmountAfter, paymentCost.currency)}</div>
+                                            {entry.reference && <div className="small">Reference: {entry.reference}</div>}
+                                            {entry.note && <div className="small">{entry.note}</div>}
+                                        </div>)}</div>}
+                            </div>}
                         </div>
                     </div>
                 </>
