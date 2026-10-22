@@ -4,6 +4,7 @@ const CostEntry = require("../models/CostEntry");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { costSummary, parseCostPayload } = require("../utils/costProfit");
 const { getBusinessDayBounds } = require("../utils/businessDate");
+const { parseSupplierPayment } = require("../utils/supplierPayment");
 
 const TYPES = { quotation: "Quotation", booking: "Booking" };
 const validId = (id) => /^[0-9a-f]{24}$/i.test(String(id || ""));
@@ -85,7 +86,8 @@ const getSupplierPayables = async (req, res) => {
             $expr: { $lt: [{ $ifNull: ["$paidAmount", 0] }, "$amount"] },
         };
         const [costs, total, overdue] = await Promise.all([
-            CostEntry.find(query).sort({ paymentDueDate: 1, _id: 1 }).limit(50).lean(),
+            CostEntry.find(query).select("recordId description currency amount paidAmount paymentDueDate")
+                .sort({ paymentDueDate: 1, _id: 1 }).limit(50).lean(),
             CostEntry.countDocuments(query),
             CostEntry.countDocuments({ ...query, paymentDueDate: { $ne: null, $lt: start } }),
         ]);
@@ -156,6 +158,21 @@ const updateCost = async (req, res) => {
         const payload = parseCostPayload(req.body, record.currency, item.recordType, item);
         if (payload.error) return res.status(400).json({ message: payload.error });
 
+        const previousPaid = item.paidAmount ?? 0;
+        const deltaCents = item.recordType === "Booking"
+            ? Math.round((payload.value.paidAmount - previousPaid) * 100) : 0;
+        if (deltaCents !== 0) {
+            const note = req.body?.adjustmentNote ?? "";
+            if (typeof note !== "string" || note.trim().length > 300) {
+                return res.status(400).json({ message: "Payment correction note must be at most 300 characters." });
+            }
+            item.paymentHistory.push({
+                kind: "adjustment", amount: deltaCents / 100,
+                paidAmountAfter: payload.value.paidAmount,
+                note: note.trim() || "Paid total corrected manually",
+                recordedBy: req.admin._id, recordedByName: String(req.admin.name || "Staff").slice(0, 100),
+            });
+        }
         Object.assign(item, payload.value);
         await item.save();
         await createActivityLog({
@@ -165,8 +182,45 @@ const updateCost = async (req, res) => {
         });
         return res.json(item);
     } catch (error) {
+        if (error.name === "VersionError" || error.name === "DocumentNotFoundError") {
+            return res.status(409).json({ message: "This cost changed while you were editing it. Refresh and try again." });
+        }
         console.error("Cost entry update failed:", error);
         return res.status(500).json({ message: "Failed to update cost entry." });
+    }
+};
+
+const recordSupplierPayment = async (req, res) => {
+    if (!validId(req.params.id)) return res.status(400).json({ message: "Invalid cost entry." });
+    try {
+        const item = await CostEntry.findById(req.params.id);
+        if (!item) return res.status(404).json({ message: "Cost entry not found." });
+        if (item.recordType !== "Booking") {
+            return res.status(400).json({ message: "Only booking costs can have supplier payments." });
+        }
+        const record = await loadRecord("Booking", item.recordId);
+        if (!record) return res.status(404).json({ message: "Booking not found." });
+        const payment = parseSupplierPayment(req.body, item.amount - (item.paidAmount ?? 0));
+        if (payment.error) return res.status(400).json({ message: payment.error });
+
+        item.paidAmount = Math.round(((item.paidAmount ?? 0) + payment.value.amount) * 100) / 100;
+        item.paymentHistory.push({
+            kind: "payment", ...payment.value, paidAmountAfter: item.paidAmount,
+            recordedBy: req.admin._id, recordedByName: String(req.admin.name || "Staff").slice(0, 100),
+        });
+        await item.save();
+        await createActivityLog({
+            req, action: "UPDATE", module: "Other",
+            description: `Supplier payment recorded for booking ${record.reference}`,
+            relatedRecordId: item.recordId, relatedModel: "Booking", referenceNo: record.reference,
+        });
+        return res.status(201).json({ paidAmount: item.paidAmount, payment: item.paymentHistory.at(-1) });
+    } catch (error) {
+        if (error.name === "VersionError" || error.name === "DocumentNotFoundError") {
+            return res.status(409).json({ message: "This cost changed while recording the payment. Refresh and try again." });
+        }
+        console.error("Supplier payment recording failed:", error);
+        return res.status(500).json({ message: "Failed to record supplier payment." });
     }
 };
 
@@ -177,7 +231,19 @@ const deleteCost = async (req, res) => {
         if (!item) return res.status(404).json({ message: "Cost entry not found." });
         const record = await loadRecord(item.recordType, item.recordId);
         if (!record) return res.status(404).json({ message: "Quotation or booking not found." });
-        await item.deleteOne();
+        if (item.recordType === "Booking") {
+            if ((item.paidAmount ?? 0) > 0 || item.paymentHistory?.length > 0) {
+                return res.status(409).json({ message: "A cost with recorded supplier payments cannot be deleted." });
+            }
+            const result = await CostEntry.deleteOne({
+                _id: item._id,
+                $or: [{ paidAmount: 0 }, { paidAmount: { $exists: false } }],
+                "paymentHistory.0": { $exists: false },
+            });
+            if (!result.deletedCount) return res.status(409).json({ message: "This cost changed. Refresh and try again." });
+        } else {
+            await item.deleteOne();
+        }
         await createActivityLog({
             req, action: "DELETE", module: "Other",
             description: `Supplier cost entry deleted for ${item.recordType.toLowerCase()} ${record.reference}`,
@@ -190,4 +256,4 @@ const deleteCost = async (req, res) => {
     }
 };
 
-module.exports = { getCostOverview, getSupplierPayables, addCost, updateCost, deleteCost };
+module.exports = { getCostOverview, getSupplierPayables, addCost, updateCost, recordSupplierPayment, deleteCost };
