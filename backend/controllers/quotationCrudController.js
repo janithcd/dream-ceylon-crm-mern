@@ -130,6 +130,7 @@ const populateQuotation = (query) => {
             "fullName email whatsappNumber country travelDate numberOfTravelers status interestedPackage"
         )
         .populate("booking", "bookingCode bookingStatus paymentStatus customer")
+        .populate("revisionOf", "quotationNo")
         .populate("inquiry.interestedPackage", "title durationDays category");
 };
 
@@ -150,6 +151,7 @@ const buildQuotationQuery = (queryParams) => {
     if (keyword) {
         query.$or = [
             { quotationNo: buildRegex(keyword) },
+            { revisionSourceNo: buildRegex(keyword) },
             { clientName: buildRegex(keyword) },
             { country: buildRegex(keyword) },
             { tourTitle: buildRegex(keyword) },
@@ -275,6 +277,18 @@ const buildQuotationPayload = (body, existingQuotation = null) => {
     };
 };
 
+const REVISION_FIELDS = [
+    "inquiry", "clientName", "country", "tourTitle", "travelStartDate", "travelEndDate",
+    "travelers", "durationDays", "vehicleType", "vehicleDailyRate", "vehicleDays",
+    "hotelCost", "activitiesCost", "entranceFeesCost", "otherCost", "discount",
+    "advancePayment", "currency", "totals", "inclusions", "exclusions", "notes", "adminNotes",
+];
+
+const copyRevisionDetails = (source) => {
+    const saved = source.toObject();
+    return Object.fromEntries(REVISION_FIELDS.map((field) => [field, saved[field]]));
+};
+
 // @desc    Create a saved quotation
 // @route   POST /api/quotations
 // @access  Private
@@ -326,6 +340,46 @@ const createQuotation = async (req, res) => {
             message: "Failed to create quotation",
             error: error.message,
         });
+    }
+};
+
+// Start a separate offer while preserving the original's pricing and status.
+const createQuotationRevision = async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ message: "Invalid quotation ID" });
+    }
+    try {
+        const source = await Quotation.findById(req.params.id);
+        if (!source) return res.status(404).json({ message: "Quotation not found" });
+        if (source.booking) {
+            return res.status(409).json({ message: "This quotation is already a booking. Update the booking instead" });
+        }
+
+        const revision = await Quotation.create({
+            ...copyRevisionDetails(source),
+            quotationNo: await generateQuotationNo(),
+            revisionOf: source._id,
+            revisionSourceNo: source.quotationNo,
+            booking: null,
+            status: "Draft",
+            validUntil: null,
+            sentDate: null,
+            acceptedDate: null,
+        });
+        await createActivityLog({
+            req, action: "CREATE", module: "Quotation",
+            description: `Quotation ${revision.quotationNo} was created as a revision of ${source.quotationNo}`,
+            relatedRecordId: revision._id, relatedModel: "Quotation",
+            referenceNo: revision.quotationNo, customerName: revision.clientName,
+            metadata: { revisionOf: source._id, revisionSourceNo: source.quotationNo },
+        });
+        return res.status(201).json({
+            message: "Revised draft created. Review and save its details before sending it",
+            quotation: await populateQuotation(Quotation.findById(revision._id)),
+        });
+    } catch (error) {
+        console.error("Quotation revision failed:", error.message);
+        return res.status(500).json({ message: "Failed to create quotation revision" });
     }
 };
 
@@ -518,6 +572,7 @@ const deleteQuotation = async (req, res) => {
 
 module.exports = {
     createQuotation,
+    createQuotationRevision,
     getQuotations,
     getQuotationById,
     updateQuotation,
