@@ -8,6 +8,13 @@ import { notifySupplierPayablesChanged } from "../utils/supplierPayableEvents";
 
 const categories = ["Hotel", "Transport", "Guide", "Activities", "Entrance Fees", "Payment Fees", "Other"];
 const currencies = ["USD", "LKR", "EUR", "GBP"];
+const scheduleFilters = [
+    { value: "due7", label: "Due soon" },
+    { value: "overdue", label: "Overdue" },
+    { value: "later", label: "Later" },
+    { value: "unscheduled", label: "No due date" },
+    { value: "all", label: "All unpaid" },
+];
 const blankCost = (currency = "USD") => ({
     category: "Hotel", description: "", amount: "", currency, conversionRate: "1",
     paidAmount: "0", paymentDueDate: "", adjustmentNote: "",
@@ -38,7 +45,9 @@ const CostProfit = () => {
     const [reloadKey, setReloadKey] = useState(0);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
-    const [payables, setPayables] = useState({ items: [], total: 0, limit: 50 });
+    const [payables, setPayables] = useState({ items: [], total: 0, limit: 25, page: 1, pages: 0, totalsByCurrency: [] });
+    const [payablesFilter, setPayablesFilter] = useState("due7");
+    const [payablesPage, setPayablesPage] = useState(1);
     const [payablesLoading, setPayablesLoading] = useState(false);
     const [payablesError, setPayablesError] = useState("");
     const overviewKey = `${type}/${recordId}`;
@@ -98,14 +107,22 @@ const CostProfit = () => {
         let cancelled = false;
         setPayablesLoading(true);
         setPayablesError("");
-        api.get("/finance/costs/payables")
-            .then(({ data }) => { if (!cancelled) { setPayables(data); setPayablesError(""); } })
+        api.get("/finance/costs/schedule", { params: { filter: payablesFilter, page: payablesPage } })
+            .then(({ data }) => {
+                if (cancelled) return;
+                if (payablesPage > Math.max(1, data.pages)) {
+                    setPayablesPage(Math.max(1, data.pages));
+                    return;
+                }
+                setPayables(data);
+                setPayablesError("");
+            })
             .catch((requestError) => {
                 if (!cancelled) setPayablesError(requestError.response?.data?.message || "Could not load supplier payments.");
             })
             .finally(() => { if (!cancelled) setPayablesLoading(false); });
         return () => { cancelled = true; };
-    }, [type, reloadKey]);
+    }, [type, reloadKey, payablesFilter, payablesPage]);
 
     useEffect(() => {
         if (paymentCostId) paymentPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -244,13 +261,18 @@ const CostProfit = () => {
             {type === "booking" && (
                 <div className="card border-0 shadow-sm mb-4">
                     <div className="card-body">
-                        <h4 className="fw-bold mb-1">Supplier payments due</h4>
-                        <p className="text-muted small mb-3">Unpaid booking costs due today, overdue, or within the next six days in Sri Lanka. Amounts are shown in each supplier currency.</p>
+                        <h4 className="fw-bold mb-1">Supplier payment schedule</h4>
+                        <p className="text-muted small mb-3">Review unpaid booking costs by Sri Lanka due date. Due soon includes overdue payments, today, and the next six days; amounts stay in each supplier's currency.</p>
+                        <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Supplier payment timing">
+                            {scheduleFilters.map(({ value, label }) => <button key={value} type="button" className={`btn btn-sm ${payablesFilter === value ? "btn-primary" : "btn-outline-primary"}`} aria-pressed={payablesFilter === value} onClick={() => { setPayablesFilter(value); setPayablesPage(1); }}>{label}</button>)}
+                        </div>
+                        {payablesFilter === "unscheduled" && <p className="small text-warning-emphasis">These costs have no supplier due date and will not appear in the header due alert. Open a booking to set a date.</p>}
                         {payablesError && <div className="alert alert-danger" role="alert">{payablesError}</div>}
                         {!payablesError && payablesLoading && <p className="text-muted mb-0">Loading supplier payments...</p>}
                         {!payablesError && !payablesLoading && payables.items.length === 0 &&
-                            <p className="text-muted mb-0">No supplier payments due within seven days.</p>}
+                            <p className="text-muted mb-0">No unpaid supplier costs in this view.</p>}
                         {!payablesError && !payablesLoading && payables.items.length > 0 &&
+                            <><p className="small mb-2"><strong>Remaining in this view:</strong> {payables.totalsByCurrency.map(({ currency, remaining }) => formatMoney(remaining, currency)).join(" · ")}</p>
                             <div className="table-responsive"><table className="table table-hover align-middle mb-0">
                                     <thead><tr><th>Booking</th><th>Supplier / cost</th><th>Remaining</th><th>Due</th></tr></thead>
                                     <tbody>{payables.items.map((item) => <tr key={item._id}>
@@ -258,12 +280,19 @@ const CostProfit = () => {
                                             <div className="small text-muted">{item.customerName}{item.bookingStatus === "Cancelled" ? " · Cancelled booking: verify supplier obligation" : ""}</div></td>
                                         <td>{item.description}</td>
                                         <td>{formatMoney(item.remaining, item.currency)}</td>
-                                        <td><span className={toCalendarDateInput(item.paymentDueDate) < today ? "text-danger fw-semibold" : ""}>
-                                            {formatCalendarDate(item.paymentDueDate)}{toCalendarDateInput(item.paymentDueDate) < today ? " · Overdue" : ""}
+                                        <td><span className={item.paymentDueDate && toCalendarDateInput(item.paymentDueDate) < today ? "text-danger fw-semibold" : ""}>
+                                            {item.paymentDueDate ? formatCalendarDate(item.paymentDueDate) : "Not set"}{item.paymentDueDate && toCalendarDateInput(item.paymentDueDate) < today ? " · Overdue" : ""}
                                         </span></td>
                                     </tr>)}</tbody>
-                                </table></div>}
-                        {!payablesError && payables.total > payables.limit && <p className="text-muted small mt-2 mb-0">Showing the first {payables.limit} of {payables.total} due payments, earliest first.</p>}
+                                </table></div>
+                            <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
+                                <span className="text-muted small">Showing {(payables.page - 1) * payables.limit + 1}–{Math.min(payables.page * payables.limit, payables.total)} of {payables.total} unpaid costs.</span>
+                                {payables.pages > 1 && <div className="d-flex align-items-center gap-2">
+                                    <button type="button" className="btn btn-sm btn-outline-secondary" disabled={payablesPage <= 1} onClick={() => setPayablesPage((page) => page - 1)}>Previous</button>
+                                    <span className="small">Page {payables.page} of {payables.pages}</span>
+                                    <button type="button" className="btn btn-sm btn-outline-secondary" disabled={payablesPage >= payables.pages} onClick={() => setPayablesPage((page) => page + 1)}>Next</button>
+                                </div>}
+                            </div></>}
                     </div>
                 </div>
             )}

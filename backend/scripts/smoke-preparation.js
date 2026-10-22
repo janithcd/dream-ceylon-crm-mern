@@ -70,7 +70,9 @@ const main = async () => {
         });
         const costUrl = `http://127.0.0.1:5000/api/finance/costs/booking/${booking._id}`;
         const payablesUrl = "http://127.0.0.1:5000/api/finance/costs/payables";
+        const scheduleUrl = "http://127.0.0.1:5000/api/finance/costs/schedule";
         assert.equal((await request(payablesUrl, "GET")).status, 403, "Sales cannot view supplier payments");
+        assert.equal((await request(scheduleUrl, "GET")).status, 403, "Sales cannot view the supplier schedule");
         const supplierCost = {
             category: "Hotel", description: "CI hotel deposit", amount: 200,
             currency: "USD", paidAmount: 50,
@@ -88,6 +90,34 @@ const main = async () => {
         });
         assert.equal(localCost.status, 201, `Create LKR supplier cost: ${await localCost.clone().text()}`);
         const localCostId = (await localCost.json())._id;
+        const futureCost = await financeRequest(costUrl, "POST", {
+            category: "Transport", description: "CI later bill", amount: 300, currency: "USD",
+            paymentDueDate: dateOnly(new Date(Date.now() + 15 * dayMs)),
+        });
+        assert.equal(futureCost.status, 201);
+        const futureCostId = (await futureCost.json())._id;
+        const undatedCost = await financeRequest(costUrl, "POST", {
+            category: "Other", description: "CI date pending", amount: 90, currency: "USD",
+        });
+        assert.equal(undatedCost.status, 201);
+        const undatedCostId = (await undatedCost.json())._id;
+        assert.equal((await financeRequest(`${scheduleUrl}?filter=bad`)).status, 400);
+        assert.equal((await financeRequest(`${scheduleUrl}?page=0`)).status, 400);
+        const dueSchedule = await (await financeRequest(`${scheduleUrl}?filter=due7`)).json();
+        assert.equal(dueSchedule.total, 2);
+        assert.ok(dueSchedule.items.some((item) => item._id === costId));
+        assert.ok(dueSchedule.items.some((item) => item._id === localCostId));
+        assert.deepEqual(dueSchedule.totalsByCurrency, [
+            { currency: "LKR", remaining: 15000 }, { currency: "USD", remaining: 150 },
+        ]);
+        assert.equal((await (await financeRequest(`${scheduleUrl}?filter=later`)).json()).items[0]._id, futureCostId);
+        assert.equal((await (await financeRequest(`${scheduleUrl}?filter=unscheduled`)).json()).items[0]._id, undatedCostId);
+        const allSchedule = await (await financeRequest(`${scheduleUrl}?filter=all&page=2&limit=2`)).json();
+        assert.equal(allSchedule.total, 4);
+        assert.equal(allSchedule.items.length, 2);
+        assert.deepEqual(allSchedule.totalsByCurrency, [
+            { currency: "LKR", remaining: 15000 }, { currency: "USD", remaining: 540 },
+        ]);
         const costOverview = await financeRequest(costUrl);
         assert.equal(costOverview.status, 200);
         assert.equal((await costOverview.json()).items.find((item) => item._id === costId).paidAmount, 50);
@@ -128,6 +158,7 @@ const main = async () => {
         assert.equal(remainingData.summary.upcoming, 1);
         assert.equal(remainingPayables.some((item) => item._id === costId), false);
         assert.equal(remainingPayables.some((item) => item._id === localCostId), true);
+        assert.equal((await (await financeRequest(`${scheduleUrl}?filter=overdue`)).json()).total, 0);
         const paidCost = (await (await financeRequest(costUrl)).json()).items.find((item) => item._id === costId);
         assert.equal(paidCost.paidAmount, 200);
         assert.deepEqual(paidCost.paymentHistory.map((entry) => [entry.kind, entry.amount, entry.paidAmountAfter]), [
@@ -137,6 +168,11 @@ const main = async () => {
         assert.equal(paidCost.paymentHistory[1].recordedByName, financeAdmin.name);
         assert.equal((await financeRequest(costItemUrl, "PUT", { ...supplierCost, paidAmount: 0, currency: "GBP", conversionRate: 1.2 })).status, 400);
         assert.equal((await financeRequest(costItemUrl, "DELETE")).status, 409, "Recorded payments cannot be deleted with the cost");
+        await Admin.findByIdAndUpdate(financeAdmin._id, { $addToSet: { customPermissions: "booking.delete" } });
+        const protectedBooking = await financeRequest(`http://127.0.0.1:5000/api/bookings/${booking._id}`, "DELETE");
+        assert.equal(protectedBooking.status, 409, `Booking with supplier payments: ${await protectedBooking.clone().text()}`);
+        assert.ok(await Booking.exists({ _id: booking._id }), "Payment history keeps the booking intact");
+        await Admin.findByIdAndUpdate(financeAdmin._id, { $pull: { customPermissions: "booking.delete" } });
         const getAttention = async () => {
             const response = await request("http://127.0.0.1:5000/api/dashboard/stats", "GET");
             const body = await response.json();
