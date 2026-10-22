@@ -5,6 +5,7 @@ const Admin = require("../models/Admin");
 const Booking = require("../models/Booking");
 const BookingPayment = require("../models/BookingPayment");
 const TourPackage = require("../models/TourPackage");
+const Quotation = require("../models/Quotation");
 const ActivityLog = require("../models/ActivityLog");
 const { PDFDocument } = require("pdf-lib");
 
@@ -19,6 +20,7 @@ const main = async () => {
     let booking;
     let overlappingBooking;
     let tourPackage;
+    let quotation;
 
     try {
         const dayMs = 24 * 60 * 60 * 1000;
@@ -80,6 +82,45 @@ const main = async () => {
             assert.equal(response.status, 200, `Supplier queue: ${JSON.stringify(body)}`);
             return body;
         };
+
+        const quotationsUrl = "http://127.0.0.1:5000/api/quotations";
+        const validityClient = `CI Validity ${Date.now()}`;
+        assert.equal((await request(quotationsUrl, "POST", {
+            clientName: validityClient, tourTitle: "CI tour", status: "Sent", validUntil: "2027-02-30",
+        })).status, 400);
+        const savedQuotation = await request(quotationsUrl, "POST", {
+            clientName: validityClient, tourTitle: "CI tour", status: "Sent", validUntil: dateOnly(new Date(Date.now() - dayMs)),
+            vehicleDailyRate: 80, vehicleDays: 5,
+        });
+        assert.equal(savedQuotation.status, 201, `Create quotation: ${await savedQuotation.clone().text()}`);
+        const saved = (await savedQuotation.json()).quotation;
+        quotation = saved._id;
+        assert.equal(dateOnly(new Date(saved.validUntil)), dateOnly(new Date(Date.now() - dayMs)));
+        const listValidity = async (filter) => {
+            const response = await request(`${quotationsUrl}?keyword=${encodeURIComponent(validityClient)}&validity=${filter}`, "GET");
+            assert.equal(response.status, 200, `Quotation validity filter: ${await response.clone().text()}`);
+            return response.json();
+        };
+        assert.equal((await listValidity("pastDue")).totalQuotations, 1);
+        assert.equal((await listValidity("dueSoon")).totalQuotations, 0);
+        assert.equal((await request(`${quotationsUrl}?validity=invalid`, "GET")).status, 400);
+        const quotationUrl = `${quotationsUrl}/${quotation}`;
+        const nextValidity = dateOnly(new Date(Date.now() + 2 * dayMs));
+        assert.equal((await request(quotationUrl, "PUT", { validUntil: "2027-02-30" })).status, 400);
+        const updatedValidity = await request(quotationUrl, "PUT", { validUntil: nextValidity });
+        assert.equal(updatedValidity.status, 200, `Update quotation validity: ${await updatedValidity.clone().text()}`);
+        assert.equal(dateOnly(new Date((await updatedValidity.json()).quotation.validUntil)), nextValidity);
+        assert.equal((await listValidity("pastDue")).totalQuotations, 0);
+        assert.equal((await listValidity("dueSoon")).totalQuotations, 1);
+        const savedPdf = await request(`${quotationsUrl}/pdf`, "POST", {
+            quotationNo: saved.quotationNo, quotationDate: saved.createdAt, validUntil: nextValidity,
+            booking: booking._id, clientName: validityClient, tourTitle: "CI tour", vehicleDailyRate: 80, vehicleDays: 5,
+        });
+        assert.equal(savedPdf.status, 200, `Quotation PDF: ${await savedPdf.clone().text()}`);
+        assert.equal((await PDFDocument.load(await savedPdf.arrayBuffer())).getPageCount() >= 1, true);
+        assert.equal((await request(quotationUrl, "PUT", { validUntil: null })).status, 200);
+        assert.equal((await listValidity("noDate")).totalQuotations, 1);
+        assert.equal((await Quotation.findById(quotation)).validUntil, null);
 
         const assignees = await request("http://127.0.0.1:5000/api/bookings/preparation-assignees", "GET");
         assert.equal(assignees.status, 200);
@@ -612,7 +653,7 @@ const main = async () => {
 
         assert.equal((await getBalanceQueue("dateFilter=all&contactFilter=due")).summary.followUpsDue, 0);
         assert.equal((await getPaymentAttention()).summary.total, 0);
-        console.log("Booking preparation, package itinerary import, supplier confirmations, payment alerts and follow-ups, transport overlaps, PDFs, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
+        console.log("Quotation validity, booking preparation, package itinerary import, supplier confirmations, payment alerts and follow-ups, transport overlaps, PDFs, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
             await BookingPayment.deleteMany({ booking: booking._id });
@@ -627,6 +668,10 @@ const main = async () => {
             await Booking.deleteOne({ _id: overlappingBooking._id });
         }
         if (tourPackage) await TourPackage.deleteOne({ _id: tourPackage._id });
+        if (quotation) {
+            await ActivityLog.deleteMany({ relatedRecordId: quotation });
+            await Quotation.deleteOne({ _id: quotation });
+        }
         if (admin) await Admin.deleteOne({ _id: admin._id });
         if (otherAdmin) await Admin.deleteOne({ _id: otherAdmin._id });
         await mongoose.disconnect();

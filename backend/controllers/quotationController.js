@@ -15,6 +15,7 @@ const {
     getDocumentBrandConfig,
 } = require("../utils/documentSettings");
 const { createActivityLog } = require("../utils/createActivityLog");
+const { parseQuotationValidUntil } = require("../utils/quotationValidity");
 const PAGE = {
     width: 595.28,
     height: 841.89,
@@ -564,6 +565,16 @@ const drawQuotationTitle = (state, data) => {
         width: 180,
         align: "right",
     });
+
+    if (data.validUntil) {
+        drawText(state, `Valid until: ${formatDate(data.validUntil)}`, 320, state.cursorY + 72, {
+            color: colors.primaryDark,
+            bold: true,
+            size: 8.5,
+            width: 190,
+            align: "right",
+        });
+    }
 
     state.cursorY += 118;
 };
@@ -1124,6 +1135,8 @@ const generateQuotationPdf = async (req, res) => {
             clientName,
             country,
             quotationDate,
+            quotationNo,
+            validUntil,
             tourTitle,
             travelStartDate,
             travelEndDate,
@@ -1150,13 +1163,18 @@ const generateQuotationPdf = async (req, res) => {
             });
         }
 
+        const validity = parseQuotationValidUntil(validUntil);
+        if (validity.error) return res.status(400).json({ message: validity.error });
+
         const totals = calculateQuotationTotals(req.body);
 
         const data = {
-            quotationNo: `DCJ-Q-${Date.now().toString().slice(-6)}`,
+            quotationNo: typeof quotationNo === "string" && /^DCJ-Q-\d{4}-\d{6,8}$/.test(quotationNo)
+                ? quotationNo : `DCJ-Q-${Date.now().toString().slice(-6)}`,
             clientName: safeText(clientName),
             country: safeText(country || "Not provided"),
             quotationDate: quotationDate || new Date(),
+            validUntil: validity.value,
             tourTitle: safeText(tourTitle),
             travelStartDate,
             travelEndDate,
@@ -1268,6 +1286,7 @@ const generateQuotationPdf = async (req, res) => {
                 grandTotal: totals.grandTotal,
                 advancePayment: totals.advancePayment,
                 balancePayment: totals.balancePayment,
+                validUntil: data.validUntil,
                 pageCount: pages.length,
             },
         });

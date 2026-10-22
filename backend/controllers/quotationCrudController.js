@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Quotation = require("../models/Quotation");
 const CostEntry = require("../models/CostEntry");
 const { createActivityLog } = require("../utils/createActivityLog");
+const { VALIDITY_FILTERS, parseQuotationValidUntil, getValidityQuery } = require("../utils/quotationValidity");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -133,7 +134,7 @@ const populateQuotation = (query) => {
 };
 
 const buildQuotationQuery = (queryParams) => {
-    const { keyword, status, currency } = queryParams;
+    const { keyword, status, currency, validity = "all" } = queryParams;
     const query = {};
 
     if (status) {
@@ -143,6 +144,8 @@ const buildQuotationQuery = (queryParams) => {
     if (currency) {
         query.currency = currency;
     }
+
+    Object.assign(query, getValidityQuery(validity));
 
     if (keyword) {
         query.$or = [
@@ -277,7 +280,10 @@ const buildQuotationPayload = (body, existingQuotation = null) => {
 // @access  Private
 const createQuotation = async (req, res) => {
     try {
+        const validity = parseQuotationValidUntil(req.body?.validUntil);
+        if (validity.error) return res.status(400).json({ message: validity.error });
         const payload = buildQuotationPayload(req.body);
+        payload.validUntil = validity.value;
 
         if (!payload.clientName || !payload.tourTitle) {
             return res.status(400).json({
@@ -328,6 +334,10 @@ const createQuotation = async (req, res) => {
 // @access  Private
 const getQuotations = async (req, res) => {
     try {
+        const validity = req.query.validity || "all";
+        if (!VALIDITY_FILTERS.includes(validity) || (validity !== "all" && req.query.status && req.query.status !== "Sent")) {
+            return res.status(400).json({ message: "Validity filters apply to sent quotations only" });
+        }
         const page = parsePositiveInteger(req.query.page, 1);
         const limit = Math.min(parsePositiveInteger(req.query.limit, 10), 10000);
         const skip = (page - 1) * limit;
@@ -395,7 +405,13 @@ const updateQuotation = async (req, res) => {
             });
         }
 
+        const validity = Object.hasOwn(req.body || {}, "validUntil")
+            ? parseQuotationValidUntil(req.body.validUntil)
+            : { value: quotation.validUntil };
+        if (validity.error) return res.status(400).json({ message: validity.error });
+
         const payload = buildQuotationPayload(req.body, quotation);
+        payload.validUntil = validity.value;
 
         if (!payload.clientName || !payload.tourTitle) {
             return res.status(400).json({
