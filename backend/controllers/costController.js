@@ -5,6 +5,7 @@ const { createActivityLog } = require("../utils/createActivityLog");
 const { costSummary, parseCostPayload } = require("../utils/costProfit");
 const { getBusinessDayBounds } = require("../utils/businessDate");
 const { parseSupplierPayment } = require("../utils/supplierPayment");
+const { parseSupplierScheduleQuery } = require("../utils/supplierSchedule");
 
 const TYPES = { quotation: "Quotation", booking: "Booking" };
 const validId = (id) => /^[0-9a-f]{24}$/i.test(String(id || ""));
@@ -32,6 +33,25 @@ const loadRecord = async (recordType, recordId) => {
         currency: record.currency,
         saleAmount: record.totalPrice || 0,
     };
+};
+
+const withBookingDetails = async (costs) => {
+    const bookings = await Booking.find({ _id: { $in: costs.map((cost) => cost.recordId) } })
+        .select("bookingCode customer.fullName bookingStatus").lean();
+    const byId = new Map(bookings.map((booking) => [String(booking._id), booking]));
+    return costs.filter((cost) => byId.has(String(cost.recordId))).map((cost) => ({
+        _id: cost._id,
+        recordId: cost.recordId,
+        description: cost.description,
+        currency: cost.currency,
+        amount: cost.amount,
+        paidAmount: cost.paidAmount ?? 0,
+        remaining: Math.round((cost.amount - (cost.paidAmount ?? 0)) * 100) / 100,
+        paymentDueDate: cost.paymentDueDate,
+        bookingCode: byId.get(String(cost.recordId)).bookingCode,
+        customerName: byId.get(String(cost.recordId)).customer?.fullName || "",
+        bookingStatus: byId.get(String(cost.recordId)).bookingStatus,
+    }));
 };
 
 const getCostOverview = async (req, res) => {
@@ -91,30 +111,41 @@ const getSupplierPayables = async (req, res) => {
             CostEntry.countDocuments(query),
             CostEntry.countDocuments({ ...query, paymentDueDate: { $ne: null, $lt: start } }),
         ]);
-        const bookings = await Booking.find({ _id: { $in: costs.map((cost) => cost.recordId) } })
-            .select("bookingCode customer.fullName bookingStatus").lean();
-        const byId = new Map(bookings.map((booking) => [String(booking._id), booking]));
         return res.json({
             total,
             limit: 50,
             summary: { total, overdue, upcoming: total - overdue },
-            items: costs.filter((cost) => byId.has(String(cost.recordId))).map((cost) => ({
-                _id: cost._id,
-                recordId: cost.recordId,
-                description: cost.description,
-                currency: cost.currency,
-                amount: cost.amount,
-                paidAmount: cost.paidAmount ?? 0,
-                remaining: Math.round((cost.amount - (cost.paidAmount ?? 0)) * 100) / 100,
-                paymentDueDate: cost.paymentDueDate,
-                bookingCode: byId.get(String(cost.recordId)).bookingCode,
-                customerName: byId.get(String(cost.recordId)).customer?.fullName || "",
-                bookingStatus: byId.get(String(cost.recordId)).bookingStatus,
-            })),
+            items: await withBookingDetails(costs),
         });
     } catch (error) {
         console.error("Supplier payables failed:", error);
         return res.status(500).json({ message: "Failed to load supplier payments." });
+    }
+};
+
+const getSupplierSchedule = async (req, res) => {
+    const parsed = parseSupplierScheduleQuery(req.query);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    const { filter, page, limit, query } = parsed.value;
+    try {
+        const [costs, total, totalsByCurrency] = await Promise.all([
+            CostEntry.find(query).select("recordId description currency amount paidAmount paymentDueDate")
+                .sort({ paymentDueDate: 1, _id: 1 }).skip((page - 1) * limit).limit(limit).lean(),
+            CostEntry.countDocuments(query),
+            CostEntry.aggregate([
+                { $match: query },
+                { $group: { _id: "$currency", remaining: { $sum: { $subtract: ["$amount", { $ifNull: ["$paidAmount", 0] }] } } } },
+                { $project: { _id: 0, currency: "$_id", remaining: { $round: ["$remaining", 2] } } },
+                { $sort: { currency: 1 } },
+            ]),
+        ]);
+        return res.json({
+            filter, page, limit, total, pages: Math.ceil(total / limit), totalsByCurrency,
+            items: await withBookingDetails(costs),
+        });
+    } catch (error) {
+        console.error("Supplier schedule failed:", error);
+        return res.status(500).json({ message: "Failed to load supplier payment schedule." });
     }
 };
 
@@ -256,4 +287,4 @@ const deleteCost = async (req, res) => {
     }
 };
 
-module.exports = { getCostOverview, getSupplierPayables, addCost, updateCost, recordSupplierPayment, deleteCost };
+module.exports = { getCostOverview, getSupplierPayables, getSupplierSchedule, addCost, updateCost, recordSupplierPayment, deleteCost };

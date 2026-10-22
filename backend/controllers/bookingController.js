@@ -442,6 +442,16 @@ const deleteBooking = async (req, res) => {
             });
         }
 
+        const hasSupplierPayments = await CostEntry.exists({
+            recordType: "Booking", recordId: booking._id,
+            $or: [{ paidAmount: { $gt: 0 } }, { "paymentHistory.0": { $exists: true } }],
+        });
+        if (hasSupplierPayments) {
+            return res.status(409).json({
+                message: "This booking has recorded supplier payments. Cancel it instead of deleting its payment history.",
+            });
+        }
+
         const deletedDetails = {
             id: booking._id,
             bookingCode: booking.bookingCode,

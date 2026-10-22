@@ -13,6 +13,7 @@ const CostEntry = require("../models/CostEntry");
 const ActivityLog = require("../models/ActivityLog");
 const { costSummary, parseCostPayload } = require("../utils/costProfit");
 const { parseSupplierPayment } = require("../utils/supplierPayment");
+const { parseSupplierScheduleQuery } = require("../utils/supplierSchedule");
 
 test("cost math requires entered costs and detects changed sale currency", () => {
     assert.equal(costSummary(1000, "USD", []).profit, null);
@@ -77,6 +78,23 @@ test("supplier payment entries respect remaining balance and Sri Lanka payment d
     assert.match(parseSupplierPayment({ ...payment, note: "x".repeat(301) }, 25.50, now).error, /300/);
     assert.equal(parseSupplierPayment(payment, 25.50, new Date("2026-10-21T19:00:00.000Z")).value.amount, 25.50,
         "a UTC date before midnight can already be the next Colombo business day");
+});
+
+test("supplier schedule separates overdue, later and missing dates in Sri Lanka", () => {
+    const now = new Date("2026-10-21T19:00:00.000Z"); // Oct 22, 00:30 in Colombo.
+    const soon = parseSupplierScheduleQuery({}, now).value;
+    assert.equal(soon.filter, "due7");
+    assert.equal(soon.page, 1);
+    assert.equal(soon.limit, 25);
+    assert.equal(soon.query.paymentDueDate.$lt.toISOString(), "2026-10-28T18:30:00.000Z");
+    assert.equal(parseSupplierScheduleQuery({ filter: "overdue" }, now).value.query.paymentDueDate.$lt.toISOString(), "2026-10-21T18:30:00.000Z");
+    assert.equal(parseSupplierScheduleQuery({ filter: "later" }, now).value.query.paymentDueDate.$gte.toISOString(), "2026-10-28T18:30:00.000Z");
+    assert.equal(parseSupplierScheduleQuery({ filter: "unscheduled" }, now).value.query.paymentDueDate, null);
+    assert.equal(Object.hasOwn(parseSupplierScheduleQuery({ filter: "all", page: "2", limit: "10" }, now).value.query, "paymentDueDate"), false);
+    assert.match(parseSupplierScheduleQuery({ filter: "invalid" }, now).error, /filter/);
+    assert.match(parseSupplierScheduleQuery({ page: "0" }, now).error, /Page/);
+    assert.match(parseSupplierScheduleQuery({ limit: "51" }, now).error, /limit/);
+    assert.match(parseSupplierScheduleQuery({ page: ["1"] }, now).error, /Page/);
 });
 
 test("cost API restricts supplier costs to finance permissions", async (t) => {
