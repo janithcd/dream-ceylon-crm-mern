@@ -46,5 +46,6 @@ const costEntrySchema = new mongoose.Schema(
 
 costEntrySchema.index({ recordType: 1, recordId: 1, createdAt: -1 });
 costEntrySchema.index({ recordType: 1, paymentDueDate: 1 });
+costEntrySchema.index({ recordType: 1, "paymentHistory.paymentDate": -1 });
 
 module.exports = mongoose.model("CostEntry", costEntrySchema);
