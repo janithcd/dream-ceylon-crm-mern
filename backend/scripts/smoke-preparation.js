@@ -21,6 +21,7 @@ const main = async () => {
     let overlappingBooking;
     let tourPackage;
     let quotation;
+    let revisedQuotation;
 
     try {
         const dayMs = 24 * 60 * 60 * 1000;
@@ -118,6 +119,30 @@ const main = async () => {
         });
         assert.equal(savedPdf.status, 200, `Quotation PDF: ${await savedPdf.clone().text()}`);
         assert.equal((await PDFDocument.load(await savedPdf.arrayBuffer())).getPageCount() >= 1, true);
+        const revised = await request(`${quotationUrl}/revisions`, "POST");
+        assert.equal(revised.status, 201, `Create revised draft: ${await revised.clone().text()}`);
+        const newDraft = (await revised.json()).quotation;
+        revisedQuotation = newDraft._id;
+        assert.notEqual(newDraft.quotationNo, saved.quotationNo);
+        assert.equal(newDraft.revisionSourceNo, saved.quotationNo);
+        assert.equal(newDraft.revisionOf.quotationNo, saved.quotationNo);
+        assert.equal(newDraft.status, "Draft");
+        assert.equal(newDraft.validUntil, null);
+        assert.equal(newDraft.booking, null);
+        assert.equal(newDraft.vehicleDailyRate, 80);
+        assert.equal(newDraft.totals.grandTotal, 400);
+        const relatedQuotes = await request(`${quotationsUrl}?keyword=${encodeURIComponent(saved.quotationNo)}`, "GET");
+        assert.equal(relatedQuotes.status, 200);
+        assert.equal((await relatedQuotes.json()).totalQuotations, 2, "Searching the source number finds both versions");
+        assert.ok(await ActivityLog.exists({ relatedRecordId: revisedQuotation, "metadata.revisionSourceNo": saved.quotationNo }));
+        const revisedEdit = await request(`${quotationsUrl}/${revisedQuotation}`, "PUT", { vehicleDailyRate: 90 });
+        assert.equal(revisedEdit.status, 200, `Edit revised draft: ${await revisedEdit.clone().text()}`);
+        assert.equal((await revisedEdit.json()).quotation.totals.grandTotal, 450);
+        assert.equal((await Quotation.findById(quotation)).vehicleDailyRate, 80, "Original price remains unchanged");
+        assert.equal((await Quotation.findById(quotation)).status, "Sent", "Original status remains unchanged");
+        await Quotation.updateOne({ _id: quotation }, { $set: { booking: booking._id } });
+        assert.equal((await request(`${quotationUrl}/revisions`, "POST")).status, 409, "Converted quotations cannot start a revised sales draft");
+        await Quotation.updateOne({ _id: quotation }, { $set: { booking: null } });
         assert.equal((await request(quotationUrl, "PUT", { validUntil: null })).status, 200);
         assert.equal((await listValidity("noDate")).totalQuotations, 1);
         assert.equal((await Quotation.findById(quotation)).validUntil, null);
@@ -671,6 +696,10 @@ const main = async () => {
         if (quotation) {
             await ActivityLog.deleteMany({ relatedRecordId: quotation });
             await Quotation.deleteOne({ _id: quotation });
+        }
+        if (revisedQuotation) {
+            await ActivityLog.deleteMany({ relatedRecordId: revisedQuotation });
+            await Quotation.deleteOne({ _id: revisedQuotation });
         }
         if (admin) await Admin.deleteOne({ _id: admin._id });
         if (otherAdmin) await Admin.deleteOne({ _id: otherAdmin._id });

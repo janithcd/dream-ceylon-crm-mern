@@ -21,6 +21,18 @@ const quotationSchema = new mongoose.Schema(
             default: null,
         },
 
+        revisionOf: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Quotation",
+            default: null,
+        },
+
+        revisionSourceNo: {
+            type: String,
+            trim: true,
+            default: "",
+        },
+
         clientName: {
             type: String,
             required: true,

@@ -6,6 +6,7 @@ const {
 
 const {
     createQuotation,
+    createQuotationRevision,
     getQuotations,
     getQuotationById,
     updateQuotation,
@@ -53,6 +54,13 @@ router.post(
     protect,
     authorizePermissions(PERMISSIONS.QUOTATION_CONVERT),
     convertQuotationToBooking
+);
+
+router.post(
+    "/:id/revisions",
+    protect,
+    authorizePermissions(PERMISSIONS.QUOTATION_VIEW, PERMISSIONS.QUOTATION_CREATE),
+    createQuotationRevision
 );
 
 router.get(

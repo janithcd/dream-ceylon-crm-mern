@@ -173,6 +173,7 @@ const Quotations = () => {
     const [success, setSuccess] = useState("");
     const [quotationNo, setQuotationNo] = useState("");
     const [quotationDate, setQuotationDate] = useState("");
+    const [revisionSourceNo, setRevisionSourceNo] = useState("");
     const [editedSinceSave, setEditedSinceSave] = useState(false);
 
     const isEditMode = Boolean(editId);
@@ -242,6 +243,7 @@ const Quotations = () => {
                 setFormData(mapQuotationToForm(quotation));
                 setQuotationNo(quotation.quotationNo || "");
                 setQuotationDate(quotation.createdAt || "");
+                setRevisionSourceNo(quotation.revisionSourceNo || quotation.revisionOf?.quotationNo || "");
                 setEditedSinceSave(false);
             } catch (err) {
                 setError(
@@ -268,6 +270,7 @@ const Quotations = () => {
                 setError("");
                 setSuccess("");
                 setQuotationNo("");
+                setRevisionSourceNo("");
 
                 const response = await api.get(`/inquiries/${inquiryId}`);
                 const inquiry = response.data;
@@ -420,6 +423,7 @@ const Quotations = () => {
         setSuccess("");
         setQuotationNo("");
         setQuotationDate("");
+        setRevisionSourceNo("");
         setEditedSinceSave(false);
         setSearchParams({});
     };
@@ -561,6 +565,7 @@ const Quotations = () => {
                             {quotationNo}
                         </div>
                     )}
+                    {revisionSourceNo && <p className="small text-muted mt-2 mb-0">Revised from {revisionSourceNo}. Review the prices and set a new validity date before sending.</p>}
                 </div>
 
                 <button className="btn btn-outline-secondary" onClick={handleReset}>

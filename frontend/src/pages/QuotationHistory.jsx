@@ -11,6 +11,7 @@ import {
     FaBell,
     FaFileCsv,
     FaCoins,
+    FaCopy,
 } from "react-icons/fa";
 import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
@@ -138,6 +139,7 @@ const QuotationHistory = () => {
     const [pdfLoadingId, setPdfLoadingId] = useState("");
     const [statusLoadingId, setStatusLoadingId] = useState("");
     const [convertLoadingId, setConvertLoadingId] = useState("");
+    const [revisionLoadingId, setRevisionLoadingId] = useState("");
     const [deleteLoadingId, setDeleteLoadingId] = useState("");
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
@@ -373,6 +375,20 @@ const QuotationHistory = () => {
         }
     };
 
+    const handleCreateRevision = async (quotation) => {
+        if (!window.confirm(`Create a new draft based on ${quotation.quotationNo}? The original offer will remain available.`)) return;
+        try {
+            setRevisionLoadingId(quotation._id);
+            setError("");
+            const response = await api.post(`/quotations/${quotation._id}/revisions`);
+            navigate(`/quotations?edit=${response.data.quotation._id}`);
+        } catch (err) {
+            setError(err.response?.data?.message || "Failed to create a revised draft.");
+        } finally {
+            setRevisionLoadingId("");
+        }
+    };
+
     const handleDelete = async (quotationId) => {
         const confirmed = window.confirm(
             "Are you sure you want to delete this quotation?"
@@ -448,6 +464,7 @@ const QuotationHistory = () => {
                 "Balance Payment": quotation.totals?.balancePayment || 0,
                 Currency: quotation.currency || "",
                 Status: quotation.status || "",
+                "Revised From": quotation.revisionSourceNo || quotation.revisionOf?.quotationNo || "",
                 "Valid Until": quotation.validUntil ? formatCalendarDate(quotation.validUntil) : "",
                 Converted: quotation.booking ? "Yes" : "No",
                 "Created Date": formatCalendarDate(quotation.createdAt),
@@ -629,6 +646,8 @@ const QuotationHistory = () => {
                                             <small className="text-muted">
                                                 {quotation.currency}
                                             </small>
+                                            {(quotation.revisionSourceNo || quotation.revisionOf?.quotationNo) &&
+                                                <small className="d-block text-muted mt-1">Revised from {quotation.revisionSourceNo || quotation.revisionOf.quotationNo}</small>}
 
                                             {quotation.booking && (
                                                 <div className="mt-1">
@@ -755,6 +774,16 @@ const QuotationHistory = () => {
                                                         title="Edit quotation"
                                                     >
                                                         <FaEdit />
+                                                    </button>
+                                                </PermissionGuard>
+
+                                                <PermissionGuard all={["quotation.view", "quotation.create"]}>
+                                                    <button type="button" className="btn btn-sm btn-outline-primary"
+                                                        onClick={() => handleCreateRevision(quotation)}
+                                                        disabled={revisionLoadingId === quotation._id || Boolean(quotation.booking)}
+                                                        title={quotation.booking ? "Converted quotation: update the booking" : "Create revised draft"}
+                                                        aria-label={`Create revised draft from ${quotation.quotationNo}`}>
+                                                        <FaCopy />
                                                     </button>
                                                 </PermissionGuard>
 
