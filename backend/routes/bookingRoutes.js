@@ -27,6 +27,7 @@ const {
 } = require("../controllers/bookingTransportController");
 const { getTeamTasks } = require("../controllers/teamTasksController");
 const { getSupplierConfirmations } = require("../controllers/supplierConfirmationsController");
+const { getSupplierContacts, logSupplierContact } = require("../controllers/supplierContactController");
 const { getAirportTransfers } = require("../controllers/airportTransfersController");
 const { getGuestTransferMessage } = require("../controllers/guestTransferMessageController");
 const { getHotelConfirmationDraft } = require("../controllers/hotelConfirmationDraftController");
@@ -72,6 +73,9 @@ router.get(
     authorizePermissions(PERMISSIONS.BOOKING_VIEW),
     getSupplierConfirmations
 );
+
+router.get("/:id/supplier-contacts/:type/:itemId", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getSupplierContacts);
+router.post("/:id/supplier-contacts/:type/:itemId", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), logSupplierContact);
 
 router.get(
     "/outstanding-balances",

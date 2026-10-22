@@ -88,6 +88,15 @@ const paymentContactSchema = new mongoose.Schema({
     nextFollowUpDate: { type: Date, default: null },
 }, { _id: false });
 
+const supplierContactSchema = new mongoose.Schema({
+    contactedAt: { type: Date, required: true },
+    contactedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+    contactedByName: { type: String, trim: true, maxlength: 120, default: "" },
+    channel: { type: String, enum: ["Email", "WhatsApp", "Phone", "Other"], required: true },
+    note: { type: String, trim: true, maxlength: 300, default: "" },
+    nextFollowUpDate: { type: Date, default: null },
+});
+
 const hotelStaySchema = new mongoose.Schema({
     hotelName: { type: String, required: true, trim: true, maxlength: 120 },
     location: { type: String, trim: true, maxlength: 120, default: "" },
@@ -103,6 +112,7 @@ const hotelStaySchema = new mongoose.Schema({
     },
     status: { type: String, enum: ["Requested", "Confirmed", "Cancelled"], default: "Requested" },
     followUpDate: { type: Date, default: null },
+    contacts: { type: [supplierContactSchema], default: [] },
     confirmationNumber: { type: String, trim: true, maxlength: 100, default: "" },
     notes: { type: String, trim: true, maxlength: 500, default: "" },
     createdAt: { type: Date, default: Date.now },
@@ -132,6 +142,7 @@ const transportAssignmentSchema = new mongoose.Schema({
     flight: { type: transferFlightSchema, default: null },
     status: { type: String, enum: ["Requested", "Confirmed", "Cancelled"], default: "Requested" },
     followUpDate: { type: Date, default: null },
+    contacts: { type: [supplierContactSchema], default: [] },
     notes: { type: String, trim: true, maxlength: 500, default: "" },
     createdAt: { type: Date, default: Date.now },
 });

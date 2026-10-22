@@ -27,6 +27,7 @@ import HotelSupplierEmailModal from "../components/HotelSupplierEmailModal";
 import BookingItineraryModal from "../components/BookingItineraryModal";
 import BookingActivityModal from "../components/BookingActivityModal";
 import BookingTransportModal from "../components/BookingTransportModal";
+import SupplierContactModal from "../components/SupplierContactModal";
 import BookingReadinessModal from "../components/BookingReadinessModal";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
@@ -71,6 +72,7 @@ const Bookings = () => {
     const [selectedPreparationBooking, setSelectedPreparationBooking] = useState(null);
     const [selectedHotelBooking, setSelectedHotelBooking] = useState(null);
     const [selectedHotelEmail, setSelectedHotelEmail] = useState(null);
+    const [selectedSupplierContact, setSelectedSupplierContact] = useState(null);
     const [selectedItineraryBooking, setSelectedItineraryBooking] = useState(null);
     const [selectedActivityBooking, setSelectedActivityBooking] = useState(null);
     const [selectedTransportBooking, setSelectedTransportBooking] = useState(null);
@@ -1243,6 +1245,10 @@ const Bookings = () => {
                         setSelectedHotelEmail({ bookingId: selectedHotelBooking._id, stayId });
                         setSelectedHotelBooking(null);
                     }}
+                    onOpenContacts={(itemId) => {
+                        setSelectedSupplierContact({ bookingId: selectedHotelBooking._id, type: "hotel", itemId });
+                        setSelectedHotelBooking(null);
+                    }}
                 />
             )}
             {selectedHotelEmail && <HotelSupplierEmailModal
@@ -1250,6 +1256,12 @@ const Bookings = () => {
                 bookingId={selectedHotelEmail.bookingId}
                 stayId={selectedHotelEmail.stayId}
                 onClose={() => setSelectedHotelEmail(null)}
+            />}
+            {selectedSupplierContact && <SupplierContactModal
+                key={`${selectedSupplierContact.bookingId}-${selectedSupplierContact.itemId}`}
+                {...selectedSupplierContact}
+                onClose={() => { setSelectedSupplierContact(null); fetchBookings(); }}
+                onChanged={fetchBookings}
             />}
             {selectedItineraryBooking && (
                 <BookingItineraryModal
@@ -1273,6 +1285,10 @@ const Bookings = () => {
                     booking={selectedTransportBooking}
                     onClose={() => setSelectedTransportBooking(null)}
                     onChanged={fetchBookings}
+                    onOpenContacts={(itemId) => {
+                        setSelectedSupplierContact({ bookingId: selectedTransportBooking._id, type: "transport", itemId });
+                        setSelectedTransportBooking(null);
+                    }}
                 />
             )}
         </div>
