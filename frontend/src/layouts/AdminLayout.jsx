@@ -30,6 +30,7 @@ import PermissionGuard from "../components/PermissionGuard";
 import TaskAlert from "../components/TaskAlert";
 import SupplierAlert from "../components/SupplierAlert";
 import PaymentAlert from "../components/PaymentAlert";
+import SupplierPayableAlert from "../components/SupplierPayableAlert";
 import { ROUTE_PERMISSIONS } from "../config/routePermissions";
 
 const AdminLayout = () => {
@@ -272,6 +273,9 @@ const AdminLayout = () => {
                     <div className="d-flex align-items-center flex-wrap gap-3">
                         <PermissionGuard all={[ROUTE_PERMISSIONS.bookings, ROUTE_PERMISSIONS.payments]}>
                             <PaymentAlert />
+                        </PermissionGuard>
+                        <PermissionGuard all={[ROUTE_PERMISSIONS.costProfit, ROUTE_PERMISSIONS.quotations, ROUTE_PERMISSIONS.bookings]}>
+                            <SupplierPayableAlert />
                         </PermissionGuard>
                         <PermissionGuard permission={ROUTE_PERMISSIONS.supplierConfirmations}>
                             <SupplierAlert />

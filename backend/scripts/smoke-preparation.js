@@ -93,7 +93,11 @@ const main = async () => {
         assert.equal((await costOverview.json()).items.find((item) => item._id === costId).paidAmount, 50);
         const payableList = await financeRequest(payablesUrl);
         assert.equal(payableList.status, 200);
-        const payables = (await payableList.json()).items;
+        const payableData = await payableList.json();
+        const payables = payableData.items;
+        assert.equal(payableData.summary.overdue, 1);
+        assert.equal(payableData.summary.upcoming, 1);
+        assert.equal(payableData.summary.total, payableData.total);
         const payable = payables.find((item) => item._id === costId);
         assert.equal(payable.remaining, 150);
         assert.equal(payable.currency, "USD");
@@ -104,7 +108,10 @@ const main = async () => {
         assert.equal((await financeRequest(costItemUrl, "PUT", { ...supplierCost, currency: "GBP", paidAmount: 0, conversionRate: 1.2 })).status, 400);
         const fullyPaid = await financeRequest(costItemUrl, "PUT", { ...supplierCost, paidAmount: 200 });
         assert.equal(fullyPaid.status, 200, `Settle supplier cost: ${await fullyPaid.clone().text()}`);
-        const remainingPayables = (await (await financeRequest(payablesUrl)).json()).items;
+        const remainingData = await (await financeRequest(payablesUrl)).json();
+        const remainingPayables = remainingData.items;
+        assert.equal(remainingData.summary.overdue, 0);
+        assert.equal(remainingData.summary.upcoming, 1);
         assert.equal(remainingPayables.some((item) => item._id === costId), false);
         assert.equal(remainingPayables.some((item) => item._id === localCostId), true);
         assert.equal((await (await financeRequest(costUrl)).json()).items.find((item) => item._id === costId).paidAmount, 200);

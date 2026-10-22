@@ -84,9 +84,10 @@ const getSupplierPayables = async (req, res) => {
             paymentDueDate: { $ne: null, $lt: nextWeek },
             $expr: { $lt: [{ $ifNull: ["$paidAmount", 0] }, "$amount"] },
         };
-        const [costs, total] = await Promise.all([
+        const [costs, total, overdue] = await Promise.all([
             CostEntry.find(query).sort({ paymentDueDate: 1, _id: 1 }).limit(50).lean(),
             CostEntry.countDocuments(query),
+            CostEntry.countDocuments({ ...query, paymentDueDate: { $ne: null, $lt: start } }),
         ]);
         const bookings = await Booking.find({ _id: { $in: costs.map((cost) => cost.recordId) } })
             .select("bookingCode customer.fullName bookingStatus").lean();
@@ -94,6 +95,7 @@ const getSupplierPayables = async (req, res) => {
         return res.json({
             total,
             limit: 50,
+            summary: { total, overdue, upcoming: total - overdue },
             items: costs.filter((cost) => byId.has(String(cost.recordId))).map((cost) => ({
                 _id: cost._id,
                 recordId: cost.recordId,

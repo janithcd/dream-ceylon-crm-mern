@@ -4,6 +4,7 @@ import { FaEdit, FaPlus, FaSearch, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import PermissionGuard from "../components/PermissionGuard";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
+import { notifySupplierPayablesChanged } from "../utils/supplierPayableEvents";
 
 const categories = ["Hotel", "Transport", "Guide", "Activities", "Entrance Fees", "Payment Fees", "Other"];
 const currencies = ["USD", "LKR", "EUR", "GBP"];
@@ -123,6 +124,7 @@ const CostProfit = () => {
             setEditingId("");
             setForm(blankCost(overview.record.currency));
             setReloadKey((value) => value + 1);
+            if (type === "booking") notifySupplierPayablesChanged();
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not save cost.");
         } finally {
@@ -141,6 +143,7 @@ const CostProfit = () => {
                 setForm(blankCost(overview.record.currency));
             }
             setReloadKey((value) => value + 1);
+            if (type === "booking") notifySupplierPayablesChanged();
         } catch (requestError) {
             setError(requestError.response?.data?.message || "Could not delete cost.");
         }
