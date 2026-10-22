@@ -6,6 +6,7 @@ const Booking = require("../models/Booking");
 const BookingPayment = require("../models/BookingPayment");
 const TourPackage = require("../models/TourPackage");
 const Quotation = require("../models/Quotation");
+const CostEntry = require("../models/CostEntry");
 const ActivityLog = require("../models/ActivityLog");
 const { PDFDocument } = require("pdf-lib");
 
@@ -17,6 +18,7 @@ const main = async () => {
     await mongoose.connect(process.env.MONGO_URI);
     let admin;
     let otherAdmin;
+    let financeAdmin;
     let booking;
     let overlappingBooking;
     let tourPackage;
@@ -56,6 +58,56 @@ const main = async () => {
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: body === undefined ? undefined : JSON.stringify(body),
         });
+        financeAdmin = await Admin.create({
+            name: "CI Finance Test", email: `ci-finance-${Date.now()}@example.invalid`,
+            password: "disposable-ci-only-password", role: "Finance",
+        });
+        const financeToken = jwt.sign({ id: financeAdmin._id, v: 0 }, process.env.JWT_SECRET);
+        const financeRequest = (path, method = "GET", body) => fetch(path, {
+            method,
+            headers: { Authorization: `Bearer ${financeToken}`, "Content-Type": "application/json" },
+            body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        const costUrl = `http://127.0.0.1:5000/api/finance/costs/booking/${booking._id}`;
+        const payablesUrl = "http://127.0.0.1:5000/api/finance/costs/payables";
+        assert.equal((await request(payablesUrl, "GET")).status, 403, "Sales cannot view supplier payments");
+        const supplierCost = {
+            category: "Hotel", description: "CI hotel deposit", amount: 200,
+            currency: "USD", paidAmount: 50,
+            paymentDueDate: dateOnly(new Date(Date.now() - dayMs)),
+        };
+        assert.equal((await financeRequest(costUrl, "POST", { ...supplierCost, paidAmount: 201 })).status, 400);
+        assert.equal((await financeRequest(costUrl, "POST", { ...supplierCost, paymentDueDate: "2027-02-30" })).status, 400);
+        const createdCost = await financeRequest(costUrl, "POST", supplierCost);
+        assert.equal(createdCost.status, 201, `Create supplier cost: ${await createdCost.clone().text()}`);
+        const costId = (await createdCost.json())._id;
+        const localCost = await financeRequest(costUrl, "POST", {
+            category: "Guide", description: "CI guide deposit", amount: 20000,
+            currency: "LKR", conversionRate: 0.003,
+            paidAmount: 5000, paymentDueDate: dateOnly(new Date(Date.now() + dayMs)),
+        });
+        assert.equal(localCost.status, 201, `Create LKR supplier cost: ${await localCost.clone().text()}`);
+        const localCostId = (await localCost.json())._id;
+        const costOverview = await financeRequest(costUrl);
+        assert.equal(costOverview.status, 200);
+        assert.equal((await costOverview.json()).items.find((item) => item._id === costId).paidAmount, 50);
+        const payableList = await financeRequest(payablesUrl);
+        assert.equal(payableList.status, 200);
+        const payables = (await payableList.json()).items;
+        const payable = payables.find((item) => item._id === costId);
+        assert.equal(payable.remaining, 150);
+        assert.equal(payable.currency, "USD");
+        assert.equal(payable.bookingCode, booking.bookingCode);
+        assert.equal(payables.find((item) => item._id === localCostId).remaining, 15000);
+        assert.equal(payables.find((item) => item._id === localCostId).currency, "LKR");
+        const costItemUrl = `http://127.0.0.1:5000/api/finance/costs/${costId}`;
+        assert.equal((await financeRequest(costItemUrl, "PUT", { ...supplierCost, currency: "GBP", paidAmount: 0, conversionRate: 1.2 })).status, 400);
+        const fullyPaid = await financeRequest(costItemUrl, "PUT", { ...supplierCost, paidAmount: 200 });
+        assert.equal(fullyPaid.status, 200, `Settle supplier cost: ${await fullyPaid.clone().text()}`);
+        const remainingPayables = (await (await financeRequest(payablesUrl)).json()).items;
+        assert.equal(remainingPayables.some((item) => item._id === costId), false);
+        assert.equal(remainingPayables.some((item) => item._id === localCostId), true);
+        assert.equal((await (await financeRequest(costUrl)).json()).items.find((item) => item._id === costId).paidAmount, 200);
         const getAttention = async () => {
             const response = await request("http://127.0.0.1:5000/api/dashboard/stats", "GET");
             const body = await response.json();
@@ -681,6 +733,7 @@ const main = async () => {
         console.log("Quotation validity, booking preparation, package itinerary import, supplier confirmations, payment alerts and follow-ups, transport overlaps, PDFs, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
     } finally {
         if (booking) {
+            await CostEntry.deleteMany({ recordType: "Booking", recordId: booking._id });
             await BookingPayment.deleteMany({ booking: booking._id });
             await ActivityLog.deleteMany({ $or: [
                 { relatedRecordId: booking._id },
@@ -703,6 +756,7 @@ const main = async () => {
         }
         if (admin) await Admin.deleteOne({ _id: admin._id });
         if (otherAdmin) await Admin.deleteOne({ _id: otherAdmin._id });
+        if (financeAdmin) await Admin.deleteOne({ _id: financeAdmin._id });
         await mongoose.disconnect();
     }
 };

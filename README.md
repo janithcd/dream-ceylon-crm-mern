@@ -110,6 +110,8 @@ The **Cost & Profit** page is available to Super Admin and Finance accounts. Ope
 
 Enter each supplier amount in its own currency. If it differs from the quotation or booking currency, enter the rate as **one supplier currency unit in the selling currency**. For example, if the client price is in USD and one LKR is worth 0.0033 USD, enter `0.0033` for an LKR cost. This rate is saved on the entry; the CRM does not fetch live exchange rates. Changing a sale currency flags old costs for review and hides profit until they are revalued. The summary uses `profit = client selling price − recorded costs` and `margin = profit / client selling price`. No profit is shown before any costs are entered. Booking profit uses the full booked selling price, while actual cash received and refunds remain in Payment Reports.
 
+For **actual booking costs**, enter an optional supplier payment due date and the total already paid to that supplier, including deposits. The cost table shows what remains in the supplier's currency; it never adds different currencies together. The booking tab lists outstanding supplier costs due today, overdue, or within the next six Sri Lanka calendar days, up to 50 earliest entries, with a shortcut to the booking. Fully paid costs leave this queue. Quotation estimates cannot have supplier payments. Changing a paid cost's currency requires clearing the recorded paid amount first. Cost edits create an activity event without exposing private supplier amounts there. The paid field is a running amount rather than a per-transaction payment ledger, so staff should reconcile it with bank records. `GET /api/finance/costs/payables` requires `cost.view`; changes use the existing `cost.manage` routes.
+
 ### 🤖 AI Tools
 
 - Generate client replies

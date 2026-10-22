@@ -3,11 +3,13 @@ import { Link, useSearchParams } from "react-router-dom";
 import { FaEdit, FaPlus, FaSearch, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import PermissionGuard from "../components/PermissionGuard";
+import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 
 const categories = ["Hotel", "Transport", "Guide", "Activities", "Entrance Fees", "Payment Fees", "Other"];
 const currencies = ["USD", "LKR", "EUR", "GBP"];
 const blankCost = (currency = "USD") => ({
     category: "Hotel", description: "", amount: "", currency, conversionRate: "1",
+    paidAmount: "0", paymentDueDate: "",
 });
 const formatMoney = (amount, currency) => amount === null || amount === undefined
     ? "—"
@@ -27,6 +29,9 @@ const CostProfit = () => {
     const [reloadKey, setReloadKey] = useState(0);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [payables, setPayables] = useState({ items: [], total: 0, limit: 50 });
+    const [payablesLoading, setPayablesLoading] = useState(false);
+    const [payablesError, setPayablesError] = useState("");
     const overviewKey = `${type}/${recordId}`;
     const overview = loadedOverview.key === overviewKey ? loadedOverview.data : null;
     const busy = Boolean(recordId && !overview && !error);
@@ -79,6 +84,20 @@ const CostProfit = () => {
         return () => { cancelled = true; };
     }, [type, recordId, reloadKey]);
 
+    useEffect(() => {
+        if (type !== "booking") return;
+        let cancelled = false;
+        setPayablesLoading(true);
+        setPayablesError("");
+        api.get("/finance/costs/payables")
+            .then(({ data }) => { if (!cancelled) { setPayables(data); setPayablesError(""); } })
+            .catch((requestError) => {
+                if (!cancelled) setPayablesError(requestError.response?.data?.message || "Could not load supplier payments.");
+            })
+            .finally(() => { if (!cancelled) setPayablesLoading(false); });
+        return () => { cancelled = true; };
+    }, [type, reloadKey]);
+
     const selectRecord = (nextType, nextId = "") => {
         setError("");
         setSuccess("");
@@ -130,6 +149,14 @@ const CostProfit = () => {
     const saleCurrency = overview?.record?.currency || "USD";
     const foreignCurrency = form.currency !== saleCurrency;
     const summary = overview?.summary;
+    const today = todayCalendarDate();
+    const supplierBalances = type === "booking" && overview
+        ? Object.entries(overview.items.reduce((totals, item) => {
+            const remainingCents = Math.round((item.amount - (item.paidAmount ?? 0)) * 100);
+            if (remainingCents > 0) totals[item.currency] = (totals[item.currency] || 0) + remainingCents;
+            return totals;
+        }, {})).sort(([a], [b]) => a.localeCompare(b))
+        : [];
 
     return (
         <div>
@@ -174,6 +201,33 @@ const CostProfit = () => {
                 </div>
             </div>
 
+            {type === "booking" && (
+                <div className="card border-0 shadow-sm mb-4">
+                    <div className="card-body">
+                        <h4 className="fw-bold mb-1">Supplier payments due</h4>
+                        <p className="text-muted small mb-3">Unpaid booking costs due today, overdue, or within the next six days in Sri Lanka. Amounts are shown in each supplier currency.</p>
+                        {payablesError && <div className="alert alert-danger" role="alert">{payablesError}</div>}
+                        {!payablesError && payablesLoading && <p className="text-muted mb-0">Loading supplier payments...</p>}
+                        {!payablesError && !payablesLoading && payables.items.length === 0 &&
+                            <p className="text-muted mb-0">No supplier payments due within seven days.</p>}
+                        {!payablesError && !payablesLoading && payables.items.length > 0 &&
+                            <div className="table-responsive"><table className="table table-hover align-middle mb-0">
+                                    <thead><tr><th>Booking</th><th>Supplier / cost</th><th>Remaining</th><th>Due</th></tr></thead>
+                                    <tbody>{payables.items.map((item) => <tr key={item._id}>
+                                        <td><button type="button" className="btn btn-link p-0" onClick={() => selectRecord("booking", item.recordId)}>{item.bookingCode}</button>
+                                            <div className="small text-muted">{item.customerName}{item.bookingStatus === "Cancelled" ? " · Cancelled booking: verify supplier obligation" : ""}</div></td>
+                                        <td>{item.description}</td>
+                                        <td>{formatMoney(item.remaining, item.currency)}</td>
+                                        <td><span className={toCalendarDateInput(item.paymentDueDate) < today ? "text-danger fw-semibold" : ""}>
+                                            {formatCalendarDate(item.paymentDueDate)}{toCalendarDateInput(item.paymentDueDate) < today ? " · Overdue" : ""}
+                                        </span></td>
+                                    </tr>)}</tbody>
+                                </table></div>}
+                        {!payablesError && payables.total > payables.limit && <p className="text-muted small mt-2 mb-0">Showing the first {payables.limit} of {payables.total} due payments, earliest first.</p>}
+                    </div>
+                </div>
+            )}
+
             {busy && <p className="text-muted">Loading cost details...</p>}
             {!busy && overview && (
                 <>
@@ -187,6 +241,11 @@ const CostProfit = () => {
                                 <div className="col-md-3"><div className="stat-card h-100"><small className="text-muted">{type === "quotation" ? "Estimated profit" : "Booked profit"}</small><h5 className="mt-2 mb-0">{formatMoney(summary.profit, saleCurrency)}</h5></div></div>
                                 <div className="col-md-3"><div className="stat-card h-100"><small className="text-muted">Margin on selling price</small><h5 className="mt-2 mb-0">{summary.marginPercent === null ? "—" : `${summary.marginPercent.toFixed(2)}%`}</h5></div></div>
                             </div>
+                            {type === "booking" && <p className="mt-3 mb-0">
+                                <strong>Unpaid supplier balances:</strong> {supplierBalances.length
+                                    ? supplierBalances.map(([currency, cents]) => formatMoney(cents / 100, currency)).join(" · ")
+                                    : "None recorded"}. These are not converted into the booking currency.
+                            </p>}
                             {summary.entriesCount === 0 && <p className="text-muted mt-3 mb-0">Add supplier costs to calculate profit. Empty costs are not treated as zero.</p>}
                             {summary.currencyMismatch > 0 && <div className="alert alert-warning mt-3 mb-0">The selling currency changed after {summary.currencyMismatch} cost entry or entries were saved. Edit those entries with a new exchange rate before using the profit figures.</div>}
                             {type === "booking" && <small className="text-muted d-block mt-3">Booked profit uses the full booking price, not cash collected. Update actual costs as supplier bills arrive.</small>}
@@ -220,18 +279,35 @@ const CostProfit = () => {
                                     </div>
                                     <div className="col-md-2">
                                         <label className="form-label" htmlFor="cost-currency">Currency</label>
-                                        <select id="cost-currency" className="form-select" value={form.currency} onChange={(event) => {
-                                            const currency = event.target.value;
-                                            setForm({ ...form, currency, conversionRate: currency === saleCurrency ? "1" : "" });
-                                        }}>
+                                        <select id="cost-currency" className="form-select" value={form.currency}
+                                            disabled={Boolean(editingId && overview.items.find((item) => item._id === editingId && (item.paidAmount ?? 0) > 0))}
+                                            onChange={(event) => {
+                                                const currency = event.target.value;
+                                                setForm({ ...form, currency, conversionRate: currency === saleCurrency ? "1" : "" });
+                                            }}>
                                             {currencies.map((currency) => <option key={currency}>{currency}</option>)}
                                         </select>
+                                        {editingId && overview.items.some((item) => item._id === editingId && (item.paidAmount ?? 0) > 0) &&
+                                            <small className="text-muted">Clear the recorded payment and save before changing currency.</small>}
                                     </div>
                                     {foreignCurrency && <div className="col-md-5">
                                         <label className="form-label" htmlFor="cost-rate">1 {form.currency} equals how many {saleCurrency}?</label>
                                         <input id="cost-rate" className="form-control" type="number" min="0.000001" max="1000000" step="0.000001" required value={form.conversionRate} onChange={(event) => setForm({ ...form, conversionRate: event.target.value })} placeholder="Enter your agreed conversion rate" />
                                         <small className="text-muted">Saved with this entry; existing costs are not recalculated automatically.</small>
                                     </div>}
+                                    {type === "booking" && <>
+                                        <div className="col-md-3">
+                                            <label className="form-label" htmlFor="cost-paid">Paid to supplier ({form.currency})</label>
+                                            <input id="cost-paid" className="form-control" type="number" min="0" max={form.amount || undefined} step="0.01" required
+                                                value={form.paidAmount} onChange={(event) => setForm({ ...form, paidAmount: event.target.value })} />
+                                        </div>
+                                        <div className="col-md-3">
+                                            <label className="form-label" htmlFor="cost-due">Supplier payment due</label>
+                                            <input id="cost-due" className="form-control" type="date" value={form.paymentDueDate}
+                                                onChange={(event) => setForm({ ...form, paymentDueDate: event.target.value })} />
+                                        </div>
+                                        <div className="col-12"><small className="text-muted">Record the total paid so far, including deposits. Edit it after another payment; verify the running amount against your bank records.</small></div>
+                                    </>}
                                     <div className="col-12 d-flex gap-2">
                                         <button type="submit" className="btn btn-primary" disabled={saving}><FaPlus className="me-2" />{saving ? "Saving..." : editingId ? "Save changes" : "Add cost"}</button>
                                         {editingId && <button type="button" className="btn btn-outline-secondary" onClick={() => { setEditingId(""); setForm(blankCost(saleCurrency)); }}>Cancel edit</button>}
@@ -246,14 +322,21 @@ const CostProfit = () => {
                             <h5 className="fw-bold mb-3">Supplier cost entries</h5>
                             {overview.items.length === 0 ? <p className="text-muted mb-0">No costs recorded yet.</p> : (
                                 <div className="table-responsive"><table className="table align-middle">
-                                    <thead><tr><th>Category</th><th>Description</th><th>Supplier amount</th><th>Rate to {saleCurrency}</th><th>In {saleCurrency}</th><th className="text-end">Actions</th></tr></thead>
+                                    <thead><tr><th>Category</th><th>Description</th><th>Supplier amount</th>{type === "booking" && <><th>Paid / remaining</th><th>Payment due</th></>}<th>Rate to {saleCurrency}</th><th>In {saleCurrency}</th><th className="text-end">Actions</th></tr></thead>
                                     <tbody>{overview.items.map((item) => <tr key={item._id}>
                                         <td>{item.category}</td><td>{item.description}</td>
                                         <td>{formatMoney(item.amount, item.currency)}</td>
+                                        {type === "booking" && <>
+                                            <td>{formatMoney(item.paidAmount ?? 0, item.currency)} paid
+                                                <div className="small text-muted">{formatMoney(Math.max(0, Math.round((item.amount - (item.paidAmount ?? 0)) * 100) / 100), item.currency)} remaining</div></td>
+                                            <td>{item.paymentDueDate ? formatCalendarDate(item.paymentDueDate) : "Not set"}
+                                                {(item.paidAmount ?? 0) < item.amount && item.paymentDueDate && toCalendarDateInput(item.paymentDueDate) < today &&
+                                                    <span className="badge text-bg-danger ms-1">Overdue</span>}</td>
+                                        </>}
                                         <td>{item.targetCurrency === saleCurrency ? item.conversionRate : `Old target: ${item.targetCurrency}`}</td>
                                         <td>{item.targetCurrency === saleCurrency ? formatMoney(Math.round(item.amount * item.conversionRate * 100) / 100, saleCurrency) : "Revalue required"}</td>
                                         <td className="text-end"><PermissionGuard permission="cost.manage"><div className="d-flex justify-content-end gap-2">
-                                            <button type="button" className="btn btn-sm btn-outline-primary" title="Edit cost" onClick={() => { setEditingId(item._id); setForm({ category: item.category, description: item.description, amount: String(item.amount), currency: item.currency, conversionRate: String(item.conversionRate) }); document.getElementById("cost-description")?.focus(); }}><FaEdit /></button>
+                                            <button type="button" className="btn btn-sm btn-outline-primary" title="Edit cost" onClick={() => { setEditingId(item._id); setForm({ category: item.category, description: item.description, amount: String(item.amount), currency: item.currency, conversionRate: String(item.conversionRate), paidAmount: String(item.paidAmount ?? 0), paymentDueDate: toCalendarDateInput(item.paymentDueDate) }); document.getElementById("cost-description")?.focus(); }}><FaEdit /></button>
                                             <button type="button" className="btn btn-sm btn-outline-danger" title="Delete cost" onClick={() => void deleteCost(item)}><FaTrash /></button>
                                         </div></PermissionGuard></td>
                                     </tr>)}</tbody>

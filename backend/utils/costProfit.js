@@ -1,5 +1,6 @@
 const CURRENCIES = Object.freeze(["USD", "LKR", "EUR", "GBP"]);
 const CATEGORIES = Object.freeze(["Hotel", "Transport", "Guide", "Activities", "Entrance Fees", "Payment Fees", "Other"]);
+const { parseCalendarDate } = require("./paymentDueDate");
 
 const roundMoney = (amount) => Math.round((amount + Number.EPSILON) * 100) / 100;
 
@@ -23,7 +24,7 @@ const costSummary = (saleAmount, saleCurrency, entries) => {
     };
 };
 
-const parseCostPayload = (body, targetCurrency) => {
+const parseCostPayload = (body, targetCurrency, recordType = "Quotation", existing = null) => {
     const category = String(body?.category || "");
     const description = String(body?.description || "").trim();
     const currency = String(body?.currency || "");
@@ -40,7 +41,27 @@ const parseCostPayload = (body, targetCurrency) => {
         Math.round(conversionRate * 1000000) / 1000000 !== conversionRate || amount * conversionRate > 1000000000000) {
         return { error: "Enter a positive exchange rate (one supplier currency unit in the sale currency), up to six decimal places." };
     }
-    return { value: { category, description, amount, currency, conversionRate, targetCurrency } };
+    const value = { category, description, amount, currency, conversionRate, targetCurrency };
+    if (recordType === "Booking") {
+        if (existing && (existing.paidAmount ?? 0) > 0 && existing.currency !== currency) {
+            return { error: "Clear the recorded supplier payment before changing its currency." };
+        }
+        const rawPaid = body?.paidAmount === undefined ? (existing?.paidAmount ?? 0) : body.paidAmount;
+        const paidAmount = Number(rawPaid);
+        if (rawPaid === "" || !Number.isFinite(paidAmount) || paidAmount < 0 ||
+            roundMoney(paidAmount) !== paidAmount || paidAmount > amount) {
+            return { error: "Paid amount must be between zero and the supplier cost, with at most two decimal places." };
+        }
+        const parsedDueDate = body?.paymentDueDate === undefined
+            ? { value: existing?.paymentDueDate ?? null }
+            : parseCalendarDate(body.paymentDueDate, "Supplier payment due date");
+        if (parsedDueDate.error) return { error: parsedDueDate.error };
+        value.paidAmount = paidAmount;
+        value.paymentDueDate = parsedDueDate.value;
+    } else if ((body?.paidAmount !== undefined && Number(body.paidAmount) !== 0) || body?.paymentDueDate) {
+        return { error: "Supplier payments can only be recorded against booking costs." };
+    }
+    return { value };
 };
 
 module.exports = { CURRENCIES, CATEGORIES, costSummary, parseCostPayload };

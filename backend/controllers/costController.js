@@ -3,9 +3,11 @@ const Booking = require("../models/Booking");
 const CostEntry = require("../models/CostEntry");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { costSummary, parseCostPayload } = require("../utils/costProfit");
+const { getBusinessDayBounds } = require("../utils/businessDate");
 
 const TYPES = { quotation: "Quotation", booking: "Booking" };
 const validId = (id) => /^[0-9a-f]{24}$/i.test(String(id || ""));
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const loadRecord = async (recordType, recordId) => {
     if (recordType === "Quotation") {
@@ -71,6 +73,47 @@ const getCostOverview = async (req, res) => {
     }
 };
 
+// Booking supplier payments due today, overdue, or within the next six days.
+// Amounts stay in each supplier's currency; never add different currencies together.
+const getSupplierPayables = async (req, res) => {
+    try {
+        const { start } = getBusinessDayBounds();
+        const nextWeek = new Date(start.getTime() + 7 * DAY_MS);
+        const query = {
+            recordType: "Booking",
+            paymentDueDate: { $ne: null, $lt: nextWeek },
+            $expr: { $lt: [{ $ifNull: ["$paidAmount", 0] }, "$amount"] },
+        };
+        const [costs, total] = await Promise.all([
+            CostEntry.find(query).sort({ paymentDueDate: 1, _id: 1 }).limit(50).lean(),
+            CostEntry.countDocuments(query),
+        ]);
+        const bookings = await Booking.find({ _id: { $in: costs.map((cost) => cost.recordId) } })
+            .select("bookingCode customer.fullName bookingStatus").lean();
+        const byId = new Map(bookings.map((booking) => [String(booking._id), booking]));
+        return res.json({
+            total,
+            limit: 50,
+            items: costs.filter((cost) => byId.has(String(cost.recordId))).map((cost) => ({
+                _id: cost._id,
+                recordId: cost.recordId,
+                description: cost.description,
+                currency: cost.currency,
+                amount: cost.amount,
+                paidAmount: cost.paidAmount ?? 0,
+                remaining: Math.round((cost.amount - (cost.paidAmount ?? 0)) * 100) / 100,
+                paymentDueDate: cost.paymentDueDate,
+                bookingCode: byId.get(String(cost.recordId)).bookingCode,
+                customerName: byId.get(String(cost.recordId)).customer?.fullName || "",
+                bookingStatus: byId.get(String(cost.recordId)).bookingStatus,
+            })),
+        });
+    } catch (error) {
+        console.error("Supplier payables failed:", error);
+        return res.status(500).json({ message: "Failed to load supplier payments." });
+    }
+};
+
 const addCost = async (req, res) => {
     const recordType = TYPES[req.params.type];
     const recordId = req.params.id;
@@ -80,7 +123,7 @@ const addCost = async (req, res) => {
     try {
         const record = await loadRecord(recordType, recordId);
         if (!record) return res.status(404).json({ message: "Quotation or booking not found." });
-        const payload = parseCostPayload(req.body, record.currency);
+        const payload = parseCostPayload(req.body, record.currency, recordType);
         if (payload.error) return res.status(400).json({ message: payload.error });
 
         const item = await CostEntry.create({
@@ -108,7 +151,7 @@ const updateCost = async (req, res) => {
         if (!item) return res.status(404).json({ message: "Cost entry not found." });
         const record = await loadRecord(item.recordType, item.recordId);
         if (!record) return res.status(404).json({ message: "Quotation or booking not found." });
-        const payload = parseCostPayload(req.body, record.currency);
+        const payload = parseCostPayload(req.body, record.currency, item.recordType, item);
         if (payload.error) return res.status(400).json({ message: payload.error });
 
         Object.assign(item, payload.value);
@@ -145,4 +188,4 @@ const deleteCost = async (req, res) => {
     }
 };
 
-module.exports = { getCostOverview, addCost, updateCost, deleteCost };
+module.exports = { getCostOverview, getSupplierPayables, addCost, updateCost, deleteCost };

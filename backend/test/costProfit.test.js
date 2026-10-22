@@ -37,6 +37,25 @@ test("foreign currency needs an explicit valid rate; same currency always uses o
     assert.equal(parseCostPayload({ category: "Hotel", description: "Room", amount: 100, currency: "LKR", conversionRate: 0.003333 }, "USD").value.conversionRate, 0.003333);
 });
 
+test("booking supplier payments validate partial amounts and calendar dates", () => {
+    const cost = { category: "Hotel", description: "Room deposit", amount: 150, currency: "USD" };
+    const saved = parseCostPayload({ ...cost, paidAmount: 50, paymentDueDate: "2027-03-10" }, "USD", "Booking");
+    assert.equal(saved.value.paidAmount, 50);
+    assert.equal(saved.value.paymentDueDate.toISOString(), "2027-03-10T00:00:00.000Z");
+    assert.equal(parseCostPayload({ ...cost, paidAmount: 150.01 }, "USD", "Booking").error !== undefined, true);
+    assert.equal(parseCostPayload({ ...cost, paidAmount: -1 }, "USD", "Booking").error !== undefined, true);
+    assert.equal(parseCostPayload({ ...cost, paidAmount: 0.001 }, "USD", "Booking").error !== undefined, true);
+    assert.equal(parseCostPayload({ ...cost, paymentDueDate: "2027-02-30" }, "USD", "Booking").error !== undefined, true);
+    assert.equal(parseCostPayload({ ...cost, paidAmount: 1 }, "USD", "Quotation").error !== undefined, true);
+    assert.equal(parseCostPayload({ ...cost, paymentDueDate: "2027-03-10" }, "USD", "Quotation").error !== undefined, true);
+
+    const updated = parseCostPayload({ ...cost, amount: 160 }, "USD", "Booking", saved.value);
+    assert.equal(updated.value.paidAmount, 50, "old clients must not erase recorded payments");
+    assert.equal(updated.value.paymentDueDate.toISOString(), "2027-03-10T00:00:00.000Z");
+    assert.equal(parseCostPayload({ ...cost, amount: 40 }, "USD", "Booking", saved.value).error !== undefined, true);
+    assert.match(parseCostPayload({ ...cost, currency: "GBP", paidAmount: 0 }, "USD", "Booking", saved.value).error, /currency/);
+});
+
 test("cost API restricts supplier costs to finance permissions", async (t) => {
     const quoteId = "507f1f77bcf86cd799439011";
     const financeId = "507f1f77bcf86cd799439012";
