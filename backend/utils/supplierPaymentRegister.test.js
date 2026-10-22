@@ -16,22 +16,31 @@ test("register validates range and pagination and treats bank references literal
     for (const query of [
         { from: "2026-02-30" }, { from: "2026-12-02", to: "2026-12-01" },
         { from: "2025-01-01", to: "2026-01-02" }, { page: "0" }, { limit: "51" },
-        { reference: "x".repeat(101) },
+        { reference: "x".repeat(101) }, { status: "unknown" },
     ]) assert.ok(parseSupplierPaymentRegisterQuery(query).error);
     const parsed = parseSupplierPaymentRegisterQuery({ from: "2026-01-01", to: "2026-01-31", reference: " A.*[1] " });
     assert.equal(parsed.value.reference, "A.*[1]");
     assert.deepEqual(parsed.value.stages[2].$match["paymentHistory.reference"], { $regex: "A\\.\\*\\[1\\]", $options: "i" });
+    const unmatched = parseSupplierPaymentRegisterQuery({ status: "unreconciled" });
+    assert.equal(unmatched.value.stages[0].$match.paymentHistory.$elemMatch.reconciledAt, null);
+    assert.equal(unmatched.value.stages[2].$match["paymentHistory.reconciledAt"], null);
+    const matched = parseSupplierPaymentRegisterQuery({ status: "reconciled" });
+    assert.deepEqual(matched.value.stages[0].$match.paymentHistory.$elemMatch.reconciledAt, { $ne: null });
+    assert.deepEqual(matched.value.stages[2].$match["paymentHistory.reconciledAt"], { $ne: null });
 });
 
 test("CSV quotes supplier fields and blocks spreadsheet formulas", () => {
     const csv = supplierPaymentsCsv([{
         paymentDate: new Date("2026-10-22T00:00:00Z"), bookingCode: "BK-1", customerName: "Guest",
         description: 'Hotel, "West"', currency: "USD", amount: 120.5, method: "Bank transfer",
-        reference: "=2+2", note: "note\nline", recordedByName: "Finance",
+        reference: "=2+2", note: "note\nline", recordedByName: "Finance", statementReference: "@bank-id",
+        reconciledByName: "Manager", reconciledAt: new Date("2026-10-23T10:00:00Z"),
         recordedAt: new Date("2026-10-22T10:00:00Z"),
     }]);
     assert.ok(csv.includes('"Hotel, ""West"""'));
     assert.ok(csv.includes('"\'=2+2"'));
     assert.ok(csv.includes('"120.50"'));
     assert.ok(csv.includes('"note\nline"'));
+    assert.ok(csv.includes('"\'@bank-id"'));
+    assert.ok(csv.includes('"Reconciled"'));
 });

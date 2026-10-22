@@ -1,5 +1,14 @@
 const mongoose = require("mongoose");
 
+const reconciliationEventSchema = new mongoose.Schema({
+    action: { type: String, enum: ["reconciled", "reopened"], required: true },
+    statementReference: { type: String, trim: true, maxlength: 100, default: "" },
+    reason: { type: String, trim: true, maxlength: 300, default: "" },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+    recordedByName: { type: String, trim: true, maxlength: 100, required: true },
+    recordedAt: { type: Date, default: Date.now },
+});
+
 const paymentHistorySchema = new mongoose.Schema({
     kind: { type: String, enum: ["payment", "adjustment"], required: true },
     amount: { type: Number, required: true }, // Signed change in the supplier's currency.
@@ -11,6 +20,11 @@ const paymentHistorySchema = new mongoose.Schema({
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
     recordedByName: { type: String, trim: true, maxlength: 100, required: true },
     recordedAt: { type: Date, default: Date.now },
+    reconciledAt: { type: Date, default: null },
+    statementReference: { type: String, trim: true, maxlength: 100, default: "" },
+    reconciledBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+    reconciledByName: { type: String, trim: true, maxlength: 100, default: "" },
+    reconciliationHistory: { type: [reconciliationEventSchema], default: [] },
 });
 
 const costEntrySchema = new mongoose.Schema(

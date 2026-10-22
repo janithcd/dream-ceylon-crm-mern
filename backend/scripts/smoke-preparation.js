@@ -198,9 +198,47 @@ const main = async () => {
         const csv = await csvResponse.text();
         assert.ok(csv.includes("CI-TRANSFER-1") && csv.includes("CI-LKR"));
         assert.equal(csv.includes("Correct opening balance"), false, "Corrections are not bank payments");
+        const reconcileUrl = `${supplierPaymentUrl}/${paidCost.paymentHistory[1]._id}/reconciliation`;
+        assert.equal((await request(reconcileUrl, "PATCH", { reconciled: true, statementReference: "CI-BANK-1" })).status, 403);
+        assert.equal((await financeRequest(reconcileUrl, "PATCH", { reconciled: true, statementReference: " " })).status, 400);
+        assert.equal((await financeRequest(`${supplierPaymentUrl}/${paidCost.paymentHistory[0]._id}/reconciliation`, "PATCH", {
+            reconciled: true, statementReference: "CI-BANK-1",
+        })).status, 404, "A paid total correction is not a cash payment");
+        const matchedResponse = await financeRequest(reconcileUrl, "PATCH", { reconciled: true, statementReference: "CI-BANK-1" });
+        assert.equal(matchedResponse.status, 200, `Match supplier payment: ${await matchedResponse.clone().text()}`);
+        const matchedPayment = (await matchedResponse.json()).payment;
+        assert.equal(matchedPayment.statementReference, "CI-BANK-1");
+        assert.equal(matchedPayment.reconciledByName, financeAdmin.name);
+        assert.equal(matchedPayment.reconciliationHistory.length, 1);
+        assert.equal((await financeRequest(reconcileUrl, "PATCH", { reconciled: true, statementReference: "CI-BANK-1" })).status, 409);
+        const unmatchedList = await (await financeRequest(`${registerUrl}?${registerQuery}&status=unreconciled`)).json();
+        assert.equal(unmatchedList.total, 1);
+        assert.deepEqual(unmatchedList.totalsByCurrency, [{ currency: "LKR", amount: 1250 }]);
+        const matchedList = await (await financeRequest(`${registerUrl}?${registerQuery}&status=reconciled`)).json();
+        assert.equal(matchedList.total, 1);
+        assert.deepEqual(matchedList.totalsByCurrency, [{ currency: "USD", amount: 140 }]);
+        assert.equal(matchedList.items[0].statementReference, "CI-BANK-1");
+        const matchedCsv = await (await financeRequest(`${registerUrl}/export?${registerQuery}&status=reconciled`)).text();
+        assert.ok(matchedCsv.includes("CI-BANK-1") && matchedCsv.includes("Reconciled"));
+        assert.equal(matchedCsv.includes("CI-LKR"), false);
+        assert.equal((await financeRequest(reconcileUrl, "PATCH", { reconciled: false, reason: " " })).status, 400);
+        const reopenedResponse = await financeRequest(reconcileUrl, "PATCH", { reconciled: false, reason: "Wrong bank transaction" });
+        assert.equal(reopenedResponse.status, 200, `Reopen supplier payment: ${await reopenedResponse.clone().text()}`);
+        const reopenedPayment = (await reopenedResponse.json()).payment;
+        assert.equal(reopenedPayment.reconciledAt, null);
+        assert.equal(reopenedPayment.statementReference, "");
+        assert.deepEqual(reopenedPayment.reconciliationHistory.map((event) => [event.action, event.statementReference, event.reason]), [
+            ["reconciled", "CI-BANK-1", ""], ["reopened", "CI-BANK-1", "Wrong bank transaction"],
+        ]);
+        assert.equal((await financeRequest(reconcileUrl, "PATCH", { reconciled: false, reason: "Wrong bank transaction" })).status, 409);
+        const finalCost = (await (await financeRequest(costUrl)).json()).items.find((item) => item._id === costId);
+        assert.equal(finalCost.paidAmount, 200, "Reconciliation does not change the cash ledger");
+        assert.equal(finalCost.paymentHistory[1].reconciliationHistory.length, 2, "Audit history survives reload");
         await Admin.findByIdAndUpdate(admin._id, { $addToSet: { customPermissions: "cost.view" } });
         assert.equal((await request(`${registerUrl}?${registerQuery}`, "GET")).status, 200);
         assert.equal((await request(`${registerUrl}/export?${registerQuery}`, "GET")).status, 403, "CSV needs report.export");
+        assert.equal((await request(reconcileUrl, "PATCH", { reconciled: true, statementReference: "CI-BANK-2" })).status, 403,
+            "A viewer cannot reconcile supplier payments");
         await Admin.findByIdAndUpdate(admin._id, { $pull: { customPermissions: "cost.view" } });
         assert.equal((await financeRequest(costItemUrl, "PUT", { ...supplierCost, paidAmount: 0, currency: "GBP", conversionRate: 1.2 })).status, 400);
         assert.equal((await financeRequest(costItemUrl, "DELETE")).status, 409, "Recorded payments cannot be deleted with the cost");

@@ -31,18 +31,27 @@ const parseSupplierPaymentRegisterQuery = (params = {}, now = new Date()) => {
     if (typeof reference !== "string" || reference.trim().length > 100) {
         return { error: "Payment reference must be at most 100 characters." };
     }
+    const status = params.status ?? "all";
+    if (!["all", "unreconciled", "reconciled"].includes(status)) {
+        return { error: "Choose all, unreconciled, or reconciled payments." };
+    }
     const escaped = reference.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const reconciliationMatch = status === "all" ? {} : {
+        "paymentHistory.reconciledAt": status === "reconciled" ? { $ne: null } : null,
+    };
     const paymentMatch = {
         "paymentHistory.kind": "payment",
         "paymentHistory.paymentDate": { $gte: start, $lt: new Date(end.getTime() + DAY_MS) },
         ...(escaped ? { "paymentHistory.reference": { $regex: escaped, $options: "i" } } : {}),
+        ...reconciliationMatch,
     };
     return { value: {
-        from, to, reference: reference.trim(), page: Number(rawPage), limit: Number(rawLimit),
+        from, to, reference: reference.trim(), status, page: Number(rawPage), limit: Number(rawLimit),
         stages: [
             { $match: { recordType: "Booking", paymentHistory: { $elemMatch: {
                 kind: "payment", paymentDate: paymentMatch["paymentHistory.paymentDate"],
                 ...(escaped ? { reference: paymentMatch["paymentHistory.reference"] } : {}),
+                ...(status === "all" ? {} : { reconciledAt: reconciliationMatch["paymentHistory.reconciledAt"] }),
             } } } },
             { $unwind: "$paymentHistory" },
             { $match: paymentMatch },
@@ -60,6 +69,9 @@ const registerProject = {
     paymentDate: "$paymentHistory.paymentDate", method: "$paymentHistory.method",
     reference: "$paymentHistory.reference", note: "$paymentHistory.note",
     recordedByName: "$paymentHistory.recordedByName", recordedAt: "$paymentHistory.recordedAt",
+    reconciledAt: "$paymentHistory.reconciledAt", statementReference: "$paymentHistory.statementReference",
+    reconciledByName: "$paymentHistory.reconciledByName",
+    reconciliationHistory: { $ifNull: ["$paymentHistory.reconciliationHistory", []] },
 };
 
 const csvCell = (value) => {
@@ -69,11 +81,13 @@ const csvCell = (value) => {
 };
 
 const supplierPaymentsCsv = (items) => {
-    const headers = ["Payment date", "Booking", "Customer", "Supplier / cost", "Currency", "Amount", "Method", "Reference", "Note", "Recorded by", "Recorded at (UTC)"];
+    const headers = ["Payment date", "Booking", "Customer", "Supplier / cost", "Currency", "Amount", "Method", "Reference", "Note", "Recorded by", "Recorded at (UTC)", "Reconciliation status", "Statement reference", "Reconciled by", "Reconciled at (UTC)"];
     const rows = items.map((item) => [
         item.paymentDate?.toISOString().slice(0, 10), item.bookingCode, item.customerName,
         item.description, item.currency, Number(item.amount).toFixed(2), item.method,
         item.reference, item.note, item.recordedByName, item.recordedAt?.toISOString(),
+        item.reconciledAt ? "Reconciled" : "Unreconciled", item.statementReference,
+        item.reconciledByName, item.reconciledAt?.toISOString(),
     ]);
     return [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
 };

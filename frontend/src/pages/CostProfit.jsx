@@ -298,7 +298,8 @@ const CostProfit = () => {
                 </div>
             )}
 
-            {type === "booking" && <SupplierPaymentRegister onSelectBooking={(id) => selectRecord("booking", id)} reloadKey={reloadKey} />}
+            {type === "booking" && <SupplierPaymentRegister onSelectBooking={(id) => selectRecord("booking", id)}
+                onChanged={() => setReloadKey((value) => value + 1)} reloadKey={reloadKey} />}
 
             {busy && <p className="text-muted">Loading cost details...</p>}
             {!busy && overview && (
@@ -456,6 +457,12 @@ const CostProfit = () => {
                                             <div className="small text-muted">{entry.kind === "payment" ? `${formatCalendarDate(entry.paymentDate)} · ${entry.method}` : "Manual correction"} · {entry.recordedByName} · Total after: {formatMoney(entry.paidAmountAfter, paymentCost.currency)}</div>
                                             {entry.reference && <div className="small">Reference: {entry.reference}</div>}
                                             {entry.note && <div className="small">{entry.note}</div>}
+                                            {entry.kind === "payment" && <div className="small">Bank match: {entry.reconciledAt
+                                                ? `Matched to ${entry.statementReference} by ${entry.reconciledByName} at ${formatRecordedAt(entry.reconciledAt)}` : "To match"}</div>}
+                                            {(entry.reconciliationHistory || []).length > 0 && <details className="small"><summary>Match history ({entry.reconciliationHistory.length})</summary>
+                                                <ul className="list-unstyled mt-1 mb-0">{entry.reconciliationHistory.map((change) => <li key={change._id}>
+                                                    {change.action === "reconciled" ? `Matched to ${change.statementReference}` : `Reopened: ${change.reason}`} · {change.recordedByName} · {formatRecordedAt(change.recordedAt)}
+                                                </li>)}</ul></details>}
                                         </div>)}</div>}
                             </div>}
                         </div>
