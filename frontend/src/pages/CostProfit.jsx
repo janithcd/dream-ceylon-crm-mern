@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { FaEdit, FaHistory, FaMoneyBillWave, FaPlus, FaSearch, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import PermissionGuard from "../components/PermissionGuard";
+import SupplierPaymentRegister from "../components/SupplierPaymentRegister";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { notifySupplierPayablesChanged } from "../utils/supplierPayableEvents";
 
@@ -296,6 +297,8 @@ const CostProfit = () => {
                     </div>
                 </div>
             )}
+
+            {type === "booking" && <SupplierPaymentRegister onSelectBooking={(id) => selectRecord("booking", id)} reloadKey={reloadKey} />}
 
             {busy && <p className="text-muted">Loading cost details...</p>}
             {!busy && overview && (

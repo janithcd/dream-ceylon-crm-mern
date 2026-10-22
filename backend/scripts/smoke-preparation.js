@@ -73,6 +73,8 @@ const main = async () => {
         const scheduleUrl = "http://127.0.0.1:5000/api/finance/costs/schedule";
         assert.equal((await request(payablesUrl, "GET")).status, 403, "Sales cannot view supplier payments");
         assert.equal((await request(scheduleUrl, "GET")).status, 403, "Sales cannot view the supplier schedule");
+        const registerUrl = "http://127.0.0.1:5000/api/finance/costs/payment-register";
+        assert.equal((await request(registerUrl, "GET")).status, 403, "Sales cannot view supplier payment history");
         const supplierCost = {
             category: "Hotel", description: "CI hotel deposit", amount: 200,
             currency: "USD", paidAmount: 50,
@@ -146,8 +148,9 @@ const main = async () => {
         assert.equal((await financeRequest(costItemUrl, "PUT", { ...supplierCost, currency: "GBP", paidAmount: 0, conversionRate: 1.2 })).status, 400);
         const correction = await financeRequest(costItemUrl, "PUT", { ...supplierCost, paidAmount: 60, adjustmentNote: "Correct opening balance" });
         assert.equal(correction.status, 200, `Correct supplier cost: ${await correction.clone().text()}`);
+        const paymentDay = dateOnly(new Date());
         const fullyPaid = await financeRequest(supplierPaymentUrl, "POST", {
-            amount: 140, paymentDate: dateOnly(new Date()), method: "Bank transfer",
+            amount: 140, paymentDate: paymentDay, method: "Bank transfer",
             reference: "CI-TRANSFER-1", note: "Final payment",
         });
         assert.equal(fullyPaid.status, 201, `Settle supplier cost: ${await fullyPaid.clone().text()}`);
@@ -166,6 +169,39 @@ const main = async () => {
         ]);
         assert.equal(paidCost.paymentHistory[1].reference, "CI-TRANSFER-1");
         assert.equal(paidCost.paymentHistory[1].recordedByName, financeAdmin.name);
+        const localPayment = await financeRequest(`http://127.0.0.1:5000/api/finance/costs/${localCostId}/payments`, "POST", {
+            amount: 1250, paymentDate: paymentDay, method: "Cash", reference: "CI-LKR",
+        });
+        assert.equal(localPayment.status, 201, `LKR supplier deposit: ${await localPayment.clone().text()}`);
+        assert.equal((await financeRequest(`${registerUrl}?from=2026-02-30&to=${paymentDay}`)).status, 400);
+        assert.equal((await financeRequest(`${registerUrl}?page=0`)).status, 400);
+        const registerQuery = `from=${paymentDay}&to=${paymentDay}`;
+        const firstPageResponse = await financeRequest(`${registerUrl}?${registerQuery}&page=1&limit=1`);
+        assert.equal(firstPageResponse.status, 200, `Payment register: ${await firstPageResponse.clone().text()}`);
+        const firstPage = await firstPageResponse.json();
+        assert.equal(firstPage.total, 2);
+        assert.equal(firstPage.pages, 2);
+        assert.equal(firstPage.items.length, 1);
+        assert.equal(firstPage.items[0].bookingCode, booking.bookingCode);
+        assert.deepEqual(firstPage.totalsByCurrency, [
+            { currency: "LKR", amount: 1250 }, { currency: "USD", amount: 140 },
+        ]);
+        const secondPage = await (await financeRequest(`${registerUrl}?${registerQuery}&page=2&limit=1`)).json();
+        assert.equal(new Set([...firstPage.items, ...secondPage.items].map((item) => item.paymentId)).size, 2);
+        const transferOnly = await (await financeRequest(`${registerUrl}?${registerQuery}&reference=transfer-1`)).json();
+        assert.equal(transferOnly.total, 1);
+        assert.equal(transferOnly.items[0].reference, "CI-TRANSFER-1");
+        assert.deepEqual(transferOnly.totalsByCurrency, [{ currency: "USD", amount: 140 }]);
+        assert.equal((await (await financeRequest(`${registerUrl}?${registerQuery}&reference=CI.*`)).json()).total, 0);
+        const csvResponse = await financeRequest(`${registerUrl}/export?${registerQuery}`);
+        assert.equal(csvResponse.status, 200, `Supplier payment CSV: ${await csvResponse.clone().text()}`);
+        const csv = await csvResponse.text();
+        assert.ok(csv.includes("CI-TRANSFER-1") && csv.includes("CI-LKR"));
+        assert.equal(csv.includes("Correct opening balance"), false, "Corrections are not bank payments");
+        await Admin.findByIdAndUpdate(admin._id, { $addToSet: { customPermissions: "cost.view" } });
+        assert.equal((await request(`${registerUrl}?${registerQuery}`, "GET")).status, 200);
+        assert.equal((await request(`${registerUrl}/export?${registerQuery}`, "GET")).status, 403, "CSV needs report.export");
+        await Admin.findByIdAndUpdate(admin._id, { $pull: { customPermissions: "cost.view" } });
         assert.equal((await financeRequest(costItemUrl, "PUT", { ...supplierCost, paidAmount: 0, currency: "GBP", conversionRate: 1.2 })).status, 400);
         assert.equal((await financeRequest(costItemUrl, "DELETE")).status, 409, "Recorded payments cannot be deleted with the cost");
         await Admin.findByIdAndUpdate(financeAdmin._id, { $addToSet: { customPermissions: "booking.delete" } });

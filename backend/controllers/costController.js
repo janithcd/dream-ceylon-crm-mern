@@ -6,6 +6,9 @@ const { costSummary, parseCostPayload } = require("../utils/costProfit");
 const { getBusinessDayBounds } = require("../utils/businessDate");
 const { parseSupplierPayment } = require("../utils/supplierPayment");
 const { parseSupplierScheduleQuery } = require("../utils/supplierSchedule");
+const {
+    MAX_EXPORT_ROWS, parseSupplierPaymentRegisterQuery, registerSort, registerProject, supplierPaymentsCsv,
+} = require("../utils/supplierPaymentRegister");
 
 const TYPES = { quotation: "Quotation", booking: "Booking" };
 const validId = (id) => /^[0-9a-f]{24}$/i.test(String(id || ""));
@@ -149,6 +152,54 @@ const getSupplierSchedule = async (req, res) => {
     }
 };
 
+const getSupplierPaymentRegister = async (req, res) => {
+    const parsed = parseSupplierPaymentRegisterQuery(req.query);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    const { from, to, reference, page, limit, stages } = parsed.value;
+    try {
+        const [result] = await CostEntry.aggregate([
+            ...stages,
+            { $facet: {
+                items: [
+                    { $sort: registerSort }, { $skip: (page - 1) * limit }, { $limit: limit },
+                    { $project: registerProject },
+                ],
+                count: [{ $count: "total" }],
+                totalsByCurrency: [
+                    { $group: { _id: "$currency", amount: { $sum: "$paymentHistory.amount" } } },
+                    { $project: { _id: 0, currency: "$_id", amount: { $round: ["$amount", 2] } } },
+                    { $sort: { currency: 1 } },
+                ],
+            } },
+        ]);
+        const total = result.count[0]?.total || 0;
+        return res.json({ from, to, reference, page, limit, total, pages: Math.ceil(total / limit),
+            totalsByCurrency: result.totalsByCurrency, items: result.items });
+    } catch (error) {
+        console.error("Supplier payment register failed:", error);
+        return res.status(500).json({ message: "Failed to load supplier payment register." });
+    }
+};
+
+const exportSupplierPaymentRegister = async (req, res) => {
+    const parsed = parseSupplierPaymentRegisterQuery(req.query);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    const { from, to, stages } = parsed.value;
+    try {
+        const items = await CostEntry.aggregate([
+            ...stages, { $sort: registerSort }, { $limit: MAX_EXPORT_ROWS + 1 }, { $project: registerProject },
+        ]);
+        if (items.length > MAX_EXPORT_ROWS) {
+            return res.status(413).json({ message: "More than 10,000 payments match. Narrow the date range or reference to export." });
+        }
+        res.set("Content-Disposition", `attachment; filename="supplier-payments-${from}-to-${to}.csv"`);
+        return res.type("text/csv").send(`\uFEFF${supplierPaymentsCsv(items)}`);
+    } catch (error) {
+        console.error("Supplier payment export failed:", error);
+        return res.status(500).json({ message: "Failed to export supplier payments." });
+    }
+};
+
 const addCost = async (req, res) => {
     const recordType = TYPES[req.params.type];
     const recordId = req.params.id;
@@ -287,4 +338,5 @@ const deleteCost = async (req, res) => {
     }
 };
 
-module.exports = { getCostOverview, getSupplierPayables, getSupplierSchedule, addCost, updateCost, recordSupplierPayment, deleteCost };
+module.exports = { getCostOverview, getSupplierPayables, getSupplierSchedule, getSupplierPaymentRegister, exportSupplierPaymentRegister,
+    addCost, updateCost, recordSupplierPayment, deleteCost };

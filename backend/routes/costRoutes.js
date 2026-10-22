@@ -2,12 +2,15 @@ const express = require("express");
 const { protect } = require("../middleware/authMiddleware");
 const { authorizePermissions } = require("../middleware/permissionMiddleware");
 const { PERMISSIONS } = require("../config/permissions");
-const { getCostOverview, getSupplierPayables, getSupplierSchedule, addCost, updateCost, recordSupplierPayment, deleteCost } = require("../controllers/costController");
+const { getCostOverview, getSupplierPayables, getSupplierSchedule, getSupplierPaymentRegister, exportSupplierPaymentRegister,
+    addCost, updateCost, recordSupplierPayment, deleteCost } = require("../controllers/costController");
 
 const router = express.Router();
 router.use(protect);
 router.get("/payables", authorizePermissions(PERMISSIONS.COST_VIEW), getSupplierPayables);
 router.get("/schedule", authorizePermissions(PERMISSIONS.COST_VIEW), getSupplierSchedule);
+router.get("/payment-register", authorizePermissions(PERMISSIONS.COST_VIEW), getSupplierPaymentRegister);
+router.get("/payment-register/export", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.REPORT_EXPORT), exportSupplierPaymentRegister);
 router.get("/:type/:id", authorizePermissions(PERMISSIONS.COST_VIEW), getCostOverview);
 router.post("/:id/payments", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), recordSupplierPayment);
 router.post("/:type/:id", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), addCost);
