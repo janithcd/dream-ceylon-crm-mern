@@ -116,6 +116,8 @@ The cost table shows what remains in each supplier's currency; it never adds dif
 
 The booking tab also has a **Supplier payment register** for matching recorded deposits to bank records. Filter by inclusive payment dates (Sri Lanka calendar, up to 366 days) and a case-insensitive payment reference, then open the linked booking or export all matching payments as CSV. The default view is the current Sri Lanka month, with 25 payments per page and separate totals for each supplier currency. Unitemized opening balances and manual paid total corrections are excluded because they are not individual cash payments. `GET /api/finance/costs/payment-register` requires `cost.view`; `/payment-register/export` additionally requires `report.export` and allows up to 10,000 matching rows per download. Narrow the filter for larger exports.
 
+Finance staff can filter the register to **To match** or **Matched**, enter a bank statement or cashbook reference to reconcile each payment, and reopen a mistaken match with a required reason. These actions require `cost.view` and `cost.manage` at `PATCH /api/finance/costs/:id/payments/:paymentId/reconciliation` (`{ reconciled: true, statementReference }` or `{ reconciled: false, reason }`). The payment amount and paid total do not change. The register, booking payment history, and CSV show current status; reconciliation events retain the staff member, time, previous reference, and reopening reason. Older payments start unmatched until reviewed. CSV exports respect the selected status filter.
+
 ### 🤖 AI Tools
 
 - Generate client replies

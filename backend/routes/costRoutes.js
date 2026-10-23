@@ -3,7 +3,7 @@ const { protect } = require("../middleware/authMiddleware");
 const { authorizePermissions } = require("../middleware/permissionMiddleware");
 const { PERMISSIONS } = require("../config/permissions");
 const { getCostOverview, getSupplierPayables, getSupplierSchedule, getSupplierPaymentRegister, exportSupplierPaymentRegister,
-    addCost, updateCost, recordSupplierPayment, deleteCost } = require("../controllers/costController");
+    addCost, updateCost, recordSupplierPayment, reconcileSupplierPayment, deleteCost } = require("../controllers/costController");
 
 const router = express.Router();
 router.use(protect);
@@ -13,6 +13,7 @@ router.get("/payment-register", authorizePermissions(PERMISSIONS.COST_VIEW), get
 router.get("/payment-register/export", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.REPORT_EXPORT), exportSupplierPaymentRegister);
 router.get("/:type/:id", authorizePermissions(PERMISSIONS.COST_VIEW), getCostOverview);
 router.post("/:id/payments", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), recordSupplierPayment);
+router.patch("/:id/payments/:paymentId/reconciliation", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), reconcileSupplierPayment);
 router.post("/:type/:id", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), addCost);
 router.put("/:id", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), updateCost);
 router.delete("/:id", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), deleteCost);

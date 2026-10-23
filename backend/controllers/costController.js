@@ -6,6 +6,7 @@ const { costSummary, parseCostPayload } = require("../utils/costProfit");
 const { getBusinessDayBounds } = require("../utils/businessDate");
 const { parseSupplierPayment } = require("../utils/supplierPayment");
 const { parseSupplierScheduleQuery } = require("../utils/supplierSchedule");
+const { parseSupplierReconciliation } = require("../utils/supplierReconciliation");
 const {
     MAX_EXPORT_ROWS, parseSupplierPaymentRegisterQuery, registerSort, registerProject, supplierPaymentsCsv,
 } = require("../utils/supplierPaymentRegister");
@@ -155,7 +156,7 @@ const getSupplierSchedule = async (req, res) => {
 const getSupplierPaymentRegister = async (req, res) => {
     const parsed = parseSupplierPaymentRegisterQuery(req.query);
     if (parsed.error) return res.status(400).json({ message: parsed.error });
-    const { from, to, reference, page, limit, stages } = parsed.value;
+    const { from, to, reference, status, page, limit, stages } = parsed.value;
     try {
         const [result] = await CostEntry.aggregate([
             ...stages,
@@ -173,7 +174,7 @@ const getSupplierPaymentRegister = async (req, res) => {
             } },
         ]);
         const total = result.count[0]?.total || 0;
-        return res.json({ from, to, reference, page, limit, total, pages: Math.ceil(total / limit),
+        return res.json({ from, to, reference, status, page, limit, total, pages: Math.ceil(total / limit),
             totalsByCurrency: result.totalsByCurrency, items: result.items });
     } catch (error) {
         console.error("Supplier payment register failed:", error);
@@ -306,6 +307,53 @@ const recordSupplierPayment = async (req, res) => {
     }
 };
 
+const reconcileSupplierPayment = async (req, res) => {
+    if (!validId(req.params.id) || !validId(req.params.paymentId)) {
+        return res.status(400).json({ message: "Choose a valid supplier payment." });
+    }
+    const parsed = parseSupplierReconciliation(req.body);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    try {
+        const item = await CostEntry.findById(req.params.id);
+        if (!item) return res.status(404).json({ message: "Cost entry not found." });
+        if (item.recordType !== "Booking") return res.status(400).json({ message: "Only booking payments can be reconciled." });
+        const payment = item.paymentHistory.id(req.params.paymentId);
+        if (!payment || payment.kind !== "payment") {
+            return res.status(404).json({ message: "Supplier payment not found." });
+        }
+        const booking = await loadRecord("Booking", item.recordId);
+        if (!booking) return res.status(404).json({ message: "Booking not found." });
+        if (Boolean(payment.reconciledAt) === parsed.value.reconciled) {
+            return res.status(409).json({ message: "This payment status has changed. Refresh the register and try again." });
+        }
+
+        const recordedAt = new Date();
+        const recordedByName = String(req.admin.name || "Staff").slice(0, 100);
+        payment.reconciliationHistory.push({
+            action: parsed.value.reconciled ? "reconciled" : "reopened",
+            statementReference: parsed.value.reconciled ? parsed.value.statementReference : payment.statementReference,
+            reason: parsed.value.reason || "", recordedBy: req.admin._id, recordedByName, recordedAt,
+        });
+        payment.reconciledAt = parsed.value.reconciled ? recordedAt : null;
+        payment.statementReference = parsed.value.reconciled ? parsed.value.statementReference : "";
+        payment.reconciledBy = parsed.value.reconciled ? req.admin._id : null;
+        payment.reconciledByName = parsed.value.reconciled ? recordedByName : "";
+        await item.save();
+        await createActivityLog({
+            req, action: "UPDATE", module: "Other",
+            description: `Supplier payment ${parsed.value.reconciled ? "reconciled" : "reopened"} for booking ${booking.reference}`,
+            relatedRecordId: item.recordId, relatedModel: "Booking", referenceNo: booking.reference,
+        });
+        return res.json({ payment });
+    } catch (error) {
+        if (error.name === "VersionError" || error.name === "DocumentNotFoundError") {
+            return res.status(409).json({ message: "This payment changed while you were updating it. Refresh and try again." });
+        }
+        console.error("Supplier payment reconciliation failed:", error);
+        return res.status(500).json({ message: "Failed to update supplier payment reconciliation." });
+    }
+};
+
 const deleteCost = async (req, res) => {
     if (!validId(req.params.id)) return res.status(400).json({ message: "Invalid cost entry." });
     try {
@@ -339,4 +387,4 @@ const deleteCost = async (req, res) => {
 };
 
 module.exports = { getCostOverview, getSupplierPayables, getSupplierSchedule, getSupplierPaymentRegister, exportSupplierPaymentRegister,
-    addCost, updateCost, recordSupplierPayment, deleteCost };
+    addCost, updateCost, recordSupplierPayment, reconcileSupplierPayment, deleteCost };
