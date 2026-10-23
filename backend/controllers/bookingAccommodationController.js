@@ -41,6 +41,7 @@ const addHotelStay = async (req, res) => {
             hotelName: value.hotelName,
             status: value.status,
             followUpDate: value.followUpDate,
+            cancellationDeadline: value.cancellationDeadline,
         });
         return res.status(201).json({ hotelStays: booking.hotelStays });
     } catch (error) {
@@ -76,6 +77,7 @@ const updateHotelStay = async (req, res) => {
             hotelName: value.hotelName,
             status: value.status,
             followUpDate: value.followUpDate,
+            cancellationDeadline: value.cancellationDeadline,
         });
         return res.status(200).json({ hotelStays: booking.hotelStays });
     } catch (error) {

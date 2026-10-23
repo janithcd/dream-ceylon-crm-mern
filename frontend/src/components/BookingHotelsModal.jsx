@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { FaEdit, FaEnvelope, FaFilePdf, FaHistory, FaHotel, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
-import { formatCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
+import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { getHotelNightCoverage } from "../utils/hotelNightCoverage";
 import { notifySupplierConfirmationsChanged } from "../utils/supplierEvents";
 
@@ -22,6 +22,8 @@ const emptyForm = () => ({
     status: "Requested",
     followUpDate: "",
     confirmationNumber: "",
+    cancellationDeadline: "",
+    cancellationTerms: "",
     notes: "",
 });
 
@@ -127,6 +129,8 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onOpe
             status: stay.status || "Requested",
             followUpDate: toCalendarDateInput(stay.followUpDate),
             confirmationNumber: stay.confirmationNumber || "",
+            cancellationDeadline: toCalendarDateInput(stay.cancellationDeadline),
+            cancellationTerms: stay.cancellationTerms || "",
             notes: stay.notes || "",
         });
         setEditingId(stay._id);
@@ -249,6 +253,9 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onOpe
                                                     <div><strong>Rooms:</strong> {stay.rooms} {stay.roomType && `· ${stay.roomType}`}</div>
                                                     <div><strong>Meal plan:</strong> {stay.mealPlan}</div>
                                                     {stay.status === "Requested" && <div><strong>Follow up:</strong> {stay.followUpDate ? formatCalendarDate(stay.followUpDate) : "Not scheduled"}</div>}
+                                                    {stay.cancellationDeadline && <div className={stay.status !== "Cancelled" && toCalendarDateInput(stay.cancellationDeadline) < todayCalendarDate() ? "text-danger" : ""}>
+                                                        <strong>Cancellation cutoff:</strong> {formatCalendarDate(stay.cancellationDeadline)}{stay.status !== "Cancelled" && toCalendarDateInput(stay.cancellationDeadline) < todayCalendarDate() ? " · Passed" : ""}</div>}
+                                                    {stay.cancellationTerms && <div><strong>Cancellation terms:</strong> {stay.cancellationTerms}</div>}
                                                     {stay.confirmationNumber && <div><strong>Confirmation:</strong> {stay.confirmationNumber}</div>}
                                                     {stay.supplierEmail && <div><strong>Supplier email:</strong> {stay.supplierEmail}</div>}
                                                     {stay.notes && <div className="text-muted mt-2">{stay.notes}</div>}
@@ -327,6 +334,17 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onOpe
                                             <label className="form-label" htmlFor="stay-follow-up">Supplier follow-up date</label>
                                             <input id="stay-follow-up" name="followUpDate" type="date" className="form-control" value={form.followUpDate} onChange={updateField} max={form.checkInDate || undefined} />
                                             <small className="text-muted">Optional. Follow up by check-in if confirmation is still pending.</small>
+                                        </div>
+                                        <div className="col-md-6">
+                                            <label className="form-label" htmlFor="stay-cancellation-deadline">Hotel cancellation cutoff</label>
+                                            <input id="stay-cancellation-deadline" name="cancellationDeadline" type="date" className="form-control"
+                                                value={form.cancellationDeadline} onChange={updateField} max={form.checkInDate || undefined} />
+                                            <small className="text-muted">Optional reminder date. Check the hotel’s exact cutoff time and policy.</small>
+                                        </div>
+                                        <div className="col-12">
+                                            <label className="form-label" htmlFor="stay-cancellation-terms">Cancellation terms</label>
+                                            <input id="stay-cancellation-terms" name="cancellationTerms" className="form-control" maxLength={300}
+                                                value={form.cancellationTerms} onChange={updateField} placeholder="e.g. Free until 18:00 Sri Lanka time, then one night charged" />
                                         </div>
                                         <div className="col-12">
                                             <label className="form-label" htmlFor="stay-notes">Internal notes</label>

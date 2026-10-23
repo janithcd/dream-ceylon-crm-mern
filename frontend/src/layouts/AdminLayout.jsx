@@ -11,6 +11,7 @@ import {
     FaEnvelopeOpenText,
     FaFileInvoiceDollar,
     FaGlobeAsia,
+    FaHotel,
     FaHistory,
     FaMapMarkedAlt,
     FaMoneyBillWave,
@@ -146,6 +147,13 @@ const AdminLayout = () => {
                         <NavLink to="/supplier-confirmations">
                             <FaClipboardCheck />
                             Supplier Confirmations
+                        </NavLink>
+                    </PermissionGuard>
+
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.hotelDeadlines}>
+                        <NavLink to="/hotel-cancellation-deadlines">
+                            <FaHotel />
+                            Hotel Deadlines
                         </NavLink>
                     </PermissionGuard>
 
