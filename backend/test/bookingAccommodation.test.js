@@ -25,6 +25,12 @@ const validStay = {
 test("hotel stay dates, status and rooms are validated before saving", () => {
     assert.equal(parseHotelStay(validStay).value.hotelName, "Pelwehera Village");
     assert.equal(parseHotelStay(validStay).value.checkInDate.toISOString(), "2027-02-27T00:00:00.000Z");
+    const withDeadline = parseHotelStay({ ...validStay, cancellationDeadline: "2027-02-25",
+        cancellationTerms: "  One night charged after cutoff  " }).value;
+    assert.equal(withDeadline.cancellationDeadline.toISOString(), "2027-02-25T00:00:00.000Z");
+    assert.equal(withDeadline.cancellationTerms, "One night charged after cutoff");
+    assert.equal(parseHotelStay({ status: "Confirmed" }, withDeadline).value.cancellationDeadline.toISOString(), "2027-02-25T00:00:00.000Z");
+    assert.equal(parseHotelStay({ cancellationDeadline: "" }, withDeadline).value.cancellationDeadline, null);
     for (const changes of [
         { checkInDate: "2027-02-30" },
         { checkOutDate: "2027-02-27" },
@@ -33,6 +39,9 @@ test("hotel stay dates, status and rooms are validated before saving", () => {
         { status: "Paid" },
         { mealPlan: "Breakfast?" },
         { hotelName: " ".repeat(2) },
+        { cancellationDeadline: "2027-02-30" },
+        { cancellationDeadline: "2027-02-28" },
+        { cancellationTerms: "x".repeat(301) },
     ]) {
         assert.ok(parseHotelStay({ ...validStay, ...changes }).error, JSON.stringify(changes));
     }
@@ -105,18 +114,21 @@ test("hotel stays require booking edit permission and can be added, confirmed an
     assert.equal((await request(url, "POST", viewerId, validStay)).status, 403);
     assert.equal((await request(url, "POST", salesId, { ...validStay, checkOutDate: "2027-02-27" })).status, 400);
 
-    const created = await request(url, "POST", salesId, { ...validStay, supplierEmail: "Reception@Pelwehera.COM" });
+    const created = await request(url, "POST", salesId, { ...validStay, supplierEmail: "Reception@Pelwehera.COM",
+        cancellationDeadline: "2027-02-25", cancellationTerms: "One night charged" });
     assert.equal(created.status, 201);
     const stay = (await created.json()).hotelStays[0];
     assert.equal(stay.hotelName, "Pelwehera Village");
     assert.equal(stay.mealPlan, "Half Board");
     assert.equal(stay.supplierEmail, "reception@pelwehera.com");
+    assert.equal(stay.cancellationDeadline, "2027-02-25T00:00:00.000Z");
 
     const stayUrl = `${url}/${stay._id}`;
     const updated = await request(stayUrl, "PUT", salesId, { status: "Confirmed", confirmationNumber: "HV-123" });
     assert.equal(updated.status, 200);
     assert.equal((await updated.json()).hotelStays[0].confirmationNumber, "HV-123");
     assert.equal(booking.hotelStays[0].supplierEmail, "reception@pelwehera.com");
+    assert.equal(booking.hotelStays[0].cancellationTerms, "One night charged");
     assert.equal((await request(stayUrl, "PUT", viewerId, { status: "Cancelled" })).status, 403);
 
     assert.equal((await request(stayUrl, "DELETE", salesId)).status, 200);

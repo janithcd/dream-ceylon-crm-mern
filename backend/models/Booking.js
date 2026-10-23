@@ -114,6 +114,8 @@ const hotelStaySchema = new mongoose.Schema({
     followUpDate: { type: Date, default: null },
     contacts: { type: [supplierContactSchema], default: [] },
     confirmationNumber: { type: String, trim: true, maxlength: 100, default: "" },
+    cancellationDeadline: { type: Date, default: null },
+    cancellationTerms: { type: String, trim: true, maxlength: 300, default: "" },
     notes: { type: String, trim: true, maxlength: 500, default: "" },
     createdAt: { type: Date, default: Date.now },
 });

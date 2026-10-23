@@ -462,6 +462,18 @@ const main = async () => {
         assert.equal(await ownAttention(), undefined);
 
         const hotelsUrl = `http://127.0.0.1:5000/api/bookings/${booking._id}/hotel-stays`;
+        const deadlinesUrl = "http://127.0.0.1:5000/api/bookings/hotel-cancellation-deadlines";
+        assert.equal((await financeRequest(deadlinesUrl)).status, 200, "Finance can review hotel deadlines");
+        assert.equal((await financeRequest(hotelsUrl, "POST", { hotelName: "Blocked" })).status, 403,
+            "Booking view does not permit editing hotel stays");
+        assert.equal((await request(`${deadlinesUrl}?filter=wrong`, "GET")).status, 400);
+        assert.equal((await request(`${deadlinesUrl}?page=0`, "GET")).status, 400);
+        assert.equal((await (await request(deadlinesUrl, "GET")).json()).total, 0);
+        const deadlineDay = dateOnly(new Date(Date.now() + dayMs));
+        assert.equal((await request(hotelsUrl, "POST", {
+            hotelName: "Invalid cutoff", checkInDate: dateOnly(travelStart), checkOutDate: dateOnly(hotelCheckout),
+            cancellationDeadline: dateOnly(travelEnd),
+        })).status, 400);
         const hotelAdded = await request(hotelsUrl, "POST", {
             hotelName: "CI Hotel",
             location: "Sigiriya",
@@ -469,6 +481,8 @@ const main = async () => {
             checkInDate: dateOnly(travelStart),
             checkOutDate: dateOnly(hotelCheckout),
             followUpDate: dateOnly(new Date(Date.now() - dayMs)),
+            cancellationDeadline: deadlineDay,
+            cancellationTerms: "Free until 18:00 local time",
             rooms: 1,
             mealPlan: "Half Board",
         });
@@ -477,6 +491,14 @@ const main = async () => {
         const hotel = (await Booking.findById(booking._id)).hotelStays[0];
         assert.equal(hotel.hotelName, "CI Hotel");
         assert.equal(hotel.supplierEmail, "reservations@hotel.example");
+        assert.equal(dateOnly(hotel.cancellationDeadline), deadlineDay);
+        const deadlinesDue = await (await request(deadlinesUrl, "GET")).json();
+        assert.equal(deadlinesDue.total, 1);
+        assert.equal(deadlinesDue.summary.dueSoon, 1);
+        assert.equal(deadlinesDue.items[0].bookingCode, booking.bookingCode);
+        assert.equal(deadlinesDue.items[0].cancellationTerms, "Free until 18:00 local time");
+        assert.equal("customerEmail" in deadlinesDue.items[0], false);
+        assert.equal((await (await request(`${deadlinesUrl}?filter=later`, "GET")).json()).total, 0);
         assert.equal((await ownAttention()).pendingHotelCount, 1);
         const overdueSupplierQueue = await getSupplierQueue("?type=hotel&dateFilter=overdue");
         assert.equal(overdueSupplierQueue.summary.hotels, 1);
@@ -530,6 +552,17 @@ const main = async () => {
         assert.equal((await request(hotelContactUrl, "POST", { channel: "Phone", nextFollowUpDate: null })).status, 409);
         assert.equal((await (await request(hotelContactUrl, "GET")).json()).contacts.length, 1);
         assert.equal((await Booking.findById(booking._id)).hotelStays[0].confirmationNumber, "CI-123");
+        assert.equal((await (await request(deadlinesUrl, "GET")).json()).total, 1,
+            "Confirmed hotel stays retain their cutoff reminder");
+        assert.equal((await request(hotelUrl, "PUT", {
+            cancellationDeadline: dateOnly(new Date(Date.now() - dayMs)),
+        })).status, 200);
+        const passedDeadlines = await (await request(`${deadlinesUrl}?filter=overdue`, "GET")).json();
+        assert.equal(passedDeadlines.total, 1);
+        assert.equal(passedDeadlines.summary.overdue, 1);
+        assert.equal((await request(hotelUrl, "PUT", { cancellationDeadline: "" })).status, 200);
+        assert.equal((await (await request(deadlinesUrl, "GET")).json()).total, 0,
+            "Clearing a cutoff removes the reminder");
         assert.equal(await ownAttention(), undefined);
 
         const hotelRemoved = await request(hotelUrl, "DELETE");

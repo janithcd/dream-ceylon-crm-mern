@@ -21,7 +21,7 @@ const parseHotelStay = (body, existing = {}) => {
 
     for (const [field, maxLength] of [
         ["hotelName", 120], ["location", 120], ["roomType", 100],
-        ["confirmationNumber", 100], ["notes", 500],
+        ["confirmationNumber", 100], ["cancellationTerms", 300], ["notes", 500],
     ]) {
         const input = body[field] !== undefined ? body[field] : existing[field];
         if (input !== undefined && input !== null && typeof input !== "string") {
@@ -54,6 +54,13 @@ const parseHotelStay = (body, existing = {}) => {
     if ((followUpInput !== "" && followUpInput != null && !value.followUpDate) ||
         (value.followUpDate && value.followUpDate > value.checkInDate)) {
         return { error: "Follow-up must be a valid date on or before check-in" };
+    }
+
+    const deadlineInput = body.cancellationDeadline !== undefined ? body.cancellationDeadline : existing.cancellationDeadline;
+    value.cancellationDeadline = deadlineInput === "" || deadlineInput == null ? null : dateFromInput(deadlineInput);
+    if ((deadlineInput !== "" && deadlineInput != null && !value.cancellationDeadline) ||
+        (value.cancellationDeadline && value.cancellationDeadline > value.checkInDate)) {
+        return { error: "Cancellation deadline must be a valid date on or before check-in" };
     }
 
     value.rooms = Number(body.rooms ?? existing.rooms ?? 1);

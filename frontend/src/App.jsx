@@ -13,6 +13,7 @@ import Bookings from "./pages/Bookings";
 import MyTasks from "./pages/MyTasks";
 import TeamTasks from "./pages/TeamTasks";
 import SupplierConfirmations from "./pages/SupplierConfirmations";
+import HotelCancellationDeadlines from "./pages/HotelCancellationDeadlines";
 import AirportTransfers from "./pages/AirportTransfers";
 import Vehicles from "./pages/Vehicles";
 import Quotations from "./pages/Quotations";
@@ -175,6 +176,11 @@ const App = () => {
                                 </PermissionRoute>
                             }
                         />
+                        <Route path="hotel-cancellation-deadlines" element={
+                            <PermissionRoute permission={ROUTE_PERMISSIONS.hotelDeadlines}>
+                                <HotelCancellationDeadlines />
+                            </PermissionRoute>
+                        } />
                         <Route
                             path="booking-calendar"
                             element={
