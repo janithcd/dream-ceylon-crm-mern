@@ -16,23 +16,30 @@ test("lead cohorts begin on Sri Lanka calendar days and use actual linked bookin
     assert.equal(pipeline[0].$match.createdAt.$gte.toISOString(), "2026-09-17T18:30:00.000Z");
     assert.equal(pipeline[0].$match.createdAt.$lt.toISOString(), "2026-10-17T18:30:00.000Z");
     assert.equal(pipeline[1].$lookup.foreignField, "inquiry");
+    assert.equal(pipeline[2].$project.responseMs.$cond[1].$subtract[0], "$firstContactAt");
+    assert.equal(pipeline[2].$project.waiting24h.$and[1].$eq[0], "$firstContactAt");
+    assert.equal(pipeline[3].$facet.sources[0].$group.within24h.$sum.$cond[0].$and[1].$lte[1], 86400000);
     assert.deepEqual(buildLeadInsightsPipeline("all")[0], { $match: {} });
     assert.throws(() => buildLeadInsightsPipeline("31"), /valid insights period/);
     assert.deepEqual(summarizeLeadInsights({
         sources: [
-            { _id: "Referral", inquiries: 3, booked: 2, lost: 1 },
+            { _id: "Referral", inquiries: 3, booked: 2, lost: 1, firstContacts: 2, within24h: 1, responseMsTotal: 28 * 3600000, waiting24h: 1 },
             { _id: "Website", inquiries: 1, booked: 0, lost: 0 },
         ],
         reasons: [{ _id: null, count: 1 }],
     }), {
-        summary: { inquiries: 4, booked: 2, lost: 1, conversionRate: 50 },
+        summary: { inquiries: 4, booked: 2, lost: 1, conversionRate: 50,
+            firstContacts: 2, within24h: 1, within24hRate: 50, averageResponseHours: 14, waiting24h: 1 },
         sources: [
-            { source: "Referral", inquiries: 3, booked: 2, lost: 1, conversionRate: 66.7 },
-            { source: "Website", inquiries: 1, booked: 0, lost: 0, conversionRate: 0 },
+            { source: "Referral", inquiries: 3, booked: 2, lost: 1, conversionRate: 66.7,
+                firstContacts: 2, within24h: 1, within24hRate: 50, averageResponseHours: 14, waiting24h: 1 },
+            { source: "Website", inquiries: 1, booked: 0, lost: 0, conversionRate: 0,
+                firstContacts: 0, within24h: 0, within24hRate: null, averageResponseHours: null, waiting24h: 0 },
         ],
         reasons: [{ reason: "Unspecified", count: 1 }],
     });
     assert.equal(summarizeLeadInsights().summary.conversionRate, 0);
+    assert.equal(summarizeLeadInsights().summary.within24hRate, null);
 });
 
 test("public and manual inquiry submissions keep source and loss details private to admins", async (t) => {

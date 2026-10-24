@@ -32,7 +32,7 @@ const LeadInsights = () => {
             <div className="d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-start mb-4">
                 <div>
                     <h2 className="fw-bold mb-1">Lead Insights</h2>
-                    <p className="text-muted mb-0">See which inquiry sources lead to bookings and why leads close.</p>
+                    <p className="text-muted mb-0">See which inquiry sources lead to bookings, why leads close, and how quickly guests are contacted.</p>
                 </div>
                 <div className="d-flex gap-2 align-items-center">
                     <label htmlFor="lead-insights-window" className="visually-hidden">Inquiry period</label>
@@ -46,6 +46,9 @@ const LeadInsights = () => {
             <p className="text-muted small">
                 The period selects inquiries created in Sri Lanka calendar days. “Booked” means the inquiry has a linked booking,
                 including one later cancelled. Closing a lead without a booking counts as lost. Booking dates may fall outside the selected period.
+            </p>
+            <p className="text-muted small">
+                Response times use the first contact recorded in the CRM, measured in elapsed hours from inquiry creation. Older records with no valid first contact time and manual status changes are excluded from the response rate. “Waiting 24h+” counts still-New inquiries with no recorded contact.
             </p>
             {error && <div className="alert alert-danger" role="alert">{error}</div>}
             {loading ? <p role="status">Loading insights...</p> : !error && summary && (
@@ -66,6 +69,24 @@ const LeadInsights = () => {
                         ))}
                     </div>
 
+                    <h5 className="fw-bold mb-3">First contact speed</h5>
+                    <div className="row g-3 mb-4">
+                        {[
+                            ["First contacts logged", `${summary.firstContacts} of ${summary.inquiries}`],
+                            ["Average response", summary.averageResponseHours === null ? "—" : `${summary.averageResponseHours}h`],
+                            ["Within 24 hours", summary.within24hRate === null ? "—" : `${summary.within24hRate}%`],
+                            ["New waiting 24h+", summary.waiting24h],
+                        ].map(([label, value]) => (
+                            <div className="col-6 col-lg-3" key={label}>
+                                <div className="card border-0 shadow-sm h-100 rounded-4"><div className="card-body">
+                                    <small className="text-muted">{label}</small>
+                                    <h3 className="fw-bold mb-0 mt-2">{value}</h3>
+                                </div></div>
+                            </div>
+                        ))}
+                    </div>
+                    <p className="text-muted small">Within 24 hours: {summary.within24h} of {summary.firstContacts} leads with a logged first contact. Average response excludes leads without a valid recorded first contact.</p>
+
                     {summary.inquiries === 0 ? (
                         <div className="alert alert-info">No inquiries were created in this period.</div>
                     ) : (
@@ -74,7 +95,7 @@ const LeadInsights = () => {
                                 <div className="card border-0 shadow-sm rounded-4 h-100"><div className="card-body">
                                     <h5 className="fw-bold mb-3">Source performance</h5>
                                     <div className="table-responsive"><table className="table align-middle mb-0">
-                                        <thead><tr><th>Source</th><th className="text-end">Inquiries</th><th className="text-end">Booked</th><th className="text-end">Closed</th><th style={{ minWidth: 130 }}>Conversion</th></tr></thead>
+                                        <thead><tr><th>Source</th><th className="text-end">Inquiries</th><th className="text-end">Booked</th><th className="text-end">Closed</th><th style={{ minWidth: 130 }}>Conversion</th><th className="text-end">First contacts</th><th className="text-end">Within 24h</th></tr></thead>
                                         <tbody>{data.sources.map((row) => (
                                             <tr key={row.source}>
                                                 <th scope="row">{row.source}</th>
@@ -87,6 +108,8 @@ const LeadInsights = () => {
                                                         <div className="progress-bar bg-success" style={{ width: `${row.conversionRate}%` }} />
                                                     </div>
                                                 </td>
+                                                <td className="text-end">{row.firstContacts}</td>
+                                                <td className="text-end">{row.within24hRate === null ? "—" : `${row.within24hRate}%`}</td>
                                             </tr>
                                         ))}</tbody>
                                     </table></div>

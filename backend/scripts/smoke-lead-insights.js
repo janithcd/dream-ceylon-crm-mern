@@ -59,13 +59,34 @@ const main = async () => {
             bookingStatus: "Cancelled",
         });
 
+        const now = new Date();
+        const hourMs = 60 * 60 * 1000;
+        await Inquiry.collection.updateOne({ _id: new mongoose.Types.ObjectId(referral._id) }, { $set: {
+            createdAt: new Date(now.getTime() - 30 * hourMs),
+            firstContactAt: new Date(now.getTime() - 28 * hourMs), status: "Contacted",
+        } });
+        await Inquiry.collection.updateOne({ _id: new mongoose.Types.ObjectId(lost._id) }, { $set: {
+            createdAt: new Date(now.getTime() - 30 * hourMs),
+            firstContactAt: new Date(now.getTime() - 4 * hourMs),
+        } });
+        await Inquiry.collection.updateOne({ _id: new mongoose.Types.ObjectId(website._id) }, { $set: {
+            createdAt: new Date(now.getTime() - 48 * hourMs),
+        } });
+        await Inquiry.collection.updateOne({ _id: new mongoose.Types.ObjectId(unlinked._id) }, { $set: {
+            firstContactAt: new Date("2020-01-01"),
+        } });
+
         assert.equal((await request("/insights?window=all", "GET", undefined, finance)).status, 403);
         assert.equal((await request("/insights?window=bad")).status, 400);
         const response = await request("/insights?window=90");
         assert.equal(response.status, 200, await response.clone().text());
         const insights = await response.json();
-        assert.deepEqual(insights.summary, { inquiries: 5, booked: 1, lost: 2, conversionRate: 20 });
+        assert.deepEqual(insights.summary, { inquiries: 5, booked: 1, lost: 2, conversionRate: 20,
+            firstContacts: 2, within24h: 1, within24hRate: 50, averageResponseHours: 14, waiting24h: 1 });
         assert.equal(insights.sources.find(({ source }) => source === "Referral").booked, 1);
+        assert.equal(insights.sources.find(({ source }) => source === "Referral").within24hRate, 100);
+        assert.equal(insights.sources.find(({ source }) => source === "Facebook").within24hRate, 0);
+        assert.equal(insights.sources.find(({ source }) => source === "Website").averageResponseHours, null);
         assert.equal(insights.sources.find(({ source }) => source === "Facebook").lost, 1);
         assert.equal(insights.sources.find(({ source }) => source === "WhatsApp").booked, 0);
         assert.deepEqual(insights.reasons.map(({ reason, count }) => [reason, count]), [["Budget", 1], ["Unspecified", 1]]);
@@ -75,6 +96,8 @@ const main = async () => {
         assert.equal((await reopened.json()).inquiry.lossReason, null);
         const updated = await (await request("/insights?window=all")).json();
         assert.equal(updated.summary.lost, 1);
+        assert.equal(updated.summary.firstContacts, 2);
+        assert.equal(updated.summary.waiting24h, 1);
         console.log("Lead insights smoke passed: manual attribution, public isolation, real booking links, legacy reasons, access control.");
     } finally {
         if (booking) await Booking.deleteOne({ _id: booking._id });

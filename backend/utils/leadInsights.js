@@ -9,6 +9,7 @@ const buildLeadInsightsPipeline = (window, now = new Date()) => {
     }
 
     const { start } = getBusinessDayBounds(now);
+    const waitingSince = new Date(now.getTime() - DAY_MS);
     const match = window === "all" ? {} : {
         createdAt: {
             $gte: new Date(start.getTime() - (Number(window) - 1) * DAY_MS),
@@ -33,6 +34,21 @@ const buildLeadInsightsPipeline = (window, now = new Date()) => {
                 status: 1,
                 lossReason: 1,
                 booked: { $gt: [{ $size: "$linkedBookings" }, 0] },
+                // Status edits do not establish when a guest was actually contacted.
+                responseMs: { $cond: [
+                    { $and: [
+                        { $ne: ["$createdAt", null] },
+                        { $ne: ["$firstContactAt", null] },
+                        { $gte: ["$firstContactAt", "$createdAt"] },
+                    ] },
+                    { $subtract: ["$firstContactAt", "$createdAt"] },
+                    null,
+                ] },
+                waiting24h: { $and: [
+                    { $eq: ["$status", "New"] },
+                    { $eq: ["$firstContactAt", null] },
+                    { $lte: ["$createdAt", waitingSince] },
+                ] },
             },
         },
         {
@@ -48,6 +64,12 @@ const buildLeadInsightsPipeline = (window, now = new Date()) => {
                                     $cond: [{ $and: [{ $eq: ["$status", "Cancelled"] }, { $not: ["$booked"] }] }, 1, 0],
                                 },
                             },
+                            firstContacts: { $sum: { $cond: [{ $ne: ["$responseMs", null] }, 1, 0] } },
+                            within24h: { $sum: { $cond: [{ $and: [
+                                { $ne: ["$responseMs", null] }, { $lte: ["$responseMs", DAY_MS] },
+                            ] }, 1, 0] } },
+                            responseMsTotal: { $sum: { $ifNull: ["$responseMs", 0] } },
+                            waiting24h: { $sum: { $cond: ["$waiting24h", 1, 0] } },
                         },
                     },
                     { $sort: { inquiries: -1, _id: 1 } },
@@ -62,24 +84,41 @@ const buildLeadInsightsPipeline = (window, now = new Date()) => {
     ];
 };
 
+const rate = (numerator, denominator) => denominator ? Math.round(numerator * 1000 / denominator) / 10 : null;
+const averageHours = (milliseconds, count) => count ? Math.round(milliseconds / count / 360000) / 10 : null;
+
 const summarizeLeadInsights = (result = {}) => {
     const sources = (result.sources || []).map((row) => ({
         source: row._id || "Unknown",
-        inquiries: row.inquiries,
-        booked: row.booked,
-        lost: row.lost,
+        inquiries: row.inquiries || 0,
+        booked: row.booked || 0,
+        lost: row.lost || 0,
         conversionRate: row.inquiries ? Math.round(row.booked * 1000 / row.inquiries) / 10 : 0,
+        firstContacts: row.firstContacts || 0,
+        within24h: row.within24h || 0,
+        within24hRate: rate(row.within24h || 0, row.firstContacts || 0),
+        averageResponseHours: averageHours(row.responseMsTotal || 0, row.firstContacts || 0),
+        waiting24h: row.waiting24h || 0,
     }));
-    const summary = sources.reduce((totals, row) => ({
+    const totals = (result.sources || []).reduce((totals, row) => ({
         inquiries: totals.inquiries + row.inquiries,
         booked: totals.booked + row.booked,
         lost: totals.lost + row.lost,
-    }), { inquiries: 0, booked: 0, lost: 0 });
+        firstContacts: totals.firstContacts + (row.firstContacts || 0),
+        within24h: totals.within24h + (row.within24h || 0),
+        waiting24h: totals.waiting24h + (row.waiting24h || 0),
+        responseMsTotal: totals.responseMsTotal + (row.responseMsTotal || 0),
+    }), { inquiries: 0, booked: 0, lost: 0, firstContacts: 0, within24h: 0, waiting24h: 0, responseMsTotal: 0 });
 
     return {
         summary: {
-            ...summary,
-            conversionRate: summary.inquiries ? Math.round(summary.booked * 1000 / summary.inquiries) / 10 : 0,
+            inquiries: totals.inquiries, booked: totals.booked, lost: totals.lost,
+            conversionRate: totals.inquiries ? Math.round(totals.booked * 1000 / totals.inquiries) / 10 : 0,
+            firstContacts: totals.firstContacts,
+            within24h: totals.within24h,
+            within24hRate: rate(totals.within24h, totals.firstContacts),
+            averageResponseHours: averageHours(totals.responseMsTotal, totals.firstContacts),
+            waiting24h: totals.waiting24h,
         },
         sources,
         reasons: (result.reasons || []).map((row) => ({ reason: row._id || "Unspecified", count: row.count })),
