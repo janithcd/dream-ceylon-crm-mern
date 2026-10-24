@@ -53,6 +53,8 @@ const main = async () => {
         booking = await Booking.create({
             inquiry: referral._id,
             customer: { fullName: guest.fullName, email: guest.email, whatsappNumber: guest.whatsappNumber, country: guest.country },
+            travelStartDate: new Date("2027-03-01"),
+            travelEndDate: new Date("2027-03-03"),
             numberOfTravelers: 1, totalPrice: 100,
             bookingStatus: "Cancelled",
         });
