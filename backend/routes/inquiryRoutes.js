@@ -11,6 +11,7 @@ const {
     "../controllers/inquiryController"
 );
 const { getLeadInsights } = require("../controllers/leadInsightsController");
+const { getLeadAssignees, getLeadTriage, assignLead, recordLeadContact } = require("../controllers/leadTriageController");
 
 const {
     protect,
@@ -41,6 +42,10 @@ router.use(protect);
 
 router.post("/manual", authorizePermissions(PERMISSIONS.INQUIRY_CREATE), createManualInquiry);
 router.get("/insights", authorizePermissions(PERMISSIONS.INQUIRY_VIEW), getLeadInsights);
+router.get("/triage", authorizePermissions(PERMISSIONS.INQUIRY_VIEW), getLeadTriage);
+router.get("/assignees", authorizePermissions(PERMISSIONS.INQUIRY_UPDATE), getLeadAssignees);
+router.patch("/:id/assignee", authorizePermissions(PERMISSIONS.INQUIRY_UPDATE), assignLead);
+router.patch("/:id/contacted", authorizePermissions(PERMISSIONS.INQUIRY_UPDATE), recordLeadContact);
 
 router.get(
     "/",

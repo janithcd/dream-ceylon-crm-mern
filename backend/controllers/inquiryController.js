@@ -43,10 +43,10 @@ const normalizeObjectId = (value) => {
 };
 
 const populateInquiry = (query) => {
-    return query.populate(
-        "interestedPackage",
-        "title durationDays category priceFrom currency status"
-    );
+    return query
+        .populate("interestedPackage", "title durationDays category priceFrom currency status")
+        .populate("assignedTo", "name role status")
+        .populate("firstContactBy", "name");
 };
 
 const buildInquiryQuery = (queryParams) => {

@@ -67,6 +67,24 @@ const inquirySchema = new mongoose.Schema(
             default: "Website",
         },
 
+        assignedTo: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Admin",
+            default: null,
+        },
+
+        firstContactAt: { type: Date, default: null },
+        firstContactChannel: {
+            type: String,
+            enum: ["Email", "WhatsApp", "Phone", "Other"],
+            default: null,
+        },
+        firstContactBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Admin",
+            default: null,
+        },
+
         lossReason: {
             type: String,
             enum: ["Budget", "Travel plans changed", "No response", "Booked elsewhere", "Dates unavailable", "Other"],
@@ -89,6 +107,8 @@ const inquirySchema = new mongoose.Schema(
         timestamps: true,
     }
 );
+
+inquirySchema.index({ status: 1, assignedTo: 1, createdAt: 1 });
 
 const Inquiry = mongoose.model("Inquiry", inquirySchema);
 

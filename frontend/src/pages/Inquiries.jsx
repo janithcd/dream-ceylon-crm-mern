@@ -1,6 +1,6 @@
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
     FaBell,
     FaEdit,
@@ -14,6 +14,7 @@ import {
 import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
+import { usePermissions } from "../context/PermissionContext";
 const initialFormState = {
     fullName: "",
     email: "",
@@ -33,17 +34,23 @@ const initialFormState = {
 
 const Inquiries = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const { hasPermission } = usePermissions();
+    const canUpdate = hasPermission("inquiry.update");
+    const initialKeyword = searchParams.get("keyword") || "";
 
     const [inquiries, setInquiries] = useState([]);
     const [packages, setPackages] = useState([]);
+    const [assignees, setAssignees] = useState([]);
+    const [ownerBusyId, setOwnerBusyId] = useState("");
 
     const [formData, setFormData] = useState(initialFormState);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [editingWasCancelled, setEditingWasCancelled] = useState(false);
 
-    const [searchInput, setSearchInput] = useState("");
-    const [keyword, setKeyword] = useState("");
+    const [searchInput, setSearchInput] = useState(initialKeyword);
+    const [keyword, setKeyword] = useState(initialKeyword);
     const [status, setStatus] = useState("");
     const [priority, setPriority] = useState("");
     const [source, setSource] = useState("");
@@ -119,6 +126,15 @@ const Inquiries = () => {
     useEffect(() => {
         fetchPackages();
     }, []);
+
+    useEffect(() => {
+        if (!canUpdate) return;
+        let active = true;
+        api.get("/inquiries/assignees")
+            .then(({ data }) => { if (active) setAssignees(data.admins || []); })
+            .catch(() => { if (active) setError("Failed to load available lead owners."); });
+        return () => { active = false; };
+    }, [canUpdate]);
 
     useEffect(() => {
         fetchInquiries();
@@ -199,6 +215,20 @@ const Inquiries = () => {
             top: 0,
             behavior: "smooth",
         });
+    };
+
+    const changeOwner = async (inquiry, assignedTo) => {
+        try {
+            setOwnerBusyId(inquiry._id);
+            setError(""); setSuccess("");
+            await api.patch(`/inquiries/${inquiry._id}/assignee`, { assignedTo: assignedTo || null });
+            setSuccess(`Owner updated for ${inquiry.fullName}.`);
+            await fetchInquiries();
+        } catch (err) {
+            setError(err.response?.data?.message || "Failed to update the lead owner.");
+        } finally {
+            setOwnerBusyId("");
+        }
     };
 
     const handleDelete = async (id) => {
@@ -307,7 +337,10 @@ const Inquiries = () => {
                     </p>
                 </div>
 
-                <div className="d-flex gap-2">
+                <div className="d-flex flex-wrap gap-2">
+                    <button className="btn btn-outline-primary" onClick={() => navigate("/lead-triage")}>
+                        <FaBell className="me-2" />New Lead Queue
+                    </button>
                     <button className="btn btn-outline-primary" onClick={() => navigate("/lead-insights")}>
                         <FaChartBar className="me-2" />Lead Insights
                     </button>
@@ -692,6 +725,7 @@ const Inquiries = () => {
                                     <th>Package</th>
                                     <th>Source</th>
                                     <th>Priority</th>
+                                    <th>Owner</th>
                                     <th>Status</th>
                                     <th className="text-end">Actions</th>
                                 </tr>
@@ -730,7 +764,21 @@ const Inquiries = () => {
                                         </td>
 
                                         <td>
+                                            {canUpdate && !["Converted", "Cancelled"].includes(inquiry.status) ? (
+                                                <select className="form-select form-select-sm" aria-label={`Owner for ${inquiry.fullName}`}
+                                                    value={inquiry.assignedTo?._id || ""} disabled={Boolean(ownerBusyId)} onChange={(event) => changeOwner(inquiry, event.target.value)}>
+                                                    <option value="">Unassigned</option>
+                                                    {inquiry.assignedTo && !assignees.some((admin) => admin._id === inquiry.assignedTo._id) && (
+                                                        <option value={inquiry.assignedTo._id} disabled>{inquiry.assignedTo.name} (inactive)</option>
+                                                    )}
+                                                    {assignees.map((admin) => <option key={admin._id} value={admin._id}>{admin.name} · {admin.role}</option>)}
+                                                </select>
+                                            ) : (inquiry.assignedTo?.name || "Unassigned")}
+                                        </td>
+
+                                        <td>
                                             <StatusBadge status={inquiry.status} />
+                                            {inquiry.firstContactAt && <small className="d-block text-muted mt-1">First contact: {formatCalendarDate(inquiry.firstContactAt)} · {inquiry.firstContactChannel || "Unknown channel"}</small>}
                                             {inquiry.status === "Cancelled" && (
                                                 <small className="d-block text-muted mt-1" title={inquiry.lossNote || undefined}>
                                                     {inquiry.lossReason || "Reason not recorded"}
