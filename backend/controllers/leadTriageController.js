@@ -56,6 +56,29 @@ const getLeadTriage = async (req, res) => {
     }
 };
 
+const getLeadAttention = async (req, res) => {
+    const query = { status: "New", $or: [{ assignedTo: null }, { assignedTo: req.admin._id }] };
+    const waitingSince = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    try {
+        const [items, unassigned, mine, waiting24h] = await Promise.all([
+            Inquiry.find(query)
+                .select("fullName email createdAt priority assignedTo")
+                .sort({ createdAt: 1, _id: 1 })
+                .limit(5)
+                .lean(),
+            Inquiry.countDocuments({ status: "New", assignedTo: null }),
+            Inquiry.countDocuments({ status: "New", assignedTo: req.admin._id }),
+            Inquiry.countDocuments({ ...query, createdAt: { $lte: waitingSince } }),
+        ]);
+        return res.json({
+            items: items.map((item) => ({ ...item, waiting24h: item.createdAt <= waitingSince })),
+            summary: { total: unassigned + mine, unassigned, mine, waiting24h },
+        });
+    } catch (error) {
+        return res.status(500).json({ message: "Failed to load lead alerts." });
+    }
+};
+
 const logChange = async (req, inquiry, description, metadata) => {
     await createActivityLog({
         req, action: "UPDATE", module: "Inquiry", description,
@@ -134,4 +157,4 @@ const recordLeadContact = async (req, res) => {
     }
 };
 
-module.exports = { getLeadAssignees, getLeadTriage, assignLead, recordLeadContact };
+module.exports = { getLeadAssignees, getLeadTriage, getLeadAttention, assignLead, recordLeadContact };

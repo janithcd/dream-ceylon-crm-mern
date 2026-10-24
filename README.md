@@ -55,6 +55,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - View inquiry, quotation, booking, and payment history
 - Schedule and complete customer follow-ups
 - Identify overdue and upcoming follow-ups
+- See a header alert for new unassigned inquiries and new inquiries assigned to you; it highlights those waiting at least 24 hours and links to the lead queue. The alert refreshes after inquiry changes, on focus, and every minute while the CRM is open.
 - Open a reviewed WhatsApp message from a pending follow-up (requires an international client number; the admin sends it manually)
 - Export business data to CSV
 

@@ -33,6 +33,11 @@ const main = async () => {
         assert.equal(queue.items[0]._id, String(older._id), "oldest new lead appears first");
         assert.equal((await (await request("/triage?filter=unassigned")).json()).total, 1);
         assert.equal((await (await request("/triage?filter=mine")).json()).items[0]._id, String(newer._id));
+        assert.equal((await request("/attention", "GET", undefined, viewer)).status, 403);
+        const attention = await (await request("/attention")).json();
+        assert.deepEqual(attention.summary, { total: 2, unassigned: 1, mine: 1, waiting24h: 1 });
+        assert.equal(attention.items[0]._id, String(older._id));
+        assert.equal(attention.items[0].waiting24h, true);
         assert.equal((await request("/triage?filter=closed")).status, 400);
         const eligible = await (await request("/assignees")).json();
         assert.ok(eligible.admins.some((person) => person._id === String(sales._id)));
@@ -56,6 +61,8 @@ const main = async () => {
         assert.ok(contacted.firstContactAt);
         assert.equal((await request(`/${older._id}/contacted`, "PATCH", { channel: "Phone" })).status, 409);
         assert.equal((await (await request("/triage")).json()).summary.all, 1);
+        assert.deepEqual((await (await request("/attention")).json()).summary,
+            { total: 1, unassigned: 0, mine: 1, waiting24h: 0 });
 
         assert.equal((await request(`/${older._id}`, "PUT", { status: "New" })).status, 200);
         const again = await request(`/${older._id}/contacted`, "PATCH", { channel: "Phone" });
@@ -66,6 +73,8 @@ const main = async () => {
         assert.equal((await request(`/${newer._id}`, "PUT", { status: "Cancelled", lossReason: "Budget" })).status, 200);
         assert.equal((await request(`/${newer._id}/assignee`, "PATCH", { assignedTo: sales._id })).status, 409);
         assert.equal((await (await request("/triage")).json()).summary.all, 0);
+        assert.deepEqual((await (await request("/attention")).json()).summary,
+            { total: 0, unassigned: 0, mine: 0, waiting24h: 0 });
         console.log("Lead triage smoke passed: owner eligibility, oldest first, filters, atomic contact, reopening, and access control.");
     } finally {
         if (ids.length) {

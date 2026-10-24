@@ -35,8 +35,8 @@ test("lead queue is permissioned, oldest first and only includes new inquiries",
         readQuery = query;
         return {
             select() { return this; }, sort(value) { readSort = value; return this; },
-            skip() { return this; }, limit() { return this; }, populate() { return this; },
-            then(resolve, reject) { return Promise.resolve([{ _id: inquiryId, fullName: "CI Guest", status: "New" }]).then(resolve, reject); },
+            skip() { return this; }, limit() { return this; }, populate() { return this; }, lean() { return this; },
+            then(resolve, reject) { return Promise.resolve([{ _id: inquiryId, fullName: "CI Guest", email: "guest@example.test", createdAt: new Date("2025-01-01"), status: "New" }]).then(resolve, reject); },
         };
     });
     t.mock.method(Inquiry, "countDocuments", async (query) => query.assignedTo === null ? 1 : query.assignedTo ? 0 : 1);
@@ -78,6 +78,15 @@ test("lead queue is permissioned, oldest first and only includes new inquiries",
     assert.equal((await queue.json()).summary.unassigned, 1);
     assert.deepEqual(readQuery, { status: "New", assignedTo: null });
     assert.deepEqual(readSort, { createdAt: 1, _id: 1 });
+
+    assert.equal((await request("/attention", "GET", undefined, null)).status, 401);
+    assert.equal((await request("/attention", "GET", undefined, viewerId)).status, 403);
+    assert.equal((await request("/attention", "GET", undefined, financeId)).status, 403);
+    const attention = await (await request("/attention")).json();
+    assert.deepEqual(attention.summary, { total: 1, unassigned: 1, mine: 0, waiting24h: 1 });
+    assert.equal(attention.items[0].waiting24h, true);
+    assert.deepEqual(readQuery.$or, [{ assignedTo: null }, { assignedTo: salesId }]);
+    assert.equal(readQuery.status, "New");
 
     assert.equal((await request("/assignees", "GET", undefined, viewerId)).status, 403);
     const assignees = await request("/assignees");
