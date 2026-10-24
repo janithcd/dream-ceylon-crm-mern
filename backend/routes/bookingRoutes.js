@@ -16,6 +16,7 @@ const {
     deletePreparationTask,
 } = require("../controllers/bookingPreparationController");
 const { getMyTasks } = require("../controllers/myTasksController");
+const { getPreparationStarter, applyPreparationStarter } = require("../controllers/bookingPreparationStarterController");
 const { getBookingActivity } = require("../controllers/bookingActivityController");
 const { getItinerary, addItineraryDay, updateItineraryDay, deleteItineraryDay } = require("../controllers/bookingItineraryController");
 const { previewPackageItinerary, importPackageItinerary } = require("../controllers/bookingPackageImportController");
@@ -114,6 +115,9 @@ router.get(
     authorizePermissions(PERMISSIONS.BOOKING_UPDATE),
     getPreparationAssignees
 );
+
+router.get("/:id/preparation-starter", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getPreparationStarter);
+router.post("/:id/preparation-starter", protect, authorizePermissions(PERMISSIONS.BOOKING_UPDATE), applyPreparationStarter);
 
 router.get(
     "/:id/activity",
