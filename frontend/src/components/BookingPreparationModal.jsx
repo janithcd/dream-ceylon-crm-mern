@@ -5,12 +5,6 @@ import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { notifyTasksChanged } from "../utils/taskEvents";
 
-const suggestedTasks = [
-    "Confirm accommodation",
-    "Arrange vehicle and chauffeur",
-    "Confirm guide",
-    "Send final itinerary to client",
-];
 const priorityOptions = ["High", "Normal", "Low"];
 const assigneeId = (value) => (typeof value === "object" ? value?._id || "" : value || "");
 
@@ -24,6 +18,10 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
     const [newPriority, setNewPriority] = useState("Normal");
     const [newNotes, setNewNotes] = useState("");
     const [assignees, setAssignees] = useState([]);
+    const [starter, setStarter] = useState(null);
+    const [starterError, setStarterError] = useState("");
+    const [selectedStarterKeys, setSelectedStarterKeys] = useState([]);
+    const [includeDueDates, setIncludeDueDates] = useState(true);
     const [editingTaskId, setEditingTaskId] = useState("");
     const [editAssigneeId, setEditAssigneeId] = useState("");
     const [editDueDate, setEditDueDate] = useState("");
@@ -49,6 +47,16 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
             });
 
         if (canUpdate) {
+            api.get(`/bookings/${booking._id}/preparation-starter`)
+                .then(({ data }) => {
+                    if (active) {
+                        setStarter(data);
+                        setSelectedStarterKeys(data.options.filter((item) => !item.alreadyAdded).map((item) => item.key));
+                    }
+                })
+                .catch(() => {
+                    if (active) setStarterError("Could not load starter tasks. Please try reopening the checklist.");
+                });
             api.get("/bookings/preparation-assignees")
                 .then((response) => {
                     if (active) setAssignees(response.data.admins || []);
@@ -62,6 +70,42 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
     }, [booking._id, canUpdate]);
 
     const completeCount = tasks.filter((task) => task.completedAt).length;
+    const availableStarterTasks = starter?.options.filter((item) => !item.alreadyAdded) || [];
+
+    const refreshStarter = async () => {
+        try {
+            const { data } = await api.get(`/bookings/${booking._id}/preparation-starter`);
+            setStarter(data);
+            setStarterError("");
+            setSelectedStarterKeys(data.options.filter((item) => !item.alreadyAdded).map((item) => item.key));
+        } catch {
+            setStarterError("Could not refresh starter tasks. Please reopen the checklist.");
+        }
+    };
+
+    const addStarterTasks = async () => {
+        if (!selectedStarterKeys.length || busy || !starter) return;
+        try {
+            setBusy(true);
+            setError("");
+            setSuccess("");
+            const response = await api.post(`/bookings/${booking._id}/preparation-starter`, {
+                keys: selectedStarterKeys,
+                includeDueDates,
+                departureDate: starter.departureDate,
+            });
+            setTasks(response.data.tasks || []);
+            setSuccess(`${response.data.addedCount} starter ${response.data.addedCount === 1 ? "task" : "tasks"} added. Assign owners and adjust dates as needed.`);
+            notifyTasksChanged();
+            onChanged();
+            await refreshStarter();
+        } catch (err) {
+            setError(err.response?.data?.message || "Failed to add starter tasks.");
+            if (err.response?.status === 409) await refreshStarter();
+        } finally {
+            setBusy(false);
+        }
+    };
 
     const addTask = async (event) => {
         event.preventDefault();
@@ -85,6 +129,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
             setSuccess("Task added.");
             notifyTasksChanged();
             onChanged();
+            await refreshStarter();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to add task.");
         } finally {
@@ -153,6 +198,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
             setTasks(response.data.tasks || []);
             notifyTasksChanged();
             onChanged();
+            await refreshStarter();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to remove task.");
         } finally {
@@ -163,7 +209,7 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
     return (
         <>
             <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="preparation-title">
-                <div className="modal-dialog modal-dialog-centered modal-lg">
+                <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
                     <div className="modal-content">
                         <div className="modal-header">
                             <div>
@@ -177,6 +223,32 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
                             <p className="text-muted small mb-3">Assign an owner, due date, and priority to each arrangement as needed. Completing tasks does not change booking or payment status.</p>
                             {error && <div className="alert alert-danger" role="alert">{error}</div>}
                             {success && <div className="alert alert-success" role="status">{success}</div>}
+                            {starterError && <div className="alert alert-warning" role="alert">{starterError}</div>}
+
+                            {canUpdate && !loading && starter && availableStarterTasks.length > 0 && ["Pending", "Confirmed", "In Progress"].includes(starter.bookingStatus) && (
+                                <section className="border rounded-3 p-3 mb-4" aria-labelledby="starter-tasks-title">
+                                    <h6 id="starter-tasks-title" className="fw-bold">Starter checklist</h6>
+                                    <p className="small text-muted mb-2">Choose the arrangements this trip needs. Dates are suggested from departure ({formatCalendarDate(starter.departureDate)}), with today as the earliest due date. Review owners and dates after adding.</p>
+                                    <div className="d-flex flex-column gap-2 mb-3">
+                                        {starter.options.map((item) => (
+                                            <label key={item.key} className={`d-flex align-items-start gap-2 small ${item.alreadyAdded ? "text-muted" : ""}`}>
+                                                <input type="checkbox" className="form-check-input mt-1" checked={item.alreadyAdded || selectedStarterKeys.includes(item.key)} disabled={item.alreadyAdded || busy}
+                                                    onChange={(event) => setSelectedStarterKeys((current) => event.target.checked ? [...current, item.key] : current.filter((key) => key !== item.key))} />
+                                                <span>{item.title}{item.alreadyAdded ? " · already on checklist" : ` · ${item.daysBeforeDeparture} days before departure`}
+                                                    {!item.alreadyAdded && item.dueDate && <span className="text-muted"> (suggested {formatCalendarDate(item.dueDate)})</span>}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <label className="form-check small mb-3">
+                                        <input type="checkbox" className="form-check-input" checked={includeDueDates} onChange={(event) => setIncludeDueDates(event.target.checked)} disabled={busy} />
+                                        <span className="form-check-label">Add suggested due dates</span>
+                                    </label>
+                                    <div><button type="button" className="btn btn-outline-primary btn-sm" onClick={addStarterTasks}
+                                        disabled={busy || !selectedStarterKeys.length || tasks.length + selectedStarterKeys.length > 30}>Add selected tasks</button></div>
+                                    {tasks.length + selectedStarterKeys.length > 30 && <small className="text-danger d-block mt-2">Choose fewer tasks to stay within the 30-task limit.</small>}
+                                </section>
+                            )}
 
                             <h6 className="fw-bold mb-3">{completeCount} of {tasks.length} tasks completed</h6>
                             {loading ? (
@@ -299,13 +371,6 @@ const BookingPreparationModal = ({ booking, onClose, onChanged }) => {
                                     <button type="submit" className="btn btn-primary mt-3" disabled={busy || tasks.length >= 30}>
                                         <FaPlus className="me-2" />Add task
                                     </button>
-                                    <div className="d-flex flex-wrap gap-2 mt-3">
-                                        {suggestedTasks.filter((suggestion) => !tasks.some((task) => task.title.toLowerCase() === suggestion.toLowerCase())).map((suggestion) => (
-                                            <button key={suggestion} type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setTitle(suggestion)} disabled={busy || tasks.length >= 30}>
-                                                {suggestion}
-                                            </button>
-                                        ))}
-                                    </div>
                                     {tasks.length >= 30 && <small className="text-muted d-block mt-2">Maximum of 30 tasks per booking.</small>}
                                 </form>
                             )}
