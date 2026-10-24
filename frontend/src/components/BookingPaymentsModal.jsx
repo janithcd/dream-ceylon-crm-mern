@@ -716,6 +716,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                 <th>Reference</th>
                                                 <th>Amount</th>
                                                 <th>Status</th>
+                                                <th>Bank match</th>
                                                 <th className="text-end">Action</th>
                                             </tr>
                                             </thead>
@@ -758,6 +759,13 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                               </span>
                                                     </td>
 
+                                                    <td>
+                                                        {payment.status === "Cancelled" ? "—" : payment.reconciledAt ? (
+                                                            <><span className="text-success fw-semibold">Matched</span>
+                                                                <div className="small text-muted">{payment.statementReference}</div></>
+                                                        ) : <span className="text-warning-emphasis">To match</span>}
+                                                    </td>
+
                                                     <td className="text-end">
                                                         <div className="d-flex justify-content-end gap-2">
                                                             <PermissionGuard
@@ -793,11 +801,8 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                                             payment._id
                                                                         )
                                                                     }
-                                                                    disabled={
-                                                                        deleteLoadingId ===
-                                                                        payment._id
-                                                                    }
-                                                                    title="Delete payment"
+                                                                    disabled={deleteLoadingId === payment._id || Boolean(payment.reconciledAt)}
+                                                                    title={payment.reconciledAt ? "Reopen the bank match in Payment Reports before deleting" : "Delete payment"}
                                                                 >
                                                                     <FaTrash />
                                                                 </button>

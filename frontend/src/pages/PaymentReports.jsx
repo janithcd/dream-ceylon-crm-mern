@@ -27,6 +27,7 @@ import {
 import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
+import GuestPaymentRegister from "../components/GuestPaymentRegister";
 
 const COLORS = ["#0f766e", "#2563eb", "#f59e0b", "#dc2626", "#7c3aed"];
 
@@ -153,6 +154,7 @@ const PaymentReports = () => {
     const [loading, setLoading] = useState(false);
     const [receiptLoadingId, setReceiptLoadingId] = useState("");
     const [exportLoading, setExportLoading] = useState(false);
+    const [registerReloadKey, setRegisterReloadKey] = useState(0);
 
     const [error, setError] = useState("");
 
@@ -199,7 +201,6 @@ const PaymentReports = () => {
             });
 
             const response = await api.get("/finance/reports/payments", { params });
-
             setReport(response.data);
         } catch (err) {
             setError(
@@ -312,6 +313,11 @@ const PaymentReports = () => {
 
             const response = await api.get("/finance/reports/payments", { params });
 
+            if (response.data.totalPayments > response.data.payments.length) {
+                setError("More than 10,000 payments match. Narrow the filters before exporting.");
+                return;
+            }
+
             const exportPayments = response.data.payments || [];
 
             const rows = exportPayments.map((payment) => ({
@@ -326,6 +332,10 @@ const PaymentReports = () => {
                 Amount: payment.amount || 0,
                 Currency: payment.currency || "",
                 Status: payment.status || "",
+                "Matching Status": payment.status === "Cancelled" ? "Not applicable" : payment.reconciledAt ? "Matched" : "To match",
+                "Statement Reference": payment.statementReference || "",
+                "Matched By": payment.reconciledByName || "",
+                "Matched At (UTC)": payment.reconciledAt || "",
                 Notes: payment.notes || "",
             }));
 
@@ -349,15 +359,14 @@ const PaymentReports = () => {
                 <div>
                     <h2 className="fw-bold mb-1">Payment Reports</h2>
                     <p className="text-muted mb-0">
-                        Track received payments, refunds, net income, and payment method
-                        performance.
+                        Track received payments, refunds, bank matching, net income, and payment methods.
                     </p>
                 </div>
 
                 <div className="d-flex gap-2">
                     <button
                         className="btn btn-outline-success"
-                        onClick={fetchReport}
+                        onClick={() => { fetchReport(); setRegisterReloadKey((current) => current + 1); }}
                         disabled={loading}
                     >
                         <FaRedo className="me-2" />
@@ -666,6 +675,10 @@ const PaymentReports = () => {
                 </div>
             </div>
 
+            <PermissionGuard all={["report.view", "payment.view"]}>
+                <GuestPaymentRegister reloadKey={registerReloadKey} onChanged={fetchReport} />
+            </PermissionGuard>
+
             <div className="card border-0 shadow-sm rounded-4">
                 <div className="card-body p-4">
                     <div className="d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3">
@@ -700,6 +713,7 @@ const PaymentReports = () => {
                                     <th>Method</th>
                                     <th>Amount</th>
                                     <th>Status</th>
+                                    <th>Bank match</th>
                                     <th className="text-end">Receipt</th>
                                 </tr>
                                 </thead>
@@ -753,6 +767,13 @@ const PaymentReports = () => {
                         >
                           {payment.status}
                         </span>
+                                        </td>
+
+                                        <td>
+                                            {payment.status === "Cancelled" ? "—" : payment.reconciledAt ? (
+                                                <><span className="text-success fw-semibold">Matched</span>
+                                                    <div className="small text-muted">{payment.statementReference}</div></>
+                                            ) : <span className="text-warning-emphasis">To match</span>}
                                         </td>
 
                                         <td className="text-end">

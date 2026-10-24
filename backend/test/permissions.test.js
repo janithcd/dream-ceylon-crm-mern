@@ -32,6 +32,14 @@ test("Finance cannot manage administrator accounts", () => {
 test("Manager cannot refund payments", () => {
     assert.equal(run(authorizePermissions("payment.refund"), { role: "Manager" }).status, 403);
 });
+test("only Finance and Super Admin reconcile guest payments by default", () => {
+    for (const role of ["Manager", "Sales", "Viewer"]) {
+        assert.equal(run(authorizePermissions("payment.view", "payment.reconcile"), { role }).status, 403);
+    }
+    for (const role of ["Finance", "Super Admin"]) {
+        assert.equal(run(authorizePermissions("payment.view", "payment.reconcile"), { role }).next, true);
+    }
+});
 test("Super Admin can manage administrator accounts", () => {
     assert.equal(run(authorizePermissions("admin.create"), { role: "Super Admin" }).next, true);
 });

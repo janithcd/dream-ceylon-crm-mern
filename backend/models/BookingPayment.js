@@ -1,5 +1,17 @@
 const mongoose = require("mongoose");
 
+const reconciliationEventSchema = new mongoose.Schema({
+    action: { type: String, enum: ["reconciled", "reopened"], required: true },
+    statementReference: { type: String, trim: true, maxlength: 100, default: "" },
+    reason: { type: String, trim: true, maxlength: 300, default: "" },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+    recordedByName: { type: String, trim: true, maxlength: 100, required: true },
+    recordedAt: { type: Date, required: true },
+    amount: { type: Number, required: true },
+    currency: { type: String, required: true },
+    status: { type: String, required: true },
+}, { _id: true });
+
 const bookingPaymentSchema = new mongoose.Schema(
     {
         paymentNo: {
@@ -60,10 +72,18 @@ const bookingPaymentSchema = new mongoose.Schema(
             type: String,
             default: "",
         },
+
+        reconciledAt: { type: Date, default: null },
+        statementReference: { type: String, trim: true, maxlength: 100, default: "" },
+        reconciledBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+        reconciledByName: { type: String, trim: true, maxlength: 100, default: "" },
+        reconciliationHistory: { type: [reconciliationEventSchema], default: [] },
     },
     {
         timestamps: true,
     }
 );
+
+bookingPaymentSchema.index({ paymentDate: -1, status: 1, reconciledAt: 1 });
 
 module.exports = mongoose.model("BookingPayment", bookingPaymentSchema);

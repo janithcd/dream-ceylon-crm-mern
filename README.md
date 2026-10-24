@@ -99,6 +99,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - Record booking payments
 - View payment history
 - Handle refunds
+- Match recorded guest receipts and refunds against bank or cashbook entries
 - Calculate paid, pending, and outstanding amounts
 - Generate individual payment receipts
 - View financial reports
@@ -106,6 +107,8 @@ The system combines operational management, AI-powered productivity tools, brand
 - Export report data
 
 The **Outstanding Balances** page lists open balances by agreed payment due date, with filters for overdue dates, the next seven days, later dates, and bookings without a due date. Departure filters can be combined with payment timing. Existing bookings have no due date until staff records one; a departure date alone is not treated as a payment deadline. Payment dates use Sri Lanka calendar days, and recording a payment removes a fully paid booking from this queue.
+
+In **Payment Reports → Guest payment matching**, Finance can review recorded receipts and refunds for a Sri Lanka date range (up to 366 days), search payment or statement references, and filter **To match** or **Matched**. Enter the bank statement or cashbook reference to match a payment; reopen an incorrect match with a reason. Each change records the staff member, time, reference and a snapshot of the amount, currency and status. Matched payments must be reopened before editing or deleting them. Matching never changes the paid balance, and cancelled payments do not appear in this register. Existing payments start as unmatched. The register totals received, refunded and net separately by currency, pages 25 records at a time, and exports up to 10,000 matching records to CSV. `GET /api/booking-payments/register` requires `payment.view` and `report.view`; `/register/export` also requires `report.export`. `PATCH /api/booking-payments/:id/reconciliation` requires `payment.view` and `payment.reconcile` with `{ "reconciled": true, "statementReference": "..." }` or `{ "reconciled": false, "reason": "..." }`. Finance and Super Admin have the new reconcile permission by default; a Super Admin can grant it to others.
 
 For packages requiring a hotel deposit, set a **hotel advance to collect** in the booking currency and its due date (for example, the agreed 50% of hotel charges), followed by the existing final balance due date. The CRM does not infer this amount from supplier costs, which may use different currencies. The hotel advance is a collection target, not money received; only payment records change the paid total. The payment modal shows both milestone targets and outstanding amounts. Net payments cover the hotel advance first, and a refund can reopen it. Outstanding Balances, due filters, header alerts, and reviewed WhatsApp reminders use the next unpaid milestone; older bookings without an advance continue to use their existing balance due date. Staff with `payment.update` can change the advance at `PATCH /api/bookings/:id/hotel-advance` with `{ "hotelAdvanceAmount": 300, "hotelAdvanceDueDate": "YYYY-MM-DD" }` (send `0` and `null` to clear). The advance cannot exceed the booking price, and its date cannot fall after the final due date.
 

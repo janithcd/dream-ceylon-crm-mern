@@ -29,6 +29,7 @@ const PERMISSIONS = Object.freeze({
     PAYMENT_VIEW: "payment.view",
     PAYMENT_CREATE: "payment.create",
     PAYMENT_UPDATE: "payment.update",
+    PAYMENT_RECONCILE: "payment.reconcile",
     PAYMENT_DELETE: "payment.delete",
     PAYMENT_REFUND: "payment.refund",
 
@@ -145,6 +146,7 @@ const ROLE_PERMISSIONS = Object.freeze({
         PERMISSIONS.PAYMENT_CREATE,
         PERMISSIONS.PAYMENT_UPDATE,
         PERMISSIONS.PAYMENT_REFUND,
+        PERMISSIONS.PAYMENT_RECONCILE,
 
         PERMISSIONS.REPORT_VIEW,
         PERMISSIONS.REPORT_EXPORT,

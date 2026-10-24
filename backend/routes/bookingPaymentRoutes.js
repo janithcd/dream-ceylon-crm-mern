@@ -3,6 +3,9 @@ const express = require("express");
 const {
     createBookingPayment,
     getBookingPayments,
+    getGuestPaymentRegister,
+    exportGuestPaymentRegister,
+    reconcileGuestPayment,
     getBookingPaymentsByBooking,
     getBookingPaymentById,
     updateBookingPayment,
@@ -57,6 +60,27 @@ router.get(
     protect,
     authorizePermissions(PERMISSIONS.PAYMENT_VIEW),
     getBookingPayments
+);
+
+router.get(
+    "/register/export",
+    protect,
+    authorizePermissions(PERMISSIONS.PAYMENT_VIEW, PERMISSIONS.REPORT_EXPORT),
+    exportGuestPaymentRegister
+);
+
+router.get(
+    "/register",
+    protect,
+    authorizePermissions(PERMISSIONS.PAYMENT_VIEW, PERMISSIONS.REPORT_VIEW),
+    getGuestPaymentRegister
+);
+
+router.patch(
+    "/:id/reconciliation",
+    protect,
+    authorizePermissions(PERMISSIONS.PAYMENT_VIEW, PERMISSIONS.PAYMENT_RECONCILE),
+    reconcileGuestPayment
 );
 
 router.get(

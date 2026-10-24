@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Booking = require("../models/Booking");
 const BookingPayment = require("../models/BookingPayment");
 const { createActivityLog } = require("../utils/createActivityLog");
+const { parseRegisterQuery, parseReconciliation, guestPaymentsCsv } = require("../utils/guestPaymentReconciliation");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -431,6 +432,116 @@ const getBookingPayments = async (req, res) => {
     }
 };
 
+const getGuestPaymentRegister = async (req, res) => {
+    const parsed = parseRegisterQuery(req.query);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    const { query, page } = parsed.value;
+    const limit = 25;
+    try {
+        const [payments, total, totals] = await Promise.all([
+            BookingPayment.find(query).sort({ paymentDate: -1, _id: -1 })
+                .skip((page - 1) * limit).limit(limit)
+                .populate("booking", "bookingCode customer.fullName").lean(),
+            BookingPayment.countDocuments(query),
+            BookingPayment.aggregate([
+                { $match: query },
+                { $group: { _id: { currency: "$currency", status: "$status" }, amount: { $sum: "$amount" } } },
+                { $sort: { "_id.currency": 1, "_id.status": 1 } },
+            ]),
+        ]);
+        const byCurrency = new Map();
+        for (const item of totals) {
+            const currency = item._id.currency;
+            if (!byCurrency.has(currency)) byCurrency.set(currency, { currency, received: 0, refunded: 0 });
+            byCurrency.get(currency)[item._id.status === "Refunded" ? "refunded" : "received"] += item.amount;
+        }
+        res.set("Cache-Control", "no-store");
+        return res.json({
+            items: payments, total, page, limit, pages: Math.ceil(total / limit),
+            totalsByCurrency: [...byCurrency.values()].map((item) => ({
+                ...item, net: item.received - item.refunded,
+            })),
+        });
+    } catch (error) {
+        console.error("Guest payment register failed:", error.message);
+        return res.status(500).json({ message: "Failed to load guest payment register" });
+    }
+};
+
+const exportGuestPaymentRegister = async (req, res) => {
+    const parsed = parseRegisterQuery(req.query);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    const { query, from, to } = parsed.value;
+    try {
+        const count = await BookingPayment.countDocuments(query);
+        if (count > 10000) return res.status(413).json({ message: "More than 10,000 payments match. Narrow the date range." });
+        const payments = await BookingPayment.find(query).sort({ paymentDate: -1, _id: -1 })
+            .limit(10000).populate("booking", "bookingCode customer.fullName");
+        res.set("Cache-Control", "no-store");
+        res.set("Content-Type", "text/csv; charset=utf-8");
+        res.set("Content-Disposition", `attachment; filename="guest-payments-${from}-to-${to}.csv"`);
+        return res.send(`\uFEFF${guestPaymentsCsv(payments)}`);
+    } catch (error) {
+        console.error("Guest payment register export failed:", error.message);
+        return res.status(500).json({ message: "Failed to export guest payment register" });
+    }
+};
+
+const reconcileGuestPayment = async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ message: "Invalid payment ID" });
+    }
+    const parsed = parseReconciliation(req.body);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    try {
+        const payment = await BookingPayment.findById(req.params.id)
+            .populate("booking", "bookingCode customer.fullName");
+        if (!payment) return res.status(404).json({ message: "Payment not found" });
+        if (!["Received", "Refunded"].includes(payment.status)) {
+            return res.status(409).json({ message: "Cancelled payments cannot be matched." });
+        }
+        const matching = parsed.value.reconciled;
+        if (Boolean(payment.reconciledAt) === matching) {
+            return res.status(409).json({ message: "The match status changed. Refresh and try again." });
+        }
+        const recordedAt = new Date();
+        const actorName = String(req.admin.name || "Admin").slice(0, 100);
+        const statementReference = matching ? parsed.value.statementReference : payment.statementReference;
+        const updated = await BookingPayment.findOneAndUpdate(
+            { _id: payment._id, __v: payment.__v,
+                reconciledAt: matching ? null : payment.reconciledAt,
+                status: payment.status },
+            { $set: {
+                reconciledAt: matching ? recordedAt : null,
+                statementReference: matching ? statementReference : "",
+                reconciledBy: matching ? req.admin._id : null,
+                reconciledByName: matching ? actorName : "",
+            }, $push: { reconciliationHistory: {
+                action: matching ? "reconciled" : "reopened",
+                statementReference,
+                reason: matching ? "" : parsed.value.reason,
+                recordedBy: req.admin._id, recordedByName: actorName, recordedAt,
+                amount: payment.amount, currency: payment.currency, status: payment.status,
+            } }, $inc: { __v: 1 } },
+            { new: true, runValidators: true }
+        );
+        if (!updated) return res.status(409).json({ message: "The payment changed. Refresh and try again." });
+        await createActivityLog({
+            req, action: "UPDATE", module: "Payment",
+            description: `Guest payment ${payment.paymentNo} ${matching ? "matched" : "reopened"}`,
+            relatedRecordId: payment._id, relatedModel: "BookingPayment",
+            referenceNo: payment.paymentNo, customerName: payment.booking?.customer?.fullName,
+            metadata: { bookingId: payment.booking?._id, bookingCode: payment.booking?.bookingCode,
+                statementReference, reason: parsed.value.reason || "", amount: payment.amount,
+                currency: payment.currency, paymentStatus: payment.status },
+        });
+        return res.json({ payment: updated });
+    } catch (error) {
+        console.error("Guest payment reconciliation failed:", error.message);
+        return res.status(500).json({ message: "Failed to update guest payment reconciliation" });
+    }
+};
+
 // @desc    Get payments for one booking
 // @route   GET /api/booking-payments/booking/:bookingId
 // @access  Private
@@ -497,6 +608,10 @@ const updateBookingPayment = async (req, res) => {
             });
         }
 
+        if (payment.reconciledAt) {
+            return res.status(409).json({ message: "Reopen this bank match before editing the payment." });
+        }
+
         const previousBookingId = payment.booking?.toString();
         const previousStatus = payment.status;
         const payload = buildPaymentPayload(req.body, payment);
@@ -522,12 +637,18 @@ const updateBookingPayment = async (req, res) => {
         }
 
         Object.assign(payment, payload);
-        await payment.save();
+        await payment.validate();
+        const updated = await BookingPayment.findOneAndUpdate(
+            { _id: payment._id, reconciledAt: null, __v: payment.__v },
+            { $set: payload, $inc: { __v: 1 } },
+            { new: true, runValidators: true }
+        );
+        if (!updated) return res.status(409).json({ message: "The payment changed. Refresh and try again." });
 
         await syncBookingPaymentSummary(previousBookingId);
 
-        if (payment.booking.toString() !== previousBookingId) {
-            await syncBookingPaymentSummary(payment.booking);
+        if (updated.booking.toString() !== previousBookingId) {
+            await syncBookingPaymentSummary(updated.booking);
         }
 
         const action =
@@ -596,6 +717,10 @@ const deleteBookingPayment = async (req, res) => {
             });
         }
 
+        if (payment.reconciledAt) {
+            return res.status(409).json({ message: "Reopen this bank match before deleting the payment." });
+        }
+
         const bookingId = payment.booking?._id || payment.booking;
         const bookingCode = payment.booking?.bookingCode || "";
         const customerName = payment.booking?.customer?.fullName || "";
@@ -611,7 +736,10 @@ const deleteBookingPayment = async (req, res) => {
             referenceNumber: payment.referenceNumber,
         };
 
-        await payment.deleteOne();
+        const deleted = await BookingPayment.findOneAndDelete({
+            _id: payment._id, reconciledAt: null, __v: payment.__v,
+        });
+        if (!deleted) return res.status(409).json({ message: "The payment changed. Refresh and try again." });
         await syncBookingPaymentSummary(bookingId);
 
         await createActivityLog({
@@ -651,6 +779,9 @@ const deleteBookingPayment = async (req, res) => {
 module.exports = {
     createBookingPayment,
     getBookingPayments,
+    getGuestPaymentRegister,
+    exportGuestPaymentRegister,
+    reconcileGuestPayment,
     getBookingPaymentsByBooking,
     getBookingPaymentById,
     updateBookingPayment,

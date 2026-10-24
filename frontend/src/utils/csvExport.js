@@ -1,9 +1,11 @@
-const escapeCsvValue = (value) => {
+export const escapeCsvValue = (value) => {
     if (value === null || value === undefined) {
         return "";
     }
 
-    const stringValue = String(value);
+    // Guest names, payment references, and notes are untrusted spreadsheet cells.
+    const stringValue = typeof value === "string" && /^\s*[=+\-@]/.test(value)
+        ? `'${value}` : String(value);
 
     if (
         stringValue.includes(",") ||
