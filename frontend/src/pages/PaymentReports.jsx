@@ -159,12 +159,13 @@ const PaymentReports = () => {
     const [error, setError] = useState("");
 
     const summary = report?.summary || {};
+    const summaryByCurrency = report?.summaryByCurrency || [];
     const payments = report?.payments || [];
     const monthlyStats = report?.monthlyStats || [];
     const methodStats = report?.methodStats || [];
     const statusStats = report?.statusStats || [];
 
-    const chartCurrency = summary.currency || "USD";
+    const chartCurrency = activeFilters.currency;
 
     const paymentStatusChartData = useMemo(() => {
         return statusStats
@@ -188,6 +189,7 @@ const PaymentReports = () => {
         try {
             setLoading(true);
             setError("");
+            setReport(null);
 
             const params = {
                 page,
@@ -388,7 +390,8 @@ const PaymentReports = () => {
 
             {error && <div className="alert alert-danger">{error}</div>}
 
-            <div className="row g-4 mb-4">
+            {loading ? <div className="card border-0 shadow-sm rounded-4 mb-4"><div className="card-body p-4 text-muted">Loading payment totals...</div></div>
+                : activeFilters.currency ? <div className="row g-4 mb-4">
                 <div className="col-xl-3 col-md-6">
                     <StatCard
                         title="Total Received"
@@ -428,7 +431,24 @@ const PaymentReports = () => {
                         variant="danger"
                     />
                 </div>
-            </div>
+            </div> : <div className="card border-0 shadow-sm rounded-4 mb-4">
+                <div className="card-body p-4">
+                    <h5 className="fw-bold mb-1">Totals by currency</h5>
+                    <p className="text-muted small mb-3">Amounts in different currencies are shown separately. Choose a currency below to see amount charts.</p>
+                    {summaryByCurrency.length === 0 ? <p className="text-muted mb-0">No payments match these filters.</p> :
+                        <div className="table-responsive"><table className="table align-middle mb-0">
+                            <thead><tr><th>Currency</th><th>Received</th><th>Refunded</th><th>Net income</th><th>Cancelled</th><th>Records</th></tr></thead>
+                            <tbody>{summaryByCurrency.map((item) => <tr key={item.currency}>
+                                <th scope="row">{item.currency}</th>
+                                <td>{formatMoney(item.totalReceived, item.currency)}</td>
+                                <td>{formatMoney(item.totalRefunded, item.currency)}</td>
+                                <td className="fw-semibold">{formatMoney(item.netIncome, item.currency)}</td>
+                                <td>{formatMoney(item.totalCancelled, item.currency)}</td>
+                                <td>{item.totalPayments}</td>
+                            </tr>)}</tbody>
+                        </table></div>}
+                </div>
+            </div>}
 
             <div className="card border-0 shadow-sm rounded-4 mb-4">
                 <div className="card-body p-4">
@@ -515,7 +535,7 @@ const PaymentReports = () => {
                                     value={filters.currency}
                                     onChange={handleFilterChange}
                                 >
-                                    <option value="">All Currency</option>
+                                    <option value="">All currencies (separate totals)</option>
                                     {currencyOptions.map((item) => (
                                         <option key={item} value={item}>
                                             {item}
@@ -570,8 +590,8 @@ const PaymentReports = () => {
                         title="Monthly Net Income"
                         subtitle="Received payments minus refunded payments by month."
                     >
-                        {monthlyStats.length === 0 ? (
-                            <EmptyChart />
+                        {!chartCurrency || monthlyStats.length === 0 ? (
+                            <EmptyChart message={chartCurrency ? "No chart data available yet." : "Choose a currency to view amount charts."} />
                         ) : (
                             <div style={{ height: "320px" }}>
                                 <ResponsiveContainer width="100%" height="100%">
@@ -649,8 +669,8 @@ const PaymentReports = () => {
                         title="Payment Method Net Income"
                         subtitle="Shows which payment methods generate the most net income."
                     >
-                        {methodChartData.length === 0 ? (
-                            <EmptyChart />
+                        {!chartCurrency || methodChartData.length === 0 ? (
+                            <EmptyChart message={chartCurrency ? "No chart data available yet." : "Choose a currency to view amount charts."} />
                         ) : (
                             <div style={{ height: "320px" }}>
                                 <ResponsiveContainer width="100%" height="100%">
