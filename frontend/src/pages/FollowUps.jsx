@@ -15,6 +15,7 @@ import {
 } from "react-icons/fa";
 import api from "../api/axios";
 import PermissionGuard from "../components/PermissionGuard";
+import { usePermissions } from "../context/PermissionContext";
 
 const initialFormState = () => ({
     title: "",
@@ -22,6 +23,7 @@ const initialFormState = () => ({
     inquiry: "",
     quotation: "",
     booking: "",
+    assignedTo: "self",
     customerName: "",
     customerContact: "",
     followUpDate: todayCalendarDate(),
@@ -53,6 +55,10 @@ const dateFilterOptions = [
     {
         label: "Today",
         value: "today",
+    },
+    {
+        label: "Due now",
+        value: "due",
     },
     {
         label: "Overdue",
@@ -113,11 +119,8 @@ const getDateStatus = (followUpDate, status) => {
         };
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const date = new Date(followUpDate);
-    date.setHours(0, 0, 0, 0);
+    const today = todayCalendarDate();
+    const date = toCalendarDateInput(followUpDate);
 
     if (date < today) {
         return {
@@ -126,7 +129,7 @@ const getDateStatus = (followUpDate, status) => {
         };
     }
 
-    if (date.getTime() === today.getTime()) {
+    if (date === today) {
         return {
             label: "Today",
             className: "text-success",
@@ -155,6 +158,7 @@ const SummaryCard = ({ title, value, subtitle, icon, variant = "success" }) => {
 
 const FollowUps = () => {
     const [searchParams] = useSearchParams();
+    const { admin } = usePermissions();
 
     const inquiryParam = searchParams.get("inquiry");
     const quotationParam = searchParams.get("quotation");
@@ -179,6 +183,8 @@ const FollowUps = () => {
     const [inquiries, setInquiries] = useState([]);
     const [quotations, setQuotations] = useState([]);
     const [bookings, setBookings] = useState([]);
+    const [assignees, setAssignees] = useState([]);
+    const [assigneeError, setAssigneeError] = useState("");
 
     const [formData, setFormData] = useState(initialFormState);
     const [showForm, setShowForm] = useState(false);
@@ -189,7 +195,14 @@ const FollowUps = () => {
     const [status, setStatus] = useState("");
     const [priority, setPriority] = useState("");
     const [type, setType] = useState("");
-    const [dateFilter, setDateFilter] = useState("");
+    const [dateFilter, setDateFilter] = useState(() =>
+        ["today", "due", "overdue", "upcoming"].includes(searchParams.get("dateFilter"))
+            ? searchParams.get("dateFilter") : ""
+    );
+    const [owner, setOwner] = useState(() =>
+        ["mine", "unassigned", "attention"].includes(searchParams.get("owner"))
+            ? searchParams.get("owner") : "all"
+    );
 
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -223,7 +236,9 @@ const FollowUps = () => {
 
     const fetchSummary = async () => {
         try {
-            const response = await api.get("/follow-ups/summary");
+            const response = await api.get("/follow-ups/summary", {
+                params: { owner },
+            });
             setSummary(response.data || {});
         } catch (err) {
             console.error("Failed to load follow-up summary", err);
@@ -238,6 +253,7 @@ const FollowUps = () => {
             const params = {
                 page,
                 limit: 10,
+                owner,
             };
 
             if (keyword) {
@@ -318,18 +334,28 @@ const FollowUps = () => {
         }
     };
 
+    const fetchAssignees = async () => {
+        try {
+            const response = await api.get("/follow-ups/assignees");
+            setAssignees(response.data.admins || []);
+            setAssigneeError("");
+        } catch (err) {
+            setAssigneeError(err.response?.data?.message || "Could not load staff owners.");
+        }
+    };
+
     useEffect(() => {
         fetchInquiries();
         fetchQuotations();
         fetchBookings();
-        fetchSummary();
+        fetchAssignees();
     }, []);
 
     useEffect(() => {
         fetchFollowUps();
         fetchSummary();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, keyword, status, priority, type, dateFilter]);
+    }, [page, keyword, status, priority, type, dateFilter, owner]);
 
     useEffect(() => {
         if (!inquiryParam && !quotationParam && !bookingParam) {
@@ -549,6 +575,9 @@ const FollowUps = () => {
 
             const payload = {
                 ...formData,
+                ...(formData.assignedTo === "self" ? { assignedTo: undefined } : {
+                    assignedTo: formData.assignedTo || null,
+                }),
                 inquiry: formData.inquiry || null,
                 quotation: formData.quotation || null,
                 booking: formData.booking || null,
@@ -584,6 +613,7 @@ const FollowUps = () => {
             inquiry: getIdValue(followUp.inquiry),
             quotation: getIdValue(followUp.quotation),
             booking: getIdValue(followUp.booking),
+            assignedTo: getIdValue(followUp.assignedTo),
             customerName: followUp.customerName || "",
             customerContact: followUp.customerContact || "",
             followUpDate: toCalendarDateInput(followUp.followUpDate),
@@ -691,6 +721,7 @@ const FollowUps = () => {
         setPriority("");
         setType("");
         setDateFilter("");
+        setOwner("all");
         setPage(1);
     };
 
@@ -789,7 +820,24 @@ const FollowUps = () => {
                 </div>
             </div>
 
+            <div className="d-flex align-items-center flex-wrap gap-2 mb-3">
+                <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => {
+                    setOwner("mine");
+                    setDateFilter("due");
+                    setStatus("Pending");
+                    setPage(1);
+                }}>My due work</button>
+                <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => {
+                    setOwner("unassigned");
+                    setDateFilter("due");
+                    setStatus("Pending");
+                    setPage(1);
+                }}>Unassigned due work</button>
+                <small className="text-muted">Summary cards reflect the selected owner. Due dates use Sri Lanka time.</small>
+            </div>
+
             {error && <div className="alert alert-danger">{error}</div>}
+            {assigneeError && <div className="alert alert-warning">{assigneeError}</div>}
             {success && <div className="alert alert-success">{success}</div>}
 
             {showForm && (
@@ -979,6 +1027,23 @@ const FollowUps = () => {
                                     </select>
                                 </div>
 
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label fw-semibold" htmlFor="follow-up-owner">Owner</label>
+                                    <select id="follow-up-owner" name="assignedTo" className="form-select"
+                                        value={formData.assignedTo} onChange={handleChange}>
+                                        {!editingId && <option value="self">Me ({admin?.name || "signed-in staff"})</option>}
+                                        <option value="">Unassigned</option>
+                                        {formData.assignedTo && formData.assignedTo !== "self" &&
+                                            !assignees.some((person) => person._id === formData.assignedTo) && (
+                                                <option value={formData.assignedTo}>Current owner (inactive or unavailable)</option>
+                                            )}
+                                        {assignees.map((person) => (
+                                            <option key={person._id} value={person._id}>{person.name} · {person.role}</option>
+                                        ))}
+                                    </select>
+                                    <small className="text-muted">Only active staff who can manage follow-ups can be assigned.</small>
+                                </div>
+
                                 <div className="col-12">
                                     <label className="form-label fw-semibold">Notes</label>
                                     <textarea
@@ -1038,6 +1103,19 @@ const FollowUps = () => {
                                     </button>
                                 </div>
                             </form>
+                        </div>
+
+                        <div className="col-12 col-md-4 col-lg-2">
+                            <select className="form-select" aria-label="Filter follow-up owner"
+                                value={owner} onChange={(e) => { setOwner(e.target.value); setPage(1); }}>
+                                <option value="all">All owners</option>
+                                <option value="mine">Mine</option>
+                                <option value="unassigned">Unassigned</option>
+                                <option value="attention">Mine + unassigned</option>
+                                {assignees.map((person) => (
+                                    <option key={person._id} value={person._id}>{person.name}</option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="col-12 col-md-3 col-lg-2">
@@ -1145,6 +1223,7 @@ const FollowUps = () => {
                                 <tr>
                                     <th>Reminder</th>
                                     <th>Client</th>
+                                    <th>Owner</th>
                                     <th>Date</th>
                                     <th>Type</th>
                                     <th>Priority</th>
@@ -1179,6 +1258,13 @@ const FollowUps = () => {
                                                 <small className="text-muted">
                                                     {followUp.customerContact || "-"}
                                                 </small>
+                                            </td>
+
+                                            <td>
+                                                {followUp.assignedTo?.name || "Unassigned"}
+                                                {followUp.assignedTo?.status === "Inactive" && (
+                                                    <small className="d-block text-warning">Inactive</small>
+                                                )}
                                             </td>
 
                                             <td>
