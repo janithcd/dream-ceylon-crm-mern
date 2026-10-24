@@ -41,8 +41,8 @@ test("lead queue is permissioned, oldest first and only includes new inquiries",
     });
     t.mock.method(Inquiry, "countDocuments", async (query) => query.assignedTo === null ? 1 : query.assignedTo ? 0 : 1);
     t.mock.method(Inquiry, "exists", async () => true);
-    t.mock.method(Inquiry, "findOneAndUpdate", async (query, change) => {
-        updates.push({ query, change });
+    t.mock.method(Inquiry, "findOneAndUpdate", async (query, change, options) => {
+        updates.push({ query, change, options });
         if (status !== "New") return null;
         if (Array.isArray(change)) {
             status = "Contacted";
@@ -98,6 +98,7 @@ test("lead queue is permissioned, oldest first and only includes new inquiries",
     assert.equal(contacted.status, 200, await contacted.clone().text());
     assert.equal((await contacted.json()).inquiry.status, "Contacted");
     assert.equal(updates[1].query.status, "New");
+    assert.equal(updates[1].options.updatePipeline, true);
     assert.equal(updates[1].change[0].$set.firstContactChannel.$ifNull[1], "WhatsApp");
     assert.equal((await request(`/${inquiryId}/contacted`, "PATCH", { channel: "Phone" })).status, 409);
     assert.equal(logs.length, 2);

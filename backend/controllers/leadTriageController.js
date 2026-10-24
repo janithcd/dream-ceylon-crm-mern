@@ -118,7 +118,7 @@ const recordLeadContact = async (req, res) => {
                 firstContactChannel: { $ifNull: ["$firstContactChannel", req.body.channel] },
                 firstContactBy: { $ifNull: ["$firstContactBy", req.admin._id] },
             } }],
-            { new: true }
+            { new: true, updatePipeline: true }
         );
         if (!inquiry) {
             const exists = await Inquiry.exists({ _id: req.params.id });
