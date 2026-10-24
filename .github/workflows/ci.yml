@@ -72,6 +72,7 @@ jobs:
       - run: docker compose up --build --wait --wait-timeout 180
       - run: node scripts/smoke-test.mjs
       - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-preparation.js
+      - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-lead-insights.js
       - name: Show container logs on failure
         if: failure()
         run: docker compose logs --no-color --tail=100

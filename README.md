@@ -47,6 +47,8 @@ The system combines operational management, AI-powered productivity tools, brand
 ### 👥 Customer and Sales Management
 
 - Capture and manage customer inquiries
+- Staff can add a manual inquiry with its real source and priority; public website submissions remain tagged Website and cannot set private sales fields. When closing an inquiry as Cancelled, choose a loss reason and optionally add a private note (up to 300 characters). Reopening or converting it clears those fields. Older closed inquiries without reasons remain editable and appear as Unspecified in reports.
+- **Lead Insights** compares Website, social, referral, and other inquiry sources over the last 30, 90, or 365 Sri Lanka calendar days, or all time. Each period groups inquiries by creation date; a lead counts as booked only if it has a linked booking, including a booking later cancelled. Closing an unbooked lead counts as lost. The page shows conversion rates and loss reasons without guest details. Bookings can be made after the inquiry period, so these are current cohort results rather than bookings made during that period. `GET /api/inquiries/insights?window=30|90|365|all` requires `inquiry.view`; manual entry at `POST /api/inquiries/manual` requires `inquiry.create`. The public `POST /api/inquiries` remains available with rate limiting and resets submitted source, status, priority and internal fields.
 - Search, filter, update, and delete inquiries
 - Build complete customer profiles
 - View inquiry, quotation, booking, and payment history

@@ -67,6 +67,19 @@ const inquirySchema = new mongoose.Schema(
             default: "Website",
         },
 
+        lossReason: {
+            type: String,
+            enum: ["Budget", "Travel plans changed", "No response", "Booked elsewhere", "Dates unavailable", "Other"],
+            default: null,
+        },
+
+        lossNote: {
+            type: String,
+            trim: true,
+            maxlength: 300,
+            default: "",
+        },
+
         adminNotes: {
             type: String,
             default: "",

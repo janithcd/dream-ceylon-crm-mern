@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Destinations from "./pages/Destinations";
 import Packages from "./pages/Packages";
 import Inquiries from "./pages/Inquiries";
+import LeadInsights from "./pages/LeadInsights";
 import Bookings from "./pages/Bookings";
 import MyTasks from "./pages/MyTasks";
 import TeamTasks from "./pages/TeamTasks";
@@ -86,6 +87,11 @@ const App = () => {
                                 </PermissionRoute>
                             }
                         />
+                        <Route path="lead-insights" element={
+                            <PermissionRoute permission={ROUTE_PERMISSIONS.inquiries}>
+                                <LeadInsights />
+                            </PermissionRoute>
+                        } />
                         <Route
                             path="chat-conversations"
                             element={
