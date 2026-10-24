@@ -129,6 +129,7 @@ const recordLeadContact = async (req, res) => {
             { channel: req.body.channel, contactedBy: req.admin._id, firstContactAt: inquiry.firstContactAt });
         return res.json({ inquiry });
     } catch (error) {
+        console.error("[Record Lead Contact]", error);
         return res.status(500).json({ message: "Failed to record contact." });
     }
 };
