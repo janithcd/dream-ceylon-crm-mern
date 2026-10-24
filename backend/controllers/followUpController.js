@@ -3,6 +3,8 @@ const FollowUp = require("../models/FollowUp");
 const Inquiry = require("../models/Inquiry");
 const Quotation = require("../models/Quotation");
 const Booking = require("../models/Booking");
+const Admin = require("../models/Admin");
+const { PERMISSIONS, resolveAdminPermissions } = require("../config/permissions");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { getBusinessDayBounds } = require("../utils/businessDate");
 
@@ -27,6 +29,34 @@ const buildRegex = (value) => {
 
 const isValidObjectId = (value) => {
     return Boolean(value && mongoose.Types.ObjectId.isValid(value));
+};
+
+const getOwnerQuery = (owner, adminId) => {
+    if (owner === undefined || owner === "" || owner === "all") return {};
+    if (owner === "mine") return { assignedTo: adminId };
+    if (owner === "unassigned") return { assignedTo: null };
+    if (owner === "attention") return { assignedTo: { $in: [null, adminId] } };
+    if (typeof owner === "string" && /^[0-9a-fA-F]{24}$/.test(owner)) {
+        return { assignedTo: owner };
+    }
+    return null;
+};
+
+const resolveAssignee = async (requested, existing = null) => {
+    if (requested === null || requested === "") return { value: null };
+    if (typeof requested !== "string" || !/^[0-9a-fA-F]{24}$/.test(requested)) {
+        return { error: "Choose a valid follow-up owner." };
+    }
+    // Keep a former staff member's existing assignment while other fields are edited.
+    if (existing && String(existing) === requested) return { value: existing };
+
+    const admin = await Admin.findById(requested)
+        .select("_id name role status customPermissions");
+    if (!admin || admin.status !== "Active" ||
+        !resolveAdminPermissions(admin).includes(PERMISSIONS.FOLLOW_UP_MANAGE)) {
+        return { error: "Owner must be an active admin who can manage follow-ups." };
+    }
+    return { value: admin._id };
 };
 
 const parsePositiveInteger = (value, fallback) => {
@@ -108,10 +138,11 @@ const populateFollowUp = (query) => {
         .populate(
             "booking",
             "bookingCode customer bookingStatus paymentStatus travelStartDate travelEndDate"
-        );
+        )
+        .populate("assignedTo", "name role status");
 };
 
-const buildFollowUpQuery = (queryParams) => {
+const buildFollowUpQuery = (queryParams, ownerQuery = {}) => {
     const {
         keyword,
         status,
@@ -123,7 +154,7 @@ const buildFollowUpQuery = (queryParams) => {
         booking,
     } = queryParams;
 
-    const query = {};
+    const query = { ...ownerQuery };
 
     if (status) {
         query.status = status;
@@ -173,6 +204,12 @@ const buildFollowUpQuery = (queryParams) => {
             $gte: todayStart,
             $lte: todayEnd,
         };
+        if (!status) query.status = "Pending";
+    }
+
+    if (dateFilter === "due") {
+        query.followUpDate = { $lte: todayEnd };
+        if (!status) query.status = "Pending";
     }
 
     if (dateFilter === "overdue") {
@@ -257,7 +294,12 @@ const buildFollowUpPayload = async (body, existingFollowUp = null) => {
 // @access  Private
 const createFollowUp = async (req, res) => {
     try {
+        const assignment = await resolveAssignee(
+            req.body.assignedTo === undefined ? String(req.admin._id) : req.body.assignedTo
+        );
+        if (assignment.error) return res.status(400).json({ message: assignment.error });
         const followUpData = await buildFollowUpPayload(req.body);
+        followUpData.assignedTo = assignment.value;
 
         if (!followUpData.title) {
             return res.status(400).json({
@@ -289,6 +331,7 @@ const createFollowUp = async (req, res) => {
                 priority: followUp.priority,
                 status: followUp.status,
                 followUpDate: followUp.followUpDate,
+                assignedTo: followUp.assignedTo,
             },
         });
 
@@ -313,10 +356,12 @@ const createFollowUp = async (req, res) => {
 // @access  Private
 const getFollowUps = async (req, res) => {
     try {
+        const ownerQuery = getOwnerQuery(req.query.owner, req.admin._id);
+        if (!ownerQuery) return res.status(400).json({ message: "Choose a valid follow-up owner filter." });
         const page = parsePositiveInteger(req.query.page, 1);
         const limit = Math.min(parsePositiveInteger(req.query.limit, 10), 100);
         const skip = (page - 1) * limit;
-        const query = buildFollowUpQuery(req.query);
+        const query = buildFollowUpQuery(req.query, ownerQuery);
 
         const [followUps, totalFollowUps] = await Promise.all([
             populateFollowUp(
@@ -351,6 +396,8 @@ const getFollowUps = async (req, res) => {
 // @access  Private
 const getFollowUpSummary = async (req, res) => {
     try {
+        const ownerQuery = getOwnerQuery(req.query.owner, req.admin._id);
+        if (!ownerQuery) return res.status(400).json({ message: "Choose a valid follow-up owner filter." });
         const { start: todayStart, end: todayEnd } = getBusinessDayBounds();
 
         const [
@@ -363,11 +410,12 @@ const getFollowUpSummary = async (req, res) => {
             upcomingFollowUps,
             urgentFollowUps,
         ] = await Promise.all([
-            FollowUp.countDocuments(),
-            FollowUp.countDocuments({ status: "Pending" }),
-            FollowUp.countDocuments({ status: "Completed" }),
-            FollowUp.countDocuments({ status: "Cancelled" }),
+            FollowUp.countDocuments(ownerQuery),
+            FollowUp.countDocuments({ ...ownerQuery, status: "Pending" }),
+            FollowUp.countDocuments({ ...ownerQuery, status: "Completed" }),
+            FollowUp.countDocuments({ ...ownerQuery, status: "Cancelled" }),
             FollowUp.countDocuments({
+                ...ownerQuery,
                 status: "Pending",
                 followUpDate: {
                     $gte: todayStart,
@@ -375,18 +423,21 @@ const getFollowUpSummary = async (req, res) => {
                 },
             }),
             FollowUp.countDocuments({
+                ...ownerQuery,
                 status: "Pending",
                 followUpDate: {
                     $lt: todayStart,
                 },
             }),
             FollowUp.countDocuments({
+                ...ownerQuery,
                 status: "Pending",
                 followUpDate: {
                     $gt: todayEnd,
                 },
             }),
             FollowUp.countDocuments({
+                ...ownerQuery,
                 status: "Pending",
                 priority: "Urgent",
             }),
@@ -417,6 +468,22 @@ const getFollowUpSummary = async (req, res) => {
             message: "Failed to load follow-up summary",
             error: error.message,
         });
+    }
+};
+
+// @desc    Active staff who can own and complete follow-ups
+// @route   GET /api/follow-ups/assignees
+const getFollowUpAssignees = async (req, res) => {
+    try {
+        const admins = await Admin.find({ status: "Active" })
+            .select("_id name role customPermissions")
+            .sort({ name: 1 })
+            .lean();
+        return res.json({ admins: admins
+            .filter((admin) => resolveAdminPermissions(admin).includes(PERMISSIONS.FOLLOW_UP_MANAGE))
+            .map(({ _id, name, role }) => ({ _id, name, role })) });
+    } catch (error) {
+        return res.status(500).json({ message: "Failed to load follow-up owners." });
     }
 };
 
@@ -455,6 +522,12 @@ const updateFollowUp = async (req, res) => {
             return res.status(404).json({
                 message: "Follow-up not found",
             });
+        }
+
+        if (Object.hasOwn(req.body, "assignedTo")) {
+            const assignment = await resolveAssignee(req.body.assignedTo, followUp.assignedTo);
+            if (assignment.error) return res.status(400).json({ message: assignment.error });
+            followUp.assignedTo = assignment.value;
         }
 
         const updatedData = await buildFollowUpPayload(req.body, followUp);
@@ -496,6 +569,7 @@ const updateFollowUp = async (req, res) => {
                 priority: followUp.priority,
                 status: followUp.status,
                 followUpDate: followUp.followUpDate,
+                assignedTo: followUp.assignedTo,
             },
         });
 
@@ -626,6 +700,7 @@ module.exports = {
     createFollowUp,
     getFollowUps,
     getFollowUpSummary,
+    getFollowUpAssignees,
     getFollowUpById,
     updateFollowUp,
     completeFollowUp,

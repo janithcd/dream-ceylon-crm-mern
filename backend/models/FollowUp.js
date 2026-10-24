@@ -41,6 +41,13 @@ const followUpSchema = new mongoose.Schema(
             default: null,
         },
 
+        assignedTo: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Admin",
+            default: null,
+            index: true,
+        },
+
         customerName: {
             type: String,
             trim: true,

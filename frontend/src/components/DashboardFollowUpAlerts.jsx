@@ -133,19 +133,24 @@ const DashboardFollowUpAlerts = () => {
             setLoading(true);
             setError("");
 
-            const summaryResponse = await api.get("/follow-ups/summary");
+            const summaryResponse = await api.get("/follow-ups/summary", {
+                params: { owner: "attention" },
+            });
 
             const [overdueResponse, todayResponse, urgentResponse] =
                 await Promise.all([
                     api.get("/follow-ups", {
                         params: {
                             dateFilter: "overdue",
+                            owner: "attention",
                             limit: 5,
                         },
                     }),
                     api.get("/follow-ups", {
                         params: {
                             dateFilter: "today",
+                            owner: "attention",
+                            status: "Pending",
                             limit: 5,
                         },
                     }),
@@ -153,6 +158,7 @@ const DashboardFollowUpAlerts = () => {
                         params: {
                             status: "Pending",
                             priority: "Urgent",
+                            owner: "attention",
                             limit: 5,
                         },
                     }),
@@ -225,11 +231,11 @@ const DashboardFollowUpAlerts = () => {
                     <div>
                         <div className="d-flex align-items-center gap-2 mb-1">
                             <FaBell className={hasAlerts ? "text-danger" : "text-success"} />
-                            <h5 className="fw-bold mb-0">Follow-Up Alerts</h5>
+                            <h5 className="fw-bold mb-0">My & Unassigned Follow-Ups</h5>
                         </div>
 
                         <p className="text-muted mb-0">
-                            Today, overdue, and urgent reminders that need admin attention.
+                            Today, overdue, and urgent reminders assigned to you or waiting for an owner.
                         </p>
                     </div>
 
@@ -245,7 +251,7 @@ const DashboardFollowUpAlerts = () => {
 
                         <button
                             className="btn btn-success"
-                            onClick={() => navigate("/follow-ups")}
+                            onClick={() => navigate("/follow-ups?owner=attention")}
                         >
                             Manage Follow-Ups
                             <FaArrowRight className="ms-2" />
@@ -308,7 +314,7 @@ const DashboardFollowUpAlerts = () => {
                         <FaCheckCircle className="text-success mb-2" size={28} />
                         <h6 className="fw-bold mb-1">No urgent follow-ups right now</h6>
                         <p className="text-muted mb-0">
-                            Today, overdue, and urgent follow-ups will appear here.
+                            Your and unassigned follow-ups due today, overdue, or urgent will appear here.
                         </p>
                     </div>
                 ) : (
@@ -318,6 +324,7 @@ const DashboardFollowUpAlerts = () => {
                             <tr>
                                 <th>Reminder</th>
                                 <th>Client</th>
+                                <th>Owner</th>
                                 <th>Date</th>
                                 <th>Type</th>
                                 <th>Priority</th>
@@ -346,6 +353,8 @@ const DashboardFollowUpAlerts = () => {
                                                 {followUp.customerContact || "-"}
                                             </small>
                                         </td>
+
+                                        <td>{followUp.assignedTo?.name || "Unassigned"}</td>
 
                                         <td>
                                             <strong>{formatCalendarDate(followUp.followUpDate)}</strong>

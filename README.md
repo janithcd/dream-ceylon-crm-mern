@@ -55,6 +55,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - View inquiry, quotation, booking, and payment history
 - Schedule and complete customer follow-ups
 - Identify overdue and upcoming follow-ups
+- **Follow-up ownership:** new reminders default to their creator; staff can assign an active admin with `followUp.manage` or leave one unassigned. The follow-up page offers owner filters and one-click **My due work** and **Unassigned due work** queues. Due means pending with a date on or before today in Sri Lanka. The dashboard shows only your and unassigned reminders, with the owner displayed next to each; the main list can still show all team reminders. Existing reminders without an owner remain unassigned. Summary cards follow the selected owner filter. `GET /api/follow-ups?owner=all|mine|unassigned|attention|<adminId>&dateFilter=due` and `/summary?owner=...` require `followUp.view`; `/assignees` lists active eligible staff. Follow-up writes require `followUp.manage`.
 - See a header alert for new unassigned inquiries and new inquiries assigned to you; it highlights those waiting at least 24 hours and links to the lead queue. The alert refreshes after inquiry changes, on focus, and every minute while the CRM is open.
 - Open a reviewed WhatsApp message from a pending follow-up (requires an international client number; the admin sends it manually)
 - Export business data to CSV

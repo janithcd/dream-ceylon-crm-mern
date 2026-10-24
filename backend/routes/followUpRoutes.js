@@ -4,6 +4,7 @@ const {
     createFollowUp,
     getFollowUps,
     getFollowUpSummary,
+    getFollowUpAssignees,
     getFollowUpById,
     updateFollowUp,
     completeFollowUp,
@@ -37,6 +38,13 @@ router.get(
     protect,
     authorizePermissions(PERMISSIONS.FOLLOW_UP_VIEW),
     getFollowUpSummary
+);
+
+router.get(
+    "/assignees",
+    protect,
+    authorizePermissions(PERMISSIONS.FOLLOW_UP_VIEW),
+    getFollowUpAssignees
 );
 
 router.get(
