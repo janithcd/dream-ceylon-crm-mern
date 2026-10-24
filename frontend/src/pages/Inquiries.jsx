@@ -15,6 +15,7 @@ import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
+import { notifyLeadsChanged } from "../utils/leadEvents";
 const initialFormState = {
     fullName: "",
     email: "",
@@ -128,6 +129,12 @@ const Inquiries = () => {
     }, []);
 
     useEffect(() => {
+        setSearchInput(initialKeyword);
+        setKeyword(initialKeyword);
+        setPage(1);
+    }, [initialKeyword]);
+
+    useEffect(() => {
         if (!canUpdate) return;
         let active = true;
         api.get("/inquiries/assignees")
@@ -180,6 +187,7 @@ const Inquiries = () => {
                 setSuccess("Inquiry added successfully.");
             }
 
+            notifyLeadsChanged();
             resetForm();
             fetchInquiries();
         } catch (err) {
@@ -222,6 +230,7 @@ const Inquiries = () => {
             setOwnerBusyId(inquiry._id);
             setError(""); setSuccess("");
             await api.patch(`/inquiries/${inquiry._id}/assignee`, { assignedTo: assignedTo || null });
+            notifyLeadsChanged();
             setSuccess(`Owner updated for ${inquiry.fullName}.`);
             await fetchInquiries();
         } catch (err) {
@@ -245,6 +254,7 @@ const Inquiries = () => {
             setSuccess("");
 
             await api.delete(`/inquiries/${id}`);
+            notifyLeadsChanged();
 
             setSuccess("Inquiry deleted successfully.");
             fetchInquiries();

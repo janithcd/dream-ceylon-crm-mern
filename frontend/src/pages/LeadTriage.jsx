@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
+import { notifyLeadsChanged } from "../utils/leadEvents";
 
 const filters = [
     { value: "all", label: "All new" },
@@ -53,6 +54,7 @@ const LeadTriage = () => {
         try {
             setBusyId(inquiry._id); setError(""); setSuccess("");
             await api.patch(`/inquiries/${inquiry._id}/assignee`, { assignedTo: assignedTo || null });
+            notifyLeadsChanged();
             setSuccess(`Owner updated for ${inquiry.fullName}.`);
             setRefresh((value) => value + 1);
         } catch (err) {
@@ -66,6 +68,7 @@ const LeadTriage = () => {
         try {
             setBusyId(inquiry._id); setError(""); setSuccess("");
             await api.patch(`/inquiries/${inquiry._id}/contacted`, { channel });
+            notifyLeadsChanged();
             setSuccess(`Contact recorded for ${inquiry.fullName}.`);
             setRefresh((value) => value + 1);
         } catch (err) {
