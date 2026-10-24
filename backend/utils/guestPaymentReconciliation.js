@@ -84,13 +84,14 @@ const sriLankaDate = (value) => {
 const guestPaymentsCsv = (payments) => {
     const headers = ["Payment date (Sri Lanka)", "Payment no", "Booking", "Customer", "Status",
         "Currency", "Amount", "Method", "Payment reference", "Matching status",
-        "Statement reference", "Matched by", "Matched at (UTC)"];
+        "Statement reference", "Matched by", "Matched at (UTC)", "Booking currency", "Currency review"];
     const rows = payments.map((item) => [
         sriLankaDate(item.paymentDate), item.paymentNo, item.booking?.bookingCode,
         item.booking?.customer?.fullName, item.status, item.currency,
         Number(item.amount).toFixed(2), item.paymentMethod, item.referenceNumber,
         item.reconciledAt ? "Matched" : "To match", item.statementReference,
-        item.reconciledByName, item.reconciledAt?.toISOString(),
+        item.reconciledByName, item.reconciledAt?.toISOString(), item.booking?.currency,
+        item.booking?.currency === item.currency ? "Aligned" : "Review",
     ]);
     return [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
 };

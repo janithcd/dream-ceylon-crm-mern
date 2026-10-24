@@ -777,6 +777,8 @@ const PaymentReports = () => {
                                             <strong>
                                                 {formatMoney(payment.amount, payment.currency)}
                                             </strong>
+                                            {payment.booking?.currency !== payment.currency &&
+                                                <div className="small text-danger">Booking currency {payment.booking?.currency || "unknown"}. Review payment.</div>}
                                         </td>
 
                                         <td>

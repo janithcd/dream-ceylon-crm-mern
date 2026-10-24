@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Booking = require("../models/Booking");
 const CostEntry = require("../models/CostEntry");
+const BookingPayment = require("../models/BookingPayment");
 const Inquiry = require("../models/Inquiry");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { parsePaymentDueDate } = require("../utils/paymentDueDate");
@@ -397,6 +398,27 @@ const updateBooking = async (req, res) => {
         });
         if (plan.error) return res.status(400).json({ message: plan.error });
         Object.assign(payload, plan.value);
+
+        const financeChanged = payload.currency !== booking.currency || payload.totalPrice !== booking.totalPrice ||
+            Object.hasOwn(req.body || {}, "advancePayment") || Object.hasOwn(req.body || {}, "paymentStatus");
+        const hasRecordedPayments = financeChanged && Boolean(await BookingPayment.exists({ booking: booking._id }));
+        if (payload.currency !== booking.currency && (hasRecordedPayments || booking.advancePayment > 0)) {
+            return res.status(409).json({ message: "Booking currency cannot change after a paid amount or payment record exists. Keep the original currency for this booking." });
+        }
+        if (hasRecordedPayments && (
+            (Object.hasOwn(req.body || {}, "advancePayment") && payload.advancePayment !== booking.advancePayment) ||
+            (Object.hasOwn(req.body || {}, "paymentStatus") && safeText(req.body.paymentStatus) !== booking.paymentStatus)
+        )) {
+            return res.status(409).json({ message: "The recorded payments changed. Refresh the booking before saving; paid amount and status come from its payment history." });
+        }
+        if (hasRecordedPayments) {
+            payload.advancePayment = booking.advancePayment;
+            payload.paymentStatus = booking.paymentStatus === "Refunded" && booking.advancePayment === 0
+                ? "Refunded" : calculatePaymentStatus(payload.totalPrice, booking.advancePayment);
+        } else if (!financeChanged) {
+            payload.advancePayment = booking.advancePayment;
+            payload.paymentStatus = booking.paymentStatus;
+        }
 
         if (booking.itineraryDays?.length &&
             !itineraryFitsTrip(booking.itineraryDays, payload.travelStartDate, payload.travelEndDate)) {

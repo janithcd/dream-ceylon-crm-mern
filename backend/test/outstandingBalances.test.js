@@ -6,6 +6,7 @@ process.env.JWT_SECRET = "synthetic-ci-secret-never-use-in-production";
 
 const app = require("../app");
 const Booking = require("../models/Booking");
+const BookingPayment = require("../models/BookingPayment");
 const Admin = require("../models/Admin");
 const ActivityLog = require("../models/ActivityLog");
 const { buildOutstandingBalancesPipeline, buildPaymentAttentionPipeline } = require("../utils/outstandingBalances");
@@ -380,6 +381,7 @@ test("booking creation and editing preserve validated payment due dates", async 
     }) }));
     t.mock.method(ActivityLog, "create", async () => ({}));
     t.mock.method(Booking, "exists", async () => null);
+    t.mock.method(BookingPayment, "exists", async () => null);
     t.mock.method(Booking, "create", async (payload) => {
         createCalls += 1;
         created = new Booking(payload);

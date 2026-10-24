@@ -43,8 +43,6 @@ const paymentMethodOptions = [
 
 const statusOptions = ["Received", "Refunded", "Cancelled"];
 
-const currencyOptions = ["USD", "LKR", "EUR", "GBP"];
-
 const formatMoney = (amount, currency = "USD") => {
     const number = Number(amount);
 
@@ -224,7 +222,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
             const payload = {
                 booking: bookingId,
                 amount: Number(formData.amount),
-                currency: formData.currency,
+                currency: currentBooking?.currency || formData.currency,
                 paymentDate: formData.paymentDate,
                 paymentType: formData.paymentType,
                 paymentMethod: formData.paymentMethod,
@@ -547,22 +545,11 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                     </div>
 
                                                     <div className="col-md-3">
-                                                        <label className="form-label fw-semibold">
-                                                            Currency
-                                                        </label>
-                                                        <select
-                                                            name="currency"
-                                                            className="form-select"
-                                                            value={formData.currency}
-                                                            onChange={handleChange}
-                                                        >
-                                                            {currencyOptions.map((currency) => (
-                                                                <option key={currency} value={currency}>
-                                                                    {currency}
-                                                                </option>
-                                                            ))}
-                                                        </select>
+                                                        <label className="form-label fw-semibold">Booking currency</label>
+                                                        <input className="form-control" value={currentBooking?.currency || formData.currency} readOnly />
                                                     </div>
+
+                                                    <div className="col-12 small text-muted">Enter the amount in the booking currency. If the guest paid in another currency, convert it and note the original amount and agreed rate.</div>
 
                                                     <div className="col-md-3">
                                                         <label className="form-label fw-semibold">
@@ -747,6 +734,8 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                         <strong>
                                                             {formatMoney(payment.amount, payment.currency)}
                                                         </strong>
+                                                        {payment.currency !== currentBooking?.currency &&
+                                                            <div className="small text-danger">Currency differs from booking. Review this payment.</div>}
                                                     </td>
 
                                                     <td>

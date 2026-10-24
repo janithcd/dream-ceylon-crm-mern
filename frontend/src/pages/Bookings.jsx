@@ -715,6 +715,7 @@ const Bookings = () => {
                                         <option value="EUR">EUR</option>
                                         <option value="GBP">GBP</option>
                                     </select>
+                                    {editingId && <small className="text-muted">Currency is locked once a payment record or paid amount exists.</small>}
                                 </div>
 
                                 <div className="col-12">

@@ -26,6 +26,7 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
     const [actionError, setActionError] = useState("");
     const [success, setSuccess] = useState("");
     const [editor, setEditor] = useState(null);
+    const [correction, setCorrection] = useState(null);
     const [statementReference, setStatementReference] = useState("");
     const [reason, setReason] = useState("");
     const [saving, setSaving] = useState(false);
@@ -55,16 +56,51 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
         setApplied((current) => ({ ...current, status }));
         setPage(1);
         setEditor(null);
+        setCorrection(null);
         setSuccess("");
     };
 
     const openEditor = (item) => {
+        setCorrection(null);
         setEditor({ id: item._id, reconciled: !item.reconciledAt, paymentNo: item.paymentNo,
             amount: item.amount, currency: item.currency, status: item.status });
         setStatementReference("");
         setReason("");
         setActionError("");
         setSuccess("");
+    };
+
+    const openCorrection = (item) => {
+        setEditor(null);
+        setCorrection({ id: item._id, paymentNo: item.paymentNo, amount: "",
+            originalAmount: item.amount, fromCurrency: item.currency, bookingCurrency: item.booking.currency, reason: "" });
+        setActionError("");
+        setSuccess("");
+    };
+
+    const saveCorrection = async (event) => {
+        event.preventDefault();
+        if (!correction) return;
+        try {
+            setSaving(true);
+            setActionError("");
+            await api.put(`/booking-payments/${correction.id}`, {
+                currency: correction.bookingCurrency, amount: Number(correction.amount),
+                correctionReason: correction.reason,
+            });
+            setSuccess("Payment corrected in the booking currency. Review the updated guest balance.");
+            setCorrection(null);
+            setRefreshKey((current) => current + 1);
+            onChanged();
+        } catch (requestError) {
+            setActionError(requestError.response?.data?.message || "Could not correct this payment. Refresh and try again.");
+            if (requestError.response?.status === 409) {
+                setCorrection(null);
+                setRefreshKey((current) => current + 1);
+            }
+        } finally {
+            setSaving(false);
+        }
     };
 
     const saveReconciliation = async (event) => {
@@ -126,6 +162,7 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                     setPage(1);
                     setApplied({ ...filters, reference: filters.reference.trim() });
                     setEditor(null);
+                    setCorrection(null);
                     setSuccess("");
                 }}>
                     <div className="col-sm-6 col-lg-3">
@@ -154,7 +191,7 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                     <span className="small text-muted">Payment dates {applied.from} through {applied.to} (Sri Lanka). Up to 366 days per search.</span>
                     <div className="d-flex gap-2">
                         <button type="button" className="btn btn-sm btn-outline-secondary" disabled={loading} onClick={() => {
-                            setEditor(null); setActionError(""); setRefreshKey((current) => current + 1);
+                            setEditor(null); setCorrection(null); setActionError(""); setRefreshKey((current) => current + 1);
                         }}>Refresh</button>
                         <PermissionGuard permission="report.export">
                             <button type="button" className="btn btn-sm btn-outline-secondary" disabled={exporting || loading || register.total === 0 || Boolean(error)}
@@ -176,7 +213,9 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                             <td>{formatCalendarDate(item.paymentDate)}</td>
                             <td><strong>{item.paymentNo}</strong><div className="small text-muted">{item.booking?.bookingCode || "Booking removed"}</div></td>
                             <td>{item.booking?.customer?.fullName || "—"}</td>
-                            <td>{item.status === "Refunded" ? "Refund " : "Received "}{money(item.amount, item.currency)}</td>
+                            <td>{item.status === "Refunded" ? "Refund " : "Received "}{money(item.amount, item.currency)}
+                                {item.booking?.currency !== item.currency &&
+                                    <div className="small text-danger">Booking currency {item.booking?.currency || "unknown"}. Correct the amount and currency before matching.</div>}</td>
                             <td>{item.paymentMethod}{item.referenceNumber && <div className="small text-muted">{item.referenceNumber}</div>}</td>
                             <td>
                                 <span className={item.reconciledAt ? "text-success fw-semibold" : "text-warning-emphasis fw-semibold"}>{item.reconciledAt ? "Matched" : "To match"}</span>
@@ -188,10 +227,15 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                                             <span className="text-muted">{entry.recordedByName} · {localTime(entry.recordedAt)} · {money(entry.amount, entry.currency)}</span></li>)}</ul>
                                 </details>}
                                 <PermissionGuard permission="payment.reconcile">
-                                    <button type="button" className="btn btn-sm btn-link p-0 mt-1 d-block" onClick={() => openEditor(item)}>
+                                    <button type="button" className="btn btn-sm btn-link p-0 mt-1 d-block"
+                                        disabled={!item.reconciledAt && item.booking?.currency !== item.currency} onClick={() => openEditor(item)}>
                                         {item.reconciledAt ? "Reopen match" : "Mark matched"}
                                     </button>
                                 </PermissionGuard>
+                                {!item.reconciledAt && item.booking?.currency !== item.currency && item.booking?.currency &&
+                                    <PermissionGuard all={item.status === "Refunded" ? ["payment.update", "payment.refund"] : ["payment.update"]}>
+                                        <button type="button" className="btn btn-sm btn-link p-0 mt-1 d-block" onClick={() => openCorrection(item)}>Correct currency</button>
+                                    </PermissionGuard>}
                             </td>
                         </tr>)}</tbody>
                     </table></div>
@@ -208,12 +252,25 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                             {saving ? "Saving..." : editor.reconciled ? "Confirm match" : "Reopen payment"}</button>
                             <button className="btn btn-sm btn-outline-secondary" type="button" disabled={saving} onClick={() => setEditor(null)}>Cancel</button></div>
                     </form></PermissionGuard>}
+                    {correction && <PermissionGuard permission="payment.update"><form className="border rounded p-3 mt-3" onSubmit={(event) => void saveCorrection(event)}>
+                        <h6 className="fw-semibold">Correct {correction.paymentNo}</h6>
+                        <p className="small text-muted">Recorded as {money(correction.originalAmount, correction.fromCurrency)}. Enter its verified equivalent in {correction.bookingCurrency}. This changes the guest paid balance; compare the original bank transaction and agreed rate first.</p>
+                        <label className="form-label" htmlFor="guest-correction-amount">Amount in {correction.bookingCurrency}</label>
+                        <input id="guest-correction-amount" className="form-control mb-2" type="number" step="0.01" min="0.01" required value={correction.amount}
+                            onChange={(event) => setCorrection({ ...correction, amount: event.target.value })} />
+                        <label className="form-label" htmlFor="guest-correction-reason">Correction reason</label>
+                        <textarea id="guest-correction-reason" className="form-control mb-2" minLength={3} maxLength={300} required value={correction.reason}
+                            onChange={(event) => setCorrection({ ...correction, reason: event.target.value })} placeholder="Original amount, currency, and agreed conversion rate" />
+                        <div className="d-flex gap-2"><button className="btn btn-sm btn-primary" type="submit" disabled={saving}>
+                            {saving ? "Saving..." : "Save correction"}</button>
+                            <button className="btn btn-sm btn-outline-secondary" type="button" disabled={saving} onClick={() => setCorrection(null)}>Cancel</button></div>
+                    </form></PermissionGuard>}
                     <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
                         <span className="text-muted small">Showing {(register.page - 1) * register.limit + 1}–{Math.min(register.page * register.limit, register.total)} of {register.total} payments.</span>
                         {register.pages > 1 && <div className="d-flex align-items-center gap-2">
-                            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={page <= 1} onClick={() => { setEditor(null); setPage((current) => current - 1); }}>Previous</button>
+                            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={page <= 1} onClick={() => { setEditor(null); setCorrection(null); setPage((current) => current - 1); }}>Previous</button>
                             <span className="small">Page {register.page} of {register.pages}</span>
-                            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={page >= register.pages} onClick={() => { setEditor(null); setPage((current) => current + 1); }}>Next</button>
+                            <button type="button" className="btn btn-sm btn-outline-secondary" disabled={page >= register.pages} onClick={() => { setEditor(null); setCorrection(null); setPage((current) => current + 1); }}>Next</button>
                         </div>}
                     </div>
                 </>}

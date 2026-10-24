@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Booking = require("../models/Booking");
 const BookingPayment = require("../models/BookingPayment");
 const { createActivityLog } = require("../utils/createActivityLog");
+const { PERMISSIONS, resolveAdminPermissions } = require("../config/permissions");
 const { parseRegisterQuery, parseReconciliation, guestPaymentsCsv } = require("../utils/guestPaymentReconciliation");
 
 const safeText = (value) => {
@@ -140,12 +141,14 @@ const syncBookingPaymentSummary = async (bookingId) => {
 
     const payments = await BookingPayment.find({
         booking: booking._id,
-    }).select("amount status");
+    }).select("amount status currency");
 
     let receivedAmount = 0;
     let refundedAmount = 0;
 
     payments.forEach((payment) => {
+        // Never treat a foreign-currency figure as an amount in the booking currency.
+        if (payment.currency !== booking.currency) return;
         const amount = Math.max(toNumber(payment.amount), 0);
 
         if (payment.status === "Received") {
@@ -339,8 +342,11 @@ const createBookingPayment = async (req, res) => {
             });
         }
 
-        payload.paymentNo = await generatePaymentNo();
         payload.currency = payload.currency || booking.currency || "USD";
+        if (payload.currency !== booking.currency) {
+            return res.status(400).json({ message: "Record the amount in the booking currency. Convert an external payment first and note the original amount and rate." });
+        }
+        payload.paymentNo = await generatePaymentNo();
         payload.paymentDate = payload.paymentDate || new Date();
         payload.paymentType = payload.paymentType || "Advance";
         payload.paymentMethod = payload.paymentMethod || "Cash";
@@ -441,7 +447,7 @@ const getGuestPaymentRegister = async (req, res) => {
         const [payments, total, totals] = await Promise.all([
             BookingPayment.find(query).sort({ paymentDate: -1, _id: -1 })
                 .skip((page - 1) * limit).limit(limit)
-                .populate("booking", "bookingCode customer.fullName").lean(),
+                .populate("booking", "bookingCode currency customer.fullName").lean(),
             BookingPayment.countDocuments(query),
             BookingPayment.aggregate([
                 { $match: query },
@@ -476,7 +482,7 @@ const exportGuestPaymentRegister = async (req, res) => {
         const count = await BookingPayment.countDocuments(query);
         if (count > 10000) return res.status(413).json({ message: "More than 10,000 payments match. Narrow the date range." });
         const payments = await BookingPayment.find(query).sort({ paymentDate: -1, _id: -1 })
-            .limit(10000).populate("booking", "bookingCode customer.fullName");
+            .limit(10000).populate("booking", "bookingCode currency customer.fullName");
         res.set("Cache-Control", "no-store");
         res.set("Content-Type", "text/csv; charset=utf-8");
         res.set("Content-Disposition", `attachment; filename="guest-payments-${from}-to-${to}.csv"`);
@@ -495,7 +501,7 @@ const reconcileGuestPayment = async (req, res) => {
     if (parsed.error) return res.status(400).json({ message: parsed.error });
     try {
         const payment = await BookingPayment.findById(req.params.id)
-            .populate("booking", "bookingCode customer.fullName");
+            .populate("booking", "bookingCode currency customer.fullName");
         if (!payment) return res.status(404).json({ message: "Payment not found" });
         if (!["Received", "Refunded"].includes(payment.status)) {
             return res.status(409).json({ message: "Cancelled payments cannot be matched." });
@@ -503,6 +509,9 @@ const reconcileGuestPayment = async (req, res) => {
         const matching = parsed.value.reconciled;
         if (Boolean(payment.reconciledAt) === matching) {
             return res.status(409).json({ message: "The match status changed. Refresh and try again." });
+        }
+        if (matching && (!payment.booking || payment.currency !== payment.booking.currency)) {
+            return res.status(409).json({ message: "The payment currency differs from its booking. Correct the amount and currency before matching." });
         }
         const recordedAt = new Date();
         const actorName = String(req.admin.name || "Admin").slice(0, 100);
@@ -608,12 +617,19 @@ const updateBookingPayment = async (req, res) => {
             });
         }
 
+        if ((payment.status === "Refunded" || payment.paymentType === "Refund") &&
+            !resolveAdminPermissions(req.admin).includes(PERMISSIONS.PAYMENT_REFUND)) {
+            return res.status(403).json({ message: "Refund permission is required to edit this payment." });
+        }
+
         if (payment.reconciledAt) {
             return res.status(409).json({ message: "Reopen this bank match before editing the payment." });
         }
 
         const previousBookingId = payment.booking?.toString();
         const previousStatus = payment.status;
+        const previousAmount = payment.amount;
+        const previousCurrency = payment.currency;
         const payload = buildPaymentPayload(req.body, payment);
 
         if (!payload.booking) {
@@ -634,6 +650,23 @@ const updateBookingPayment = async (req, res) => {
             return res.status(404).json({
                 message: "Booking not found",
             });
+        }
+
+        if (payload.currency !== booking.currency) {
+            return res.status(400).json({ message: "Record the amount in the booking currency. Convert an external payment first and note the original amount and rate." });
+        }
+        if (payload.currency !== payment.currency && !Object.hasOwn(req.body || {}, "amount")) {
+            return res.status(400).json({ message: "Enter the converted amount when correcting a payment currency." });
+        }
+        let correctionReason = "";
+        if (payload.currency !== payment.currency) {
+            correctionReason = req.body?.correctionReason;
+            if (typeof correctionReason !== "string" || correctionReason.trim().length < 3 ||
+                correctionReason.trim().length > 300 ||
+                Math.abs(payload.amount * 100 - Math.round(payload.amount * 100)) > 0.000001) {
+                return res.status(400).json({ message: "Enter a converted amount with at most two decimals and a correction reason (3–300 characters)." });
+            }
+            correctionReason = correctionReason.trim();
         }
 
         Object.assign(payment, payload);
@@ -676,6 +709,9 @@ const updateBookingPayment = async (req, res) => {
                 currentStatus: payment.status,
                 amount: payment.amount,
                 currency: payment.currency,
+                previousAmount,
+                previousCurrency,
+                correctionReason,
                 paymentType: payment.paymentType,
                 paymentMethod: payment.paymentMethod,
                 referenceNumber: payment.referenceNumber,
