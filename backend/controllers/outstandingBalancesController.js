@@ -2,6 +2,7 @@ const Booking = require("../models/Booking");
 const mongoose = require("mongoose");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { parseCalendarDate, parsePaymentDueDate } = require("../utils/paymentDueDate");
+const { parseGuestPaymentPlan } = require("../utils/guestPaymentPlan");
 const { buildOutstandingBalancesPipeline, buildPaymentAttentionPipeline, DATE_FILTERS, DUE_FILTERS, CONTACT_FILTERS, PAGE_SIZE, OPEN_BOOKING_STATUSES } = require("../utils/outstandingBalances");
 
 const CONTACT_CHANNELS = ["WhatsApp", "Phone", "Email", "Other"];
@@ -70,12 +71,22 @@ const updatePaymentDueDate = async (req, res) => {
     if (parsed.error) return res.status(400).json({ message: parsed.error });
 
     try {
-        const booking = await Booking.findByIdAndUpdate(
-            req.params.id,
+        const booking = await Booking.findOneAndUpdate(
+            {
+                _id: req.params.id,
+                ...(parsed.value ? { $or: [
+                    { hotelAdvanceDueDate: null },
+                    { hotelAdvanceDueDate: { $lte: parsed.value } },
+                ] } : {}),
+            },
             { $set: { paymentDueDate: parsed.value } },
             { new: true, runValidators: true }
         );
-        if (!booking) return res.status(404).json({ message: "Booking not found" });
+        if (!booking) {
+            const exists = await Booking.exists({ _id: req.params.id });
+            return res.status(exists ? 409 : 404).json({ message: exists
+                ? "Final balance cannot be due before the hotel advance." : "Booking not found" });
+        }
 
         await createActivityLog({
             req,
@@ -92,6 +103,54 @@ const updatePaymentDueDate = async (req, res) => {
     } catch (error) {
         console.error("Payment due date update failed:", error.message);
         return res.status(500).json({ message: "Failed to update payment due date" });
+    }
+};
+
+const updateHotelAdvance = async (req, res) => {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ message: "Invalid booking ID" });
+    }
+    if (!Object.hasOwn(req.body || {}, "hotelAdvanceAmount") ||
+        !Object.hasOwn(req.body || {}, "hotelAdvanceDueDate")) {
+        return res.status(400).json({ message: "Provide the hotel advance amount and due date together" });
+    }
+    try {
+        const current = await Booking.findById(req.params.id)
+            .select("totalPrice paymentDueDate");
+        if (!current) return res.status(404).json({ message: "Booking not found" });
+        const plan = parseGuestPaymentPlan({
+            amount: req.body.hotelAdvanceAmount,
+            dueDate: req.body.hotelAdvanceDueDate,
+            totalPrice: current.totalPrice,
+            balanceDueDate: current.paymentDueDate,
+        });
+        if (plan.error) return res.status(400).json({ message: plan.error });
+        const date = plan.value.hotelAdvanceDueDate;
+        const booking = await Booking.findOneAndUpdate(
+            {
+                _id: current._id,
+                totalPrice: { $gte: plan.value.hotelAdvanceAmount },
+                ...(date ? { $or: [
+                    { paymentDueDate: null },
+                    { paymentDueDate: { $gte: date } },
+                ] } : {}),
+            },
+            { $set: plan.value },
+            { new: true, runValidators: true }
+        );
+        if (!booking) return res.status(409).json({ message: "The booking price or final due date changed. Refresh and try again." });
+        await createActivityLog({
+            req, action: "UPDATE", module: "Payment",
+            description: `Hotel advance schedule updated for booking ${booking.bookingCode}`,
+            relatedRecordId: booking._id, relatedModel: "Booking",
+            referenceNo: booking.bookingCode, customerName: booking.customer?.fullName,
+            metadata: plan.value,
+        });
+        return res.json({ hotelAdvanceAmount: booking.hotelAdvanceAmount,
+            hotelAdvanceDueDate: booking.hotelAdvanceDueDate });
+    } catch (error) {
+        console.error("Hotel advance update failed:", error.message);
+        return res.status(500).json({ message: "Failed to update hotel advance schedule" });
     }
 };
 
@@ -149,4 +208,4 @@ const logPaymentContact = async (req, res) => {
     }
 };
 
-module.exports = { getOutstandingBalances, getPaymentAttention, updatePaymentDueDate, logPaymentContact };
+module.exports = { getOutstandingBalances, getPaymentAttention, updatePaymentDueDate, updateHotelAdvance, logPaymentContact };

@@ -1,4 +1,4 @@
-import { formatCalendarDate, todayCalendarDate } from "../utils/calendarDate";
+import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useMemo, useState } from "react";
 import {
     FaPlus,
@@ -12,6 +12,7 @@ import api from "../api/axios";
 import PermissionGuard from "./PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
 import { notifyPaymentAttentionChanged } from "../utils/paymentEvents";
+import { getGuestPaymentMilestones } from "../utils/guestPaymentMilestones";
 
 const initialPaymentForm = () => ({
     amount: "",
@@ -121,6 +122,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
             balance,
         };
     }, [currentBooking]);
+    const milestones = useMemo(() => getGuestPaymentMilestones(currentBooking), [currentBooking]);
 
     const fetchPaymentHistory = async () => {
         if (!bookingId || !canViewPayments) {
@@ -475,6 +477,28 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                 )}
                                             </h5>
                                         </div>
+                                    </div>
+                                </div>
+
+                                <div className="border rounded-4 p-3 mb-4">
+                                    <h6 className="fw-bold mb-2">Guest payment schedule</h6>
+                                    <p className="small text-muted mb-3">Targets in the booking currency. Recorded payments cover the hotel advance first; this schedule does not record a payment.</p>
+                                    <div className="row g-2">
+                                        {milestones.map((stage) => {
+                                            const day = toCalendarDateInput(stage.dueDate);
+                                            const status = stage.outstanding <= 0 ? "Covered" : !day ? "Date needed" :
+                                                day < todayCalendarDate() ? "Overdue" : day === todayCalendarDate() ? "Due today" : "Scheduled";
+                                            return (
+                                                <div className="col-md-6" key={stage.label}>
+                                                    <div className="border rounded-3 p-3 h-100">
+                                                        <strong>{stage.label}</strong>
+                                                        <div className="small text-muted">Target: {formatMoney(stage.target, currentBooking?.currency)}</div>
+                                                        <div className="fw-semibold">Outstanding: {formatMoney(stage.outstanding, currentBooking?.currency)}</div>
+                                                        <div className="small">{formatCalendarDate(stage.dueDate)} · {status}</div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 

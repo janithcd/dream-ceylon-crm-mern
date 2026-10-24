@@ -33,7 +33,7 @@ const { getSupplierContacts, logSupplierContact } = require("../controllers/supp
 const { getAirportTransfers } = require("../controllers/airportTransfersController");
 const { getGuestTransferMessage } = require("../controllers/guestTransferMessageController");
 const { getHotelConfirmationDraft } = require("../controllers/hotelConfirmationDraftController");
-const { getOutstandingBalances, getPaymentAttention, updatePaymentDueDate, logPaymentContact } = require("../controllers/outstandingBalancesController");
+const { getOutstandingBalances, getPaymentAttention, updatePaymentDueDate, updateHotelAdvance, logPaymentContact } = require("../controllers/outstandingBalancesController");
 const {
     addHotelStay,
     updateHotelStay,
@@ -100,6 +100,13 @@ router.patch(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.PAYMENT_UPDATE),
     updatePaymentDueDate
+);
+
+router.patch(
+    "/:id/hotel-advance",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.PAYMENT_UPDATE),
+    updateHotelAdvance
 );
 
 router.patch(

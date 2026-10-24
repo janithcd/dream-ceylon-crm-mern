@@ -110,7 +110,8 @@ const PaymentAlert = () => {
                                             <Link key={item._id} to={item.followUpDue ? "/outstanding-balances?contactFilter=due" : "/outstanding-balances?dueFilter=overdue"} onClick={() => setOpen(false)} className="list-group-item list-group-item-action px-0 py-2">
                                                 <span className="d-block fw-semibold small">{item.bookingCode}</span>
                                                 <span className="d-block text-muted small">
-                                                    {item.followUpDue ? `Follow up ${formatCalendarDate(item.nextFollowUpDate)}` : `Payment due ${formatCalendarDate(item.paymentDueDate)}`}
+                                                    {item.followUpDue ? `Follow up ${formatCalendarDate(item.nextFollowUpDate)}` :
+                                                        `${item.nextPaymentStage || "Payment"} due ${formatCalendarDate(item.nextPaymentDueDate)} · ${item.currency || "USD"} ${Number(item.nextPaymentAmount || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                                                     {item.followUpDue && item.paymentOverdue && " · Payment overdue"}
                                                 </span>
                                             </Link>

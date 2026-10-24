@@ -4,6 +4,7 @@ const CostEntry = require("../models/CostEntry");
 const Inquiry = require("../models/Inquiry");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { parsePaymentDueDate } = require("../utils/paymentDueDate");
+const { parseGuestPaymentPlan } = require("../utils/guestPaymentPlan");
 const { itineraryFitsTrip } = require("../utils/bookingItinerary");
 
 const safeText = (value) => {
@@ -248,6 +249,14 @@ const createBooking = async (req, res) => {
             if (parsed.error) return res.status(400).json({ message: parsed.error });
             payload.paymentDueDate = parsed.value;
         }
+        const plan = parseGuestPaymentPlan({
+            amount: Object.hasOwn(req.body || {}, "hotelAdvanceAmount") ? req.body.hotelAdvanceAmount : 0,
+            dueDate: req.body.hotelAdvanceDueDate ?? null,
+            totalPrice: payload.totalPrice,
+            balanceDueDate: payload.paymentDueDate ?? null,
+        });
+        if (plan.error) return res.status(400).json({ message: plan.error });
+        Object.assign(payload, plan.value);
 
         if (!payload.customer.fullName) {
             return res.status(400).json({
@@ -279,6 +288,8 @@ const createBooking = async (req, res) => {
                 bookingStatus: booking.bookingStatus,
                 paymentStatus: booking.paymentStatus,
                 paymentDueDate: booking.paymentDueDate,
+                hotelAdvanceAmount: booking.hotelAdvanceAmount,
+                hotelAdvanceDueDate: booking.hotelAdvanceDueDate,
             },
         });
 
@@ -375,6 +386,17 @@ const updateBooking = async (req, res) => {
             if (parsed.error) return res.status(400).json({ message: parsed.error });
             payload.paymentDueDate = parsed.value;
         }
+        const plan = parseGuestPaymentPlan({
+            amount: Object.hasOwn(req.body || {}, "hotelAdvanceAmount")
+                ? req.body.hotelAdvanceAmount : booking.hotelAdvanceAmount ?? 0,
+            dueDate: Object.hasOwn(req.body || {}, "hotelAdvanceDueDate")
+                ? req.body.hotelAdvanceDueDate : booking.hotelAdvanceDueDate ?? null,
+            totalPrice: payload.totalPrice,
+            balanceDueDate: Object.hasOwn(payload, "paymentDueDate")
+                ? payload.paymentDueDate : booking.paymentDueDate ?? null,
+        });
+        if (plan.error) return res.status(400).json({ message: plan.error });
+        Object.assign(payload, plan.value);
 
         if (booking.itineraryDays?.length &&
             !itineraryFitsTrip(booking.itineraryDays, payload.travelStartDate, payload.travelEndDate)) {
@@ -412,6 +434,8 @@ const updateBooking = async (req, res) => {
                 bookingStatus: booking.bookingStatus,
                 paymentStatus: booking.paymentStatus,
                 paymentDueDate: booking.paymentDueDate,
+                hotelAdvanceAmount: booking.hotelAdvanceAmount,
+                hotelAdvanceDueDate: booking.hotelAdvanceDueDate,
             },
         });
 

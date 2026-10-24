@@ -10,6 +10,7 @@ const Admin = require("../models/Admin");
 const ActivityLog = require("../models/ActivityLog");
 const { buildOutstandingBalancesPipeline, buildPaymentAttentionPipeline } = require("../utils/outstandingBalances");
 const { parseCalendarDate, parsePaymentDueDate } = require("../utils/paymentDueDate");
+const { parseGuestPaymentPlan } = require("../utils/guestPaymentPlan");
 
 test("payment due dates validate calendar days and can be cleared", () => {
     assert.equal(parsePaymentDueDate("2028-02-29").value.toISOString(), "2028-02-29T00:00:00.000Z");
@@ -22,6 +23,20 @@ test("payment due dates validate calendar days and can be cleared", () => {
     assert.match(parseCalendarDate("2027-02-29", "Next follow-up date").error, /Next follow-up date/);
 });
 
+test("hotel advance plans require a valid target and a date before the final balance", () => {
+    const plan = parseGuestPaymentPlan({ amount: 350.25, dueDate: "2027-02-20", totalPrice: 1000,
+        balanceDueDate: new Date("2027-02-28") });
+    assert.equal(plan.value.hotelAdvanceAmount, 350.25);
+    assert.equal(plan.value.hotelAdvanceDueDate.toISOString(), "2027-02-20T00:00:00.000Z");
+    for (const [amount, dueDate] of [[1001, "2027-02-20"], [200.001, "2027-02-20"],
+        ["200", "2027-02-20"], [200, "2027-02-30"], [200, null], [0, "2027-02-20"],
+        [200, "2027-03-01"]]) {
+        assert.ok(parseGuestPaymentPlan({ amount, dueDate, totalPrice: 1000,
+            balanceDueDate: new Date("2027-02-28") }).error);
+    }
+    assert.equal(parseGuestPaymentPlan({ amount: 0, dueDate: null, totalPrice: 1000 }).value.hotelAdvanceDueDate, null);
+});
+
 test("open balances use recorded amounts and Sri Lanka payment days without exposing contact details", () => {
     const now = new Date("2026-10-16T19:00:00Z");
     const pipeline = buildOutstandingBalancesPipeline({ dateFilter: "next30", page: 2 }, now);
@@ -31,8 +46,14 @@ test("open balances use recorded amounts and Sri Lanka payment days without expo
         $round: [{ $subtract: ["$totalPrice", { $ifNull: ["$advancePayment", 0] }] }, 2],
     });
     assert.deepEqual(Object.keys(pipeline[1].$project).sort(), [
-        "balance", "bookingCode", "bookingStatus", "contactChannel", "currency", "customerName", "lastContactedAt", "nextFollowUpDate", "paymentDueDate", "recordedPaid", "totalPrice", "travelEndDate", "travelStartDate",
+        "balance", "bookingCode", "bookingStatus", "contactChannel", "currency", "customerName", "hotelAdvanceAmount", "hotelAdvanceDueDate", "lastContactedAt", "nextFollowUpDate", "nextPaymentAmount", "nextPaymentDueDate", "nextPaymentStage", "paymentDueDate", "recordedPaid", "totalPrice", "travelEndDate", "travelStartDate",
     ].sort());
+    assert.deepEqual(pipeline[1].$project.nextPaymentDueDate.$cond[0].$and[0], {
+        $gt: [{ $ifNull: ["$hotelAdvanceAmount", 0] }, { $ifNull: ["$advancePayment", 0] }],
+    });
+    assert.equal(pipeline[1].$project.nextPaymentDueDate.$cond[0].$and[1].$not[0].$and[1].$lte[1].toISOString(),
+        "2026-10-17T18:29:59.999Z");
+    assert.equal(pipeline[1].$project.nextPaymentStage.$cond[1], "Hotel advance");
     assert.deepEqual(pipeline[2].$match, { balance: { $gt: 0 } });
     const selected = { travelStartDate: {
         $gte: new Date("2026-10-16T18:30:00Z"),
@@ -49,19 +70,19 @@ test("open balances use recorded amounts and Sri Lanka payment days without expo
     });
     const overdue = buildOutstandingBalancesPipeline({ dateFilter: "all", dueFilter: "overdue" }, now);
     assert.deepEqual(overdue[3].$facet.items[0].$match, {
-        paymentDueDate: { $ne: null, $lt: selected.travelStartDate.$gte },
+        nextPaymentDueDate: { $ne: null, $lt: selected.travelStartDate.$gte },
     });
     assert.deepEqual(buildOutstandingBalancesPipeline({ dateFilter: "all", dueFilter: "due7" }, now)[3].$facet.items[0].$match, {
-        paymentDueDate: { $gte: selected.travelStartDate.$gte, $lt: new Date("2026-10-23T18:30:00Z") },
+        nextPaymentDueDate: { $gte: selected.travelStartDate.$gte, $lt: new Date("2026-10-23T18:30:00Z") },
     });
     assert.deepEqual(buildOutstandingBalancesPipeline({ dateFilter: "all", dueFilter: "unscheduled" }, now)[3].$facet.items[0].$match, {
-        paymentDueDate: null,
+        nextPaymentDueDate: null,
     });
     assert.equal(overdue[3].$facet.items[1].$addFields.dueMissing.$cond[1], 1);
-    assert.equal(overdue[3].$facet.items[2].$sort.paymentDueDate, 1);
+    assert.equal(overdue[3].$facet.items[2].$sort.nextPaymentDueDate, 1);
     const followUps = buildOutstandingBalancesPipeline({ dateFilter: "all", dueFilter: "overdue", contactFilter: "due" }, now);
     assert.deepEqual(followUps[3].$facet.items.slice(0, 2).map((step) => step.$match), [
-        { paymentDueDate: { $ne: null, $lt: selected.travelStartDate.$gte } },
+        { nextPaymentDueDate: { $ne: null, $lt: selected.travelStartDate.$gte } },
         { nextFollowUpDate: { $ne: null, $lte: new Date("2026-10-17T18:29:59.999Z") } },
     ]);
     assert.deepEqual(followUps[3].$facet.total.slice(0, 2), followUps[3].$facet.items.slice(0, 2));
@@ -78,14 +99,14 @@ test("payment alerts count distinct open balances and classify Colombo follow-up
         { $lte: ["$nextFollowUpDate", new Date("2026-10-17T18:29:59.999Z")] },
     ]);
     assert.deepEqual(pipeline[3].$addFields.paymentOverdue.$and, [
-        { $ne: ["$paymentDueDate", null] },
-        { $lt: ["$paymentDueDate", new Date("2026-10-16T18:30:00Z")] },
+        { $ne: ["$nextPaymentDueDate", null] },
+        { $lt: ["$nextPaymentDueDate", new Date("2026-10-16T18:30:00Z")] },
     ]);
     assert.deepEqual(pipeline[4].$match.$or, [{ followUpDue: true }, { paymentOverdue: true }]);
     assert.equal(pipeline[5].$facet.summary[0].$group.total.$sum, 1);
     assert.equal(pipeline[5].$facet.items[2].$limit, 5);
     assert.deepEqual(Object.keys(pipeline[5].$facet.items[3].$project).sort(), [
-        "bookingCode", "followUpDue", "nextFollowUpDate", "paymentDueDate", "paymentOverdue",
+        "bookingCode", "currency", "followUpDue", "nextFollowUpDate", "nextPaymentAmount", "nextPaymentDueDate", "nextPaymentStage", "paymentOverdue",
     ].sort());
 });
 
@@ -181,12 +202,14 @@ test("finance can set and clear a payment due date; viewers and sales cannot", a
         status: "Active", tokenVersion: 0,
     }) }));
     t.mock.method(ActivityLog, "create", async (log) => { logs.push(log); return log; });
-    t.mock.method(Booking, "findByIdAndUpdate", async (id, update) => {
+    t.mock.method(Booking, "findOneAndUpdate", async (query, update) => {
         updates += 1;
-        if (String(id) !== bookingId) return null;
+        if (String(query._id) !== bookingId) return null;
+        if (query.$or && booking.hotelAdvanceDueDate && booking.hotelAdvanceDueDate > update.$set.paymentDueDate) return null;
         booking.paymentDueDate = update.$set.paymentDueDate;
         return booking;
     });
+    t.mock.method(Booking, "exists", async (query) => String(query._id) === bookingId);
 
     const server = app.listen(0, "127.0.0.1");
     await new Promise((resolve) => server.once("listening", resolve));
@@ -215,8 +238,66 @@ test("finance can set and clear a payment due date; viewers and sales cannot", a
     const cleared = await request(financeId, { paymentDueDate: null });
     assert.equal(cleared.status, 200);
     assert.equal((await cleared.json()).paymentDueDate, null);
+    booking.hotelAdvanceDueDate = new Date("2027-02-28");
+    assert.equal((await request(financeId, { paymentDueDate: "2027-02-27" })).status, 409);
     assert.equal((await request(financeId, { paymentDueDate: null }, url.replace(bookingId, "507f1f77bcf86cd799439099"))).status, 404);
-    assert.equal(updates, 3);
+    assert.equal(updates, 4);
+});
+
+test("finance schedules a hotel advance with atomic price and final date guards", async (t) => {
+    const bookingId = "507f1f77bcf86cd7994390c1";
+    const financeId = "507f1f77bcf86cd7994390c2";
+    const salesId = "507f1f77bcf86cd7994390c3";
+    const booking = new Booking({
+        _id: bookingId, bookingCode: "DCJ-PLAN-TEST",
+        customer: { fullName: "Guest", email: "guest@example.test", whatsappNumber: "123", country: "UK" },
+        travelStartDate: "2027-03-01", travelEndDate: "2027-03-10",
+        numberOfTravelers: 2, totalPrice: 1000, paymentDueDate: "2027-02-28",
+    });
+    const logs = [];
+    let writes = 0;
+    t.mock.method(Admin, "findById", (id) => ({ select: async () => ({
+        _id: id, role: String(id) === financeId ? "Finance" : "Sales", status: "Active", tokenVersion: 0,
+    }) }));
+    t.mock.method(Booking, "findById", (id) => ({ select: async () => String(id) === bookingId ? booking : null }));
+    t.mock.method(Booking, "findOneAndUpdate", async (query, update, options) => {
+        writes += 1;
+        assert.equal(options.runValidators, true);
+        assert.equal(String(query._id), bookingId);
+        if (booking.totalPrice < query.totalPrice.$gte ||
+            (update.$set.hotelAdvanceDueDate && booking.paymentDueDate < update.$set.hotelAdvanceDueDate)) return null;
+        Object.assign(booking, update.$set);
+        await booking.validate();
+        return booking;
+    });
+    t.mock.method(ActivityLog, "create", async (entry) => { logs.push(entry); return entry; });
+
+    const server = app.listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const base = `http://127.0.0.1:${server.address().port}/api/bookings/${bookingId}/hotel-advance`;
+    const request = (body, id = financeId) => fetch(base, {
+        method: "PATCH", headers: { ...(id ? { Authorization: `Bearer ${jwt.sign({ id }, process.env.JWT_SECRET)}` } : {}),
+            "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    assert.equal((await request({ hotelAdvanceAmount: 300, hotelAdvanceDueDate: "2027-02-20" }, null)).status, 401);
+    assert.equal((await request({ hotelAdvanceAmount: 300, hotelAdvanceDueDate: "2027-02-20" }, salesId)).status, 403);
+    for (const body of [{ hotelAdvanceAmount: 300 }, { hotelAdvanceAmount: 1100, hotelAdvanceDueDate: "2027-02-20" },
+        { hotelAdvanceAmount: 300, hotelAdvanceDueDate: "2027-03-01" }]) {
+        assert.equal((await request(body)).status, 400);
+    }
+    assert.equal(writes, 0);
+    const saved = await request({ hotelAdvanceAmount: 300, hotelAdvanceDueDate: "2027-02-20" });
+    assert.equal(saved.status, 200, await saved.clone().text());
+    assert.equal((await saved.json()).hotelAdvanceAmount, 300);
+    assert.equal(logs.at(-1).module, "Payment");
+    booking.totalPrice = 250;
+    assert.equal((await request({ hotelAdvanceAmount: 300, hotelAdvanceDueDate: "2027-02-20" })).status, 400);
+    booking.totalPrice = 1000;
+    const cleared = await request({ hotelAdvanceAmount: 0, hotelAdvanceDueDate: null });
+    assert.equal(cleared.status, 200);
+    assert.equal((await cleared.json()).hotelAdvanceDueDate, null);
+    assert.equal(writes, 2);
 });
 
 test("payment contacts require finance write access, an open balance, and a valid follow-up day", async (t) => {
@@ -321,6 +402,8 @@ test("booking creation and editing preserve validated payment due dates", async 
     const request = (path, method, value) => fetch(path, { method, headers, body: JSON.stringify(value) });
 
     assert.equal((await request(url, "POST", { ...body, paymentDueDate: "2027-02-30" })).status, 400);
+    assert.equal((await request(url, "POST", { ...body, hotelAdvanceAmount: 400, hotelAdvanceDueDate: "2027-03-01" })).status, 400);
+    assert.equal((await request(url, "POST", { ...body, hotelAdvanceAmount: 400 })).status, 400);
     assert.equal(createCalls, 0);
     const response = await request(url, "POST", body);
     assert.equal(response.status, 201);
@@ -329,6 +412,13 @@ test("booking creation and editing preserve validated payment due dates", async 
 
     const editUrl = `${url}/${created._id}`;
     assert.equal((await request(editUrl, "PUT", { paymentDueDate: "2027-02-30" })).status, 400);
+    assert.equal((await request(editUrl, "PUT", { hotelAdvanceAmount: 1100, hotelAdvanceDueDate: "2027-02-20" })).status, 400);
+    const planned = await request(editUrl, "PUT", { hotelAdvanceAmount: 400, hotelAdvanceDueDate: "2027-02-20" });
+    assert.equal(planned.status, 200, await planned.clone().text());
+    assert.equal((await planned.json()).booking.hotelAdvanceAmount, 400);
+    assert.equal(created.hotelAdvanceDueDate.toISOString(), "2027-02-20T00:00:00.000Z");
+    assert.equal((await request(editUrl, "PUT", { totalPrice: 399 })).status, 400);
+    assert.equal((await request(editUrl, "PUT", { paymentDueDate: "2027-02-19" })).status, 400);
     assert.equal(created.paymentDueDate.toISOString(), "2027-02-28T00:00:00.000Z");
     assert.equal((await request(editUrl, "PUT", { totalPrice: 1200 })).status, 200);
     assert.equal(created.paymentDueDate.toISOString(), "2027-02-28T00:00:00.000Z");

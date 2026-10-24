@@ -59,6 +59,8 @@ const OutstandingBalances = () => {
     const [selected, setSelected] = useState(null);
     const [editingDue, setEditingDue] = useState(null);
     const [savingDue, setSavingDue] = useState(false);
+    const [editingHotel, setEditingHotel] = useState(null);
+    const [savingHotel, setSavingHotel] = useState(false);
     const [contactForm, setContactForm] = useState(null);
     const [savingContact, setSavingContact] = useState(false);
     const [contactError, setContactError] = useState("");
@@ -124,6 +126,27 @@ const OutstandingBalances = () => {
             setSavingDue(false);
         }
     };
+    const saveHotelAdvance = async (event, clear = false) => {
+        event?.preventDefault();
+        if (!editingHotel || !canChangeDueDate) return;
+        try {
+            setSavingHotel(true);
+            setError("");
+            setSuccess("");
+            await api.patch(`/bookings/${editingHotel.id}/hotel-advance`, {
+                hotelAdvanceAmount: clear ? 0 : Number(editingHotel.amount),
+                hotelAdvanceDueDate: clear ? null : editingHotel.dueDate || null,
+            });
+            setEditingHotel(null);
+            setSuccess("Hotel advance schedule updated.");
+            notifyPaymentAttentionChanged();
+            refresh();
+        } catch (requestError) {
+            setError(requestError.response?.data?.message || "Failed to update hotel advance schedule.");
+        } finally {
+            setSavingHotel(false);
+        }
+    };
     const saveContact = async (event) => {
         event.preventDefault();
         if (!contactForm || !canLogContact) return;
@@ -186,6 +209,9 @@ const OutstandingBalances = () => {
         customer: { fullName: selected.customerName },
         totalPrice: selected.totalPrice,
         advancePayment: selected.recordedPaid,
+        hotelAdvanceAmount: selected.hotelAdvanceAmount,
+        hotelAdvanceDueDate: selected.hotelAdvanceDueDate,
+        paymentDueDate: selected.paymentDueDate,
         currency: selected.currency,
     };
     const today = todayCalendarDate();
@@ -255,13 +281,13 @@ const OutstandingBalances = () => {
                     <p className="text-muted mb-0">No bookings with an open balance in this view.</p>
                 ) : (
                     <div className="table-responsive"><table className="table align-middle mb-0">
-                        <thead><tr><th>Booking / guest</th><th>Payment due</th><th>Contact / follow-up</th><th>Departure</th><th>Status</th><th className="text-end">Total</th><th className="text-end">Recorded paid</th><th className="text-end">Balance</th><th className="text-end">Action</th></tr></thead>
+                        <thead><tr><th>Booking / guest</th><th>Next payment</th><th>Contact / follow-up</th><th>Departure</th><th>Status</th><th className="text-end">Total</th><th className="text-end">Recorded paid</th><th className="text-end">Balance</th><th className="text-end">Action</th></tr></thead>
                         <tbody>{data.items.map((item) => (
                             <tr key={item._id}>
                                 <td><strong>{item.bookingCode}</strong><small className="d-block text-muted">{item.customerName || "-"}</small></td>
                                 <td>{editingDue?.id === item._id ? (
-                                    <form onSubmit={saveDueDate} className="d-flex flex-column gap-1" aria-label={`Payment due date for ${item.bookingCode}`}>
-                                        <input type="date" className="form-control form-control-sm" aria-label="Payment due date" value={editingDue.value} onChange={(event) => setEditingDue({ ...editingDue, value: event.target.value })} disabled={savingDue} />
+                                    <form onSubmit={saveDueDate} className="d-flex flex-column gap-1" aria-label={`Final balance due date for ${item.bookingCode}`}>
+                                        <input type="date" className="form-control form-control-sm" aria-label="Final balance due date" value={editingDue.value} onChange={(event) => setEditingDue({ ...editingDue, value: event.target.value })} disabled={savingDue} min={toCalendarDateInput(item.hotelAdvanceDueDate) || undefined} />
                                         <div className="d-flex gap-1">
                                             <button type="submit" className="btn btn-sm btn-primary" disabled={savingDue}>Save</button>
                                             <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => saveDueDate(null, true)} disabled={savingDue}>Clear date</button>
@@ -269,7 +295,13 @@ const OutstandingBalances = () => {
                                         </div>
                                     </form>
                                 ) : (
-                                    <><div>{formatCalendarDate(item.paymentDueDate)}</div><span className={`badge text-bg-${paymentDueStatus(item.paymentDueDate).color}`}>{paymentDueStatus(item.paymentDueDate).label}</span></>
+                                    <>
+                                        <strong>{item.nextPaymentStage || "Final balance"} · {formatMoney(item.nextPaymentAmount ?? item.balance, item.currency)}</strong>
+                                        <div>{formatCalendarDate(item.nextPaymentDueDate ?? item.paymentDueDate)}</div>
+                                        <span className={`badge text-bg-${paymentDueStatus(item.nextPaymentDueDate ?? item.paymentDueDate).color}`}>{paymentDueStatus(item.nextPaymentDueDate ?? item.paymentDueDate).label}</span>
+                                        {item.hotelAdvanceAmount > 0 && item.nextPaymentStage === "Hotel advance" && item.paymentDueDate &&
+                                            <small className="d-block text-muted">Final balance due {formatCalendarDate(item.paymentDueDate)}</small>}
+                                    </>
                                 )}</td>
                                 <td>
                                     {item.lastContactedAt ? <><div>{item.contactChannel} · {formatContactTime(item.lastContactedAt)}</div>
@@ -283,7 +315,8 @@ const OutstandingBalances = () => {
                                 <td className="text-end text-nowrap fw-semibold">{formatMoney(item.balance, item.currency)}</td>
                                 <td className="text-end"><div className="d-flex flex-wrap justify-content-end gap-2">
                                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelected(item)}>Payments</button>
-                                    {canChangeDueDate && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setEditingDue({ id: item._id, value: toCalendarDateInput(item.paymentDueDate) })}>Due date</button>}
+                                    {canChangeDueDate && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { setEditingDue(null); setEditingHotel({ id: item._id, amount: String(item.hotelAdvanceAmount || 0), dueDate: toCalendarDateInput(item.hotelAdvanceDueDate), total: item.totalPrice, finalDue: toCalendarDateInput(item.paymentDueDate) }); }}>Hotel advance</button>}
+                                    {canChangeDueDate && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => { setEditingHotel(null); setEditingDue({ id: item._id, value: toCalendarDateInput(item.paymentDueDate) }); }}>Final due date</button>}
                                     {canPrepareReminder && <button type="button" className="btn btn-sm btn-outline-success" onClick={() => prepareReminder(item)} disabled={Boolean(reminderLoadingId)} aria-label={`Prepare WhatsApp payment reminder for ${item.bookingCode}`}><FaWhatsapp className="me-1" />{reminderLoadingId === item._id ? "Loading..." : "Reminder"}</button>}
                                     {canLogContact && <button type="button" className="btn btn-sm btn-outline-success" onClick={() => { setContactError(""); setContactForm({ id: item._id, bookingCode: item.bookingCode, channel: item.contactChannel || "WhatsApp", nextFollowUpDate: "" }); }}>Log contact</button>}
                                     <Link className="btn btn-sm btn-outline-secondary" to={`/bookings?keyword=${encodeURIComponent(item.bookingCode)}`}>Booking</Link>
@@ -291,6 +324,25 @@ const OutstandingBalances = () => {
                             </tr>
                         ))}</tbody>
                     </table></div>
+                )}
+
+                {editingHotel && (
+                    <form className="border rounded-4 p-3 mt-3" onSubmit={saveHotelAdvance}>
+                        <strong>Hotel advance for {data.items.find((item) => item._id === editingHotel.id)?.bookingCode}</strong>
+                        <p className="small text-muted">Enter the guest amount in the booking currency (for example, 50% of hotel charges). This does not record money received.</p>
+                        <div className="row g-2 align-items-end">
+                            <div className="col-md-3"><label className="form-label" htmlFor="hotel-advance-amount">Amount</label>
+                                <input id="hotel-advance-amount" type="number" className="form-control" min="0" step="0.01" max={editingHotel.total}
+                                    value={editingHotel.amount} onChange={(event) => setEditingHotel({ ...editingHotel, amount: event.target.value })} required disabled={savingHotel} /></div>
+                            <div className="col-md-3"><label className="form-label" htmlFor="hotel-advance-due">Due date</label>
+                                <input id="hotel-advance-due" type="date" className="form-control" max={editingHotel.finalDue || undefined}
+                                    value={editingHotel.dueDate} onChange={(event) => setEditingHotel({ ...editingHotel, dueDate: event.target.value })}
+                                    required={Number(editingHotel.amount) > 0} disabled={savingHotel} /></div>
+                            <div className="col-md-auto"><button type="submit" className="btn btn-primary" disabled={savingHotel}>Save</button></div>
+                            <div className="col-md-auto"><button type="button" className="btn btn-outline-secondary" onClick={() => saveHotelAdvance(null, true)} disabled={savingHotel}>Clear plan</button></div>
+                            <div className="col-md-auto"><button type="button" className="btn btn-outline-secondary" onClick={() => setEditingHotel(null)} disabled={savingHotel}>Cancel</button></div>
+                        </div>
+                    </form>
                 )}
 
                 {!loading && data.totalPages > 1 && (

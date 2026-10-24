@@ -214,6 +214,24 @@ const bookingSchema = new mongoose.Schema(
             min: 0,
         },
 
+        hotelAdvanceAmount: {
+            type: Number,
+            default: 0,
+            min: 0,
+            validate: {
+                validator: function (value) {
+                    return (!(this instanceof mongoose.Document) || value <= this.totalPrice + 0.000001) &&
+                        Math.abs(value * 100 - Math.round(value * 100)) < 0.000001;
+                },
+                message: "Hotel advance must be no greater than the total price and use at most two decimals",
+            },
+        },
+
+        hotelAdvanceDueDate: {
+            type: Date,
+            default: null,
+        },
+
         paymentDueDate: {
             type: Date,
             default: null,

@@ -33,6 +33,8 @@ import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
 import { notifySupplierConfirmationsChanged } from "../utils/supplierEvents";
+import { notifyPaymentAttentionChanged } from "../utils/paymentEvents";
+import { getGuestPaymentMilestones } from "../utils/guestPaymentMilestones";
 
 const initialFormState = {
     inquiry: "",
@@ -50,6 +52,8 @@ const initialFormState = {
     totalPrice: 0,
     currency: "USD",
     advancePayment: 0,
+    hotelAdvanceAmount: 0,
+    hotelAdvanceDueDate: "",
     paymentDueDate: "",
     paymentStatus: "Pending",
     bookingStatus: "Pending",
@@ -275,6 +279,7 @@ const Bookings = () => {
                 numberOfTravelers: Number(formData.numberOfTravelers),
                 totalPrice: Number(formData.totalPrice),
                 advancePayment: Number(formData.advancePayment),
+                hotelAdvanceAmount: Number(formData.hotelAdvanceAmount),
             };
 
             if (editingId) {
@@ -287,6 +292,7 @@ const Bookings = () => {
 
             resetForm();
             notifySupplierConfirmationsChanged();
+            notifyPaymentAttentionChanged();
             fetchBookings();
             if (hasPermission("inquiry.view")) fetchInquiries();
         } catch (err) {
@@ -315,6 +321,8 @@ const Bookings = () => {
             totalPrice: booking.totalPrice || 0,
             currency: booking.currency || "USD",
             advancePayment: booking.advancePayment || 0,
+            hotelAdvanceAmount: booking.hotelAdvanceAmount || 0,
+            hotelAdvanceDueDate: toCalendarDateInput(booking.hotelAdvanceDueDate),
             paymentDueDate: toCalendarDateInput(booking.paymentDueDate),
             paymentStatus: booking.paymentStatus || "Pending",
             bookingStatus: booking.bookingStatus || "Pending",
@@ -467,6 +475,8 @@ const Bookings = () => {
                 Vehicle: booking.vehicleType || "",
                 "Total Price": booking.totalPrice || 0,
                 "Advance Payment": booking.advancePayment || 0,
+                "Hotel Advance Target": booking.hotelAdvanceAmount || 0,
+                "Hotel Advance Due Date": booking.hotelAdvanceDueDate ? toCalendarDateInput(booking.hotelAdvanceDueDate) : "",
                 "Payment Due Date": booking.paymentDueDate ? toCalendarDateInput(booking.paymentDueDate) : "",
                 Balance:
                     Number(booking.totalPrice || 0) - Number(booking.advancePayment || 0),
@@ -757,13 +767,30 @@ const Bookings = () => {
                                 </div>
 
                                 <div className="col-12 col-md-4">
-                                    <label className="form-label fw-semibold">Payment Due Date</label>
+                                    <label className="form-label fw-semibold">Hotel advance to collect</label>
+                                    <input type="number" name="hotelAdvanceAmount" className="form-control"
+                                        value={formData.hotelAdvanceAmount} onChange={handleChange} min="0" step="0.01"
+                                        max={formData.totalPrice} />
+                                    <small className="text-muted">Enter the guest amount in the booking currency, such as 50% of hotel charges. This is a target, not a received payment.</small>
+                                </div>
+
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label fw-semibold">Hotel advance due date</label>
+                                    <input type="date" name="hotelAdvanceDueDate" className="form-control"
+                                        value={formData.hotelAdvanceDueDate} onChange={handleChange}
+                                        max={formData.paymentDueDate || undefined} />
+                                    <small className="text-muted">Required when the hotel advance is greater than zero.</small>
+                                </div>
+
+                                <div className="col-12 col-md-4">
+                                    <label className="form-label fw-semibold">Final balance due date</label>
                                     <input
                                         type="date"
                                         name="paymentDueDate"
                                         className="form-control"
                                         value={formData.paymentDueDate}
                                         onChange={handleChange}
+                                        min={formData.hotelAdvanceDueDate || undefined}
                                     />
                                     <small className="text-muted">Optional agreed date for collecting the remaining balance.</small>
                                 </div>
@@ -1045,7 +1072,11 @@ const Bookings = () => {
 
                                         <td>
                                             <PaymentBadge status={booking.paymentStatus} />
-                                            {booking.paymentDueDate && <small className="d-block text-muted mt-1">Due {formatCalendarDate(booking.paymentDueDate)}</small>}
+                                            {getGuestPaymentMilestones(booking).filter((stage) => stage.outstanding > 0).map((stage) => (
+                                                <small key={stage.label} className="d-block text-muted mt-1">
+                                                    {stage.label}: {formatMoney(stage.outstanding, booking.currency)} · {formatCalendarDate(stage.dueDate)}
+                                                </small>
+                                            ))}
                                         </td>
 
                                         <td>
