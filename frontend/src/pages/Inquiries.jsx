@@ -6,6 +6,7 @@ import {
     FaEdit,
     FaFileCsv,
     FaFileInvoiceDollar,
+    FaChartBar,
     FaPlus,
     FaSearch,
     FaTrash,
@@ -25,6 +26,8 @@ const initialFormState = {
     status: "New",
     priority: "Medium",
     source: "Website",
+    lossReason: "",
+    lossNote: "",
     adminNotes: "",
 };
 
@@ -37,6 +40,7 @@ const Inquiries = () => {
     const [formData, setFormData] = useState(initialFormState);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    const [editingWasCancelled, setEditingWasCancelled] = useState(false);
 
     const [searchInput, setSearchInput] = useState("");
     const [keyword, setKeyword] = useState("");
@@ -57,6 +61,7 @@ const Inquiries = () => {
     const statusOptions = ["New", "Contacted", "Follow Up", "Converted", "Cancelled"];
     const priorityOptions = ["Low", "Medium", "High"];
     const sourceOptions = ["Website", "Facebook", "Instagram", "WhatsApp", "Referral", "Other"];
+    const lossReasons = ["Budget", "Travel plans changed", "No response", "Booked elsewhere", "Dates unavailable", "Other"];
 
     const fetchPackages = async () => {
         try {
@@ -124,6 +129,7 @@ const Inquiries = () => {
     const resetForm = () => {
         setFormData(initialFormState);
         setEditingId(null);
+        setEditingWasCancelled(false);
         setShowForm(false);
     };
 
@@ -154,7 +160,7 @@ const Inquiries = () => {
                 await api.put(`/inquiries/${editingId}`, payload);
                 setSuccess("Inquiry updated successfully.");
             } else {
-                await api.post("/inquiries", payload);
+                await api.post("/inquiries/manual", payload);
                 setSuccess("Inquiry added successfully.");
             }
 
@@ -169,6 +175,7 @@ const Inquiries = () => {
 
     const handleEdit = (inquiry) => {
         setEditingId(inquiry._id);
+        setEditingWasCancelled(inquiry.status === "Cancelled");
 
         setFormData({
             fullName: inquiry.fullName || "",
@@ -182,6 +189,8 @@ const Inquiries = () => {
             status: inquiry.status || "New",
             priority: inquiry.priority || "Medium",
             source: inquiry.source || "Website",
+            lossReason: inquiry.lossReason || "",
+            lossNote: inquiry.lossNote || "",
             adminNotes: inquiry.adminNotes || "",
         });
 
@@ -268,6 +277,8 @@ const Inquiries = () => {
                 Source: inquiry.source || "",
                 Priority: inquiry.priority || "",
                 Status: inquiry.status || "",
+                "Loss Reason": inquiry.lossReason || "",
+                "Loss Note": inquiry.lossNote || "",
                 Message: inquiry.message || "",
                 "Admin Notes": inquiry.adminNotes || "",
                 "Created Date": formatCalendarDate(inquiry.createdAt),
@@ -297,6 +308,9 @@ const Inquiries = () => {
                 </div>
 
                 <div className="d-flex gap-2">
+                    <button className="btn btn-outline-primary" onClick={() => navigate("/lead-insights")}>
+                        <FaChartBar className="me-2" />Lead Insights
+                    </button>
                     <PermissionGuard permission="report.export">
                         <button
                             className="btn btn-success"
@@ -314,6 +328,7 @@ const Inquiries = () => {
                             onClick={() => {
                                 setShowForm((prev) => !prev);
                                 setEditingId(null);
+                                setEditingWasCancelled(false);
                                 setFormData(initialFormState);
                             }}
                         >
@@ -469,6 +484,35 @@ const Inquiries = () => {
                                         ))}
                                     </select>
                                 </div>
+
+                                {formData.status === "Cancelled" && (
+                                    <>
+                                        <div className="col-12 col-md-4">
+                                            <label className="form-label fw-semibold">Loss reason</label>
+                                            <select
+                                                name="lossReason"
+                                                className="form-select"
+                                                value={formData.lossReason}
+                                                onChange={handleChange}
+                                                required={!editingWasCancelled}
+                                            >
+                                                <option value="">Select a reason</option>
+                                                {lossReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="col-12 col-md-4">
+                                            <label className="form-label fw-semibold">Loss note (optional)</label>
+                                            <input
+                                                name="lossNote"
+                                                className="form-control"
+                                                value={formData.lossNote}
+                                                onChange={handleChange}
+                                                maxLength={300}
+                                                placeholder="Brief internal context"
+                                            />
+                                        </div>
+                                    </>
+                                )}
 
                                 <div className="col-12 col-md-4">
                                     <label className="form-label fw-semibold">Priority</label>
@@ -687,6 +731,11 @@ const Inquiries = () => {
 
                                         <td>
                                             <StatusBadge status={inquiry.status} />
+                                            {inquiry.status === "Cancelled" && (
+                                                <small className="d-block text-muted mt-1" title={inquiry.lossNote || undefined}>
+                                                    {inquiry.lossReason || "Reason not recorded"}
+                                                </small>
+                                            )}
                                         </td>
 
                                         <td className="text-end">

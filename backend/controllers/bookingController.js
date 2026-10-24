@@ -231,6 +231,8 @@ const markInquiryConverted = async (inquiryId) => {
 
     await Inquiry.findByIdAndUpdate(inquiryId, {
         status: "Converted",
+        lossReason: null,
+        lossNote: "",
     });
 };
 

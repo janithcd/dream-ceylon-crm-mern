@@ -186,6 +186,8 @@ const convertQuotationToBooking = async (req, res) => {
         if (inquiry?._id) {
             await Inquiry.findByIdAndUpdate(inquiry._id, {
                 status: "Converted",
+                lossReason: null,
+                lossNote: "",
             });
         }
 

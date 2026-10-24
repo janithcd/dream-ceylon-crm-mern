@@ -5,6 +5,7 @@ import {
     FaCalendarCheck,
     FaCar,
     FaChartLine,
+    FaChartBar,
     FaClipboardCheck,
     FaCog,
     FaCoins,
@@ -92,6 +93,12 @@ const AdminLayout = () => {
                         <NavLink to="/inquiries">
                             <FaEnvelopeOpenText />
                             Inquiries
+                        </NavLink>
+                    </PermissionGuard>
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.inquiries}>
+                        <NavLink to="/lead-insights">
+                            <FaChartBar />
+                            Lead Insights
                         </NavLink>
                     </PermissionGuard>
                     <PermissionGuard

@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Inquiry = require("../models/Inquiry");
 const { createActivityLog } = require("../utils/createActivityLog");
+const LOSS_REASONS = Object.freeze(["Budget", "Travel plans changed", "No response", "Booked elsewhere", "Dates unavailable", "Other"]);
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -143,10 +144,39 @@ const buildInquiryPayload = (body, existingInquiry = null) => {
     return payload;
 };
 
+const applyLossDetails = (payload, body, existingInquiry = null) => {
+    if (payload.status !== "Cancelled") {
+        payload.lossReason = null;
+        payload.lossNote = "";
+        return null;
+    }
+
+    const reason = body.lossReason === undefined
+        ? safeText(existingInquiry?.lossReason)
+        : safeText(body.lossReason);
+    const note = body.lossNote === undefined
+        ? safeText(existingInquiry?.lossNote)
+        : safeText(body.lossNote);
+
+    // Older cancelled inquiries may not have a reason yet; allow unrelated edits.
+    if (!reason && (existingInquiry?.status !== "Cancelled" || body.lossReason !== undefined)) {
+        return "Choose a loss reason when closing an inquiry.";
+    }
+    if (reason && !LOSS_REASONS.includes(reason)) {
+        return "Choose a valid loss reason.";
+    }
+    if (note.length > 300) {
+        return "Loss note must be 300 characters or fewer.";
+    }
+
+    payload.lossReason = reason || null;
+    payload.lossNote = note;
+    return null;
+};
+
 // @desc    Create a new inquiry
-// @route   POST /api/inquiries
-// @access  Public
-const createInquiry = async (req, res) => {
+// @route   POST /api/inquiries (public) or /api/inquiries/manual (admin)
+const createInquiryRecord = async (req, res, manual = false) => {
     try {
         const payload =
             buildInquiryPayload(req.body);
@@ -220,10 +250,17 @@ const createInquiry = async (req, res) => {
                 1
             );
 
-        payload.status = "New";
-        payload.priority = "Medium";
-        payload.source = "Website";
-        payload.adminNotes = "";
+        if (manual) {
+            const lossError = applyLossDetails(payload, req.body);
+            if (lossError) return res.status(400).json({ message: lossError });
+        } else {
+            payload.status = "New";
+            payload.priority = "Medium";
+            payload.source = "Website";
+            payload.adminNotes = "";
+            payload.lossReason = null;
+            payload.lossNote = "";
+        }
 
         const inquiry =
             await Inquiry.create(
@@ -238,7 +275,7 @@ const createInquiry = async (req, res) => {
                     ?.chatConversationId
             );
 
-        if (chatConversationId) {
+        if (chatConversationId && !manual) {
             try {
                 const linkedConversation =
                     await linkConversationToInquiry(
@@ -281,7 +318,7 @@ const createInquiry = async (req, res) => {
             action: "CREATE",
             module: "Inquiry",
             description:
-                `Website inquiry was created for ${inquiry.fullName}`,
+                `${manual ? "Manual" : "Website"} inquiry was created for ${inquiry.fullName}`,
             relatedRecordId:
             inquiry._id,
             relatedModel:
@@ -321,7 +358,7 @@ const createInquiry = async (req, res) => {
             .status(201)
             .json({
                 message:
-                    "Thank you. Your inquiry has been submitted successfully.",
+                    manual ? "Inquiry created successfully." : "Thank you. Your inquiry has been submitted successfully.",
                 inquiry:
                 populatedInquiry,
 
@@ -359,6 +396,9 @@ const createInquiry = async (req, res) => {
             });
     }
 };
+
+const createInquiry = (req, res) => createInquiryRecord(req, res);
+const createManualInquiry = (req, res) => createInquiryRecord(req, res, true);
 
 // @desc    Get inquiries
 // @route   GET /api/inquiries
@@ -438,6 +478,9 @@ const updateInquiry = async (req, res) => {
             });
         }
 
+        const lossError = applyLossDetails(payload, req.body, inquiry);
+        if (lossError) return res.status(400).json({ message: lossError });
+
         Object.assign(inquiry, payload);
         await inquiry.save();
 
@@ -455,6 +498,7 @@ const updateInquiry = async (req, res) => {
                 status: inquiry.status,
                 priority: inquiry.priority,
                 source: inquiry.source,
+                lossReason: inquiry.lossReason,
                 travelDate: inquiry.travelDate,
                 numberOfTravelers: inquiry.numberOfTravelers,
             },
@@ -469,6 +513,9 @@ const updateInquiry = async (req, res) => {
             inquiry: populatedInquiry,
         });
     } catch (error) {
+        if (error.name === "ValidationError") {
+            return res.status(400).json({ message: Object.values(error.errors)[0]?.message || "Invalid inquiry details." });
+        }
         return res.status(500).json({
             message: "Failed to update inquiry",
             error: error.message,
@@ -534,6 +581,7 @@ const deleteInquiry = async (req, res) => {
 
 module.exports = {
     createInquiry,
+    createManualInquiry,
     getInquiries,
     getInquiryById,
     updateInquiry,

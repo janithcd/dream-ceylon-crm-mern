@@ -31,6 +31,7 @@ import SupplierContactModal from "../components/SupplierContactModal";
 import BookingReadinessModal from "../components/BookingReadinessModal";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
+import { usePermissions } from "../context/PermissionContext";
 import { notifySupplierConfirmationsChanged } from "../utils/supplierEvents";
 
 const initialFormState = {
@@ -58,6 +59,7 @@ const initialFormState = {
 
 const Bookings = () => {
     const navigate = useNavigate();
+    const { hasPermission } = usePermissions();
     const [searchParams] = useSearchParams();
     const initialKeyword = searchParams.get("keyword") || "";
 
@@ -181,9 +183,9 @@ const Bookings = () => {
     };
 
     useEffect(() => {
-        fetchInquiries();
+        if (hasPermission("inquiry.view")) fetchInquiries();
         fetchPackages();
-    }, []);
+    }, [hasPermission]);
 
     useEffect(() => {
         fetchBookings();
@@ -286,7 +288,7 @@ const Bookings = () => {
             resetForm();
             notifySupplierConfirmationsChanged();
             fetchBookings();
-            fetchInquiries();
+            if (hasPermission("inquiry.view")) fetchInquiries();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to save booking");
         } finally {
