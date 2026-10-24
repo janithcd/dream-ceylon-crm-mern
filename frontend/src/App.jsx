@@ -10,6 +10,7 @@ import Destinations from "./pages/Destinations";
 import Packages from "./pages/Packages";
 import Inquiries from "./pages/Inquiries";
 import LeadInsights from "./pages/LeadInsights";
+import LeadTriage from "./pages/LeadTriage";
 import Bookings from "./pages/Bookings";
 import MyTasks from "./pages/MyTasks";
 import TeamTasks from "./pages/TeamTasks";
@@ -90,6 +91,11 @@ const App = () => {
                         <Route path="lead-insights" element={
                             <PermissionRoute permission={ROUTE_PERMISSIONS.inquiries}>
                                 <LeadInsights />
+                            </PermissionRoute>
+                        } />
+                        <Route path="lead-triage" element={
+                            <PermissionRoute permission={ROUTE_PERMISSIONS.inquiries}>
+                                <LeadTriage />
                             </PermissionRoute>
                         } />
                         <Route

@@ -96,6 +96,12 @@ const AdminLayout = () => {
                         </NavLink>
                     </PermissionGuard>
                     <PermissionGuard permission={ROUTE_PERMISSIONS.inquiries}>
+                        <NavLink to="/lead-triage">
+                            <FaClipboardCheck />
+                            New Lead Queue
+                        </NavLink>
+                    </PermissionGuard>
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.inquiries}>
                         <NavLink to="/lead-insights">
                             <FaChartBar />
                             Lead Insights
