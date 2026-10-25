@@ -50,9 +50,17 @@ const main = async () => {
         const receiptResponse = await record(payment(300, "Advance"));
         assert.equal(receiptResponse.status, 201, `Record receipt: ${await receiptResponse.clone().text()}`);
         const receipt = (await receiptResponse.json()).payment;
+        const receiptPdf = await request(`/payment-receipts/${receipt._id}`, "POST", {});
+        assert.equal(receiptPdf.status, 200, `Receipt PDF: ${await receiptPdf.clone().text()}`);
+        assert.match(receiptPdf.headers.get("content-disposition"), /payment-receipt/);
+        assert.equal(receiptPdf.headers.get("cache-control"), "no-store");
         const refundResponse = await record(payment(250, "Refund", "Refunded"));
         assert.equal(refundResponse.status, 201, `Record refund: ${await refundResponse.clone().text()}`);
         const refund = (await refundResponse.json()).payment;
+        const refundPdf = await request(`/payment-receipts/${refund._id}`, "POST", {});
+        assert.equal(refundPdf.status, 200, `Refund PDF: ${await refundPdf.clone().text()}`);
+        assert.match(refundPdf.headers.get("content-disposition"), /refund-confirmation/);
+        assert.equal(refundPdf.headers.get("cache-control"), "no-store");
         assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 50);
         assert.equal((await record(payment(50.01, "Refund", "Refunded"))).status, 409);
         assert.equal((await request(`/booking-payments/${refund._id}`, "PUT", { paymentType: "Advance" })).status, 400);
@@ -61,6 +69,8 @@ const main = async () => {
         assert.equal((await request(`/booking-payments/${refund._id}`, "PUT", { amount: 100 })).status, 200);
         assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 200);
         assert.equal((await request(`/booking-payments/${refund._id}`, "PUT", { status: "Cancelled" })).status, 200);
+        assert.equal((await request(`/payment-receipts/${refund._id}`, "POST", {})).status, 409);
+        assert.equal((await request("/payment-receipts/not-an-id", "POST", {})).status, 400);
         assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 300);
         assert.equal((await record(payment(300, "Refund", "Refunded"))).status, 201);
         assert.equal((await (await request(`/bookings/${booking._id}`)).json()).paymentStatus, "Refunded");

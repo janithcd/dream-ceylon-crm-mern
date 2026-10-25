@@ -327,10 +327,10 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                 payment.paymentNo
                     ?.toLowerCase()
                     .replace(/[^a-z0-9]+/g, "-")
-                    .replace(/^-+|-+$/g, "") || "payment-receipt";
+                    .replace(/^-+|-+$/g, "") || "payment-document";
 
             link.href = fileUrl;
-            link.download = `dream-ceylon-payment-receipt-${cleanPaymentNo}.pdf`;
+            link.download = `dream-ceylon-${payment.status === "Refunded" ? "refund-confirmation" : "payment-receipt"}-${cleanPaymentNo}.pdf`;
 
             document.body.appendChild(link);
             link.click();
@@ -338,7 +338,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
 
             window.URL.revokeObjectURL(fileUrl);
         } catch (err) {
-            let message = "Failed to download payment receipt PDF.";
+            let message = "Failed to download payment document PDF.";
 
             if (err.response?.data instanceof Blob) {
                 const errorText = await err.response.data.text();
@@ -762,6 +762,9 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                               >
                                 {payment.status}
                               </span>
+                                                        {payment.status !== "Cancelled" &&
+                                                            (payment.status === "Refunded") !== (payment.paymentType === "Refund") &&
+                                                            <div className="small text-danger">Review type and status before downloading.</div>}
                                                     </td>
 
                                                     <td>
@@ -773,29 +776,21 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
 
                                                     <td className="text-end">
                                                         <div className="d-flex justify-content-end gap-2">
-                                                            <PermissionGuard
-                                                                all={[
-                                                                    "payment.view",
-                                                                    "pdf.generate",
-                                                                ]}
-                                                            >
-                                                                <button
-                                                                    type="button"
-                                                                    className="btn btn-sm btn-outline-success"
-                                                                    onClick={() =>
-                                                                        handleDownloadPaymentReceipt(
-                                                                            payment
-                                                                        )
-                                                                    }
-                                                                    disabled={
-                                                                        receiptLoadingId ===
-                                                                        payment._id
-                                                                    }
-                                                                    title="Download payment receipt"
-                                                                >
-                                                                    <FaReceipt />
-                                                                </button>
-                                                            </PermissionGuard>
+                                                            {payment.status !== "Cancelled" &&
+                                                                (payment.status === "Refunded") === (payment.paymentType === "Refund") && (
+                                                                    <PermissionGuard all={["payment.view", "pdf.generate"]}>
+                                                                        <button
+                                                                            type="button"
+                                                                            className="btn btn-sm btn-outline-success"
+                                                                            onClick={() => handleDownloadPaymentReceipt(payment)}
+                                                                            disabled={receiptLoadingId === payment._id}
+                                                                            title={payment.status === "Refunded" ? "Download refund confirmation" : "Download payment receipt"}
+                                                                            aria-label={payment.status === "Refunded" ? "Download refund confirmation" : "Download payment receipt"}
+                                                                        >
+                                                                            <FaReceipt />
+                                                                        </button>
+                                                                    </PermissionGuard>
+                                                                )}
 
                                                             <PermissionGuard permission="payment.delete">
                                                                 <button

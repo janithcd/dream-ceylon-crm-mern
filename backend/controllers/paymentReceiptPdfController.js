@@ -2,6 +2,7 @@ const { formatDocumentDate } = require("../utils/documentDate");
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
+const mongoose = require("mongoose");
 
 const BookingPayment = require("../models/BookingPayment");
 let brandConfig = require("../config/brandConfig");
@@ -370,18 +371,18 @@ const createPaymentReceiptPdf = async (payment) => {
     const page = pdfDoc.addPage([595.28, 841.89]);
 
     const booking = payment.booking;
+    const isRefund = payment.status === "Refunded";
 
     await drawWatermark(pdfDoc, page);
 
-    const title =
-        payment.status === "Refunded" ? "REFUND RECEIPT" : "PAYMENT RECEIPT";
+    const title = isRefund ? "REFUND CONFIRMATION" : "PAYMENT RECEIPT";
 
     await drawHeader(
         pdfDoc,
         page,
         fonts,
         title,
-        `Receipt No: ${payment.paymentNo}`
+        `${isRefund ? "Refund" : "Receipt"} No: ${payment.paymentNo}`
     );
 
     drawCompanyInfo(page, fonts, 700);
@@ -398,7 +399,7 @@ const createPaymentReceiptPdf = async (payment) => {
     drawInfoBox(
         page,
         fonts,
-        "Received From",
+        isRefund ? "Refunded To" : "Received From",
         [
             {
                 label: "Name",
@@ -456,7 +457,7 @@ const createPaymentReceiptPdf = async (payment) => {
     drawRectangle(page, 45, y - 125, 505, 125, COLORS.light, COLORS.border);
 
     page.drawText(
-        payment.status === "Refunded" ? "Refund Amount" : "Payment Received",
+        isRefund ? "Refund Amount" : "Payment Received",
         {
             x: 65,
             y: y - 35,
@@ -471,7 +472,7 @@ const createPaymentReceiptPdf = async (payment) => {
         y: y - 80,
         size: 30,
         font: fonts.bold,
-        color: payment.status === "Refunded" ? COLORS.warning : COLORS.primary,
+        color: isRefund ? COLORS.warning : COLORS.primary,
     });
 
     page.drawText(`${payment.paymentType} via ${payment.paymentMethod}`, {
@@ -487,7 +488,7 @@ const createPaymentReceiptPdf = async (payment) => {
     drawInfoBox(
         page,
         fonts,
-        "Payment Details",
+        isRefund ? "Refund Details" : "Payment Details",
         [
             {
                 label: "Payment No",
@@ -554,7 +555,7 @@ const createPaymentReceiptPdf = async (payment) => {
 
     y -= 175;
 
-    page.drawText("Receipt Notes", {
+    page.drawText(isRefund ? "Refund Notes" : "Receipt Notes", {
         x: 45,
         y,
         size: 13,
@@ -566,7 +567,9 @@ const createPaymentReceiptPdf = async (payment) => {
 
     const receiptNotes =
         payment.notes ||
-        "This receipt confirms the payment received for the above booking. Please keep this receipt for your records.";
+        (isRefund
+            ? "This document confirms a refund recorded for the above booking. Please keep it for your records."
+            : "This receipt confirms the payment received for the above booking. Please keep this receipt for your records.");
 
     drawText(page, receiptNotes, 45, y, {
         font: fonts.regular,
@@ -586,6 +589,9 @@ const createPaymentReceiptPdf = async (payment) => {
 // @access  Private
 const generateSinglePaymentReceiptPdf = async (req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: "Invalid payment ID" });
+        }
         brandConfig = await getDocumentBrandConfig();
         const payment = await getPaymentById(req.params.id);
 
@@ -601,21 +607,32 @@ const generateSinglePaymentReceiptPdf = async (req, res) => {
             });
         }
 
+        if (payment.status === "Cancelled") {
+            return res.status(409).json({ message: "Cancelled entries cannot generate payment documents." });
+        }
+
+        if ((payment.status === "Refunded") !== (payment.paymentType === "Refund")) {
+            return res.status(409).json({ message: "Review the payment type and status before generating a document." });
+        }
+
         const pdfBytes = await createPaymentReceiptPdf(payment);
 
-        const fileName = `dream-ceylon-payment-receipt-${payment.paymentNo}.pdf`;
+        const isRefund = payment.status === "Refunded";
+        const documentType = isRefund ? "Refund Confirmation" : "Payment Receipt";
+        const safePaymentNo = String(payment.paymentNo).replace(/[^a-zA-Z0-9-]/g, "-").slice(0, 80);
+        const fileName = `dream-ceylon-${isRefund ? "refund-confirmation" : "payment-receipt"}-${safePaymentNo}.pdf`;
 
         await createActivityLog({
             req,
             action: "GENERATE",
             module: "PDF",
-            description: `Payment receipt ${payment.paymentNo} was generated`,
+            description: `${documentType} ${payment.paymentNo} was generated`,
             relatedRecordId: payment._id,
             relatedModel: "BookingPayment",
             referenceNo: payment.paymentNo,
             customerName: payment.booking?.customer?.fullName,
             metadata: {
-                documentType: "Payment Receipt",
+                documentType,
                 filename: fileName,
                 bookingCode: payment.booking?.bookingCode,
                 amount: payment.amount,
@@ -628,14 +645,16 @@ const generateSinglePaymentReceiptPdf = async (req, res) => {
 
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+        res.setHeader("Cache-Control", "no-store");
 
         return res.send(Buffer.from(pdfBytes));
     } catch (error) {
+        console.error("Payment document generation failed:", error.message);
         await createActivityLog({
             req,
             action: "GENERATE",
             module: "PDF",
-            description: `Payment receipt generation failed for payment ${req.params.id}`,
+            description: `Payment document generation failed for payment ${req.params.id}`,
             relatedRecordId: req.params.id,
             relatedModel: "BookingPayment",
             referenceNo: req.params.id,
@@ -647,12 +666,12 @@ const generateSinglePaymentReceiptPdf = async (req, res) => {
         });
 
         res.status(500).json({
-            message: "Failed to generate payment receipt PDF",
-            error: error.message,
+            message: "Failed to generate payment document PDF",
         });
     }
 };
 
 module.exports = {
     generateSinglePaymentReceiptPdf,
+    createPaymentReceiptPdf,
 };
