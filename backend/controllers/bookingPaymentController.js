@@ -5,6 +5,7 @@ const { createActivityLog } = require("../utils/createActivityLog");
 const { PERMISSIONS, resolveAdminPermissions } = require("../config/permissions");
 const { parseRegisterQuery, parseReconciliation, guestPaymentsCsv } = require("../utils/guestPaymentReconciliation");
 const { validatePaymentEntry, validateProjectedBalance } = require("../utils/bookingPaymentIntegrity");
+const { acquireBookingPaymentLocks } = require("../utils/bookingPaymentLock");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -345,6 +346,7 @@ const validatePaymentBalance = async (booking, previousPayment, nextPayment) => 
 // @route   POST /api/booking-payments
 // @access  Private
 const createBookingPayment = async (req, res) => {
+    let release = null;
     try {
         const payload = buildPaymentPayload(req.body);
 
@@ -359,6 +361,8 @@ const createBookingPayment = async (req, res) => {
                 message: "Payment amount must be greater than zero",
             });
         }
+
+        release = await acquireBookingPaymentLocks([payload.booking]);
 
         const booking = await Booking.findById(payload.booking);
 
@@ -424,10 +428,13 @@ const createBookingPayment = async (req, res) => {
             payment: populatedPayment,
         });
     } catch (error) {
+        if (error.code === "PAYMENT_WRITE_BUSY") return res.status(409).json({ message: error.message });
         return res.status(500).json({
             message: "Failed to create booking payment",
             error: error.message,
         });
+    } finally {
+        if (release) await release();
     }
 };
 
@@ -636,13 +643,23 @@ const getBookingPaymentById = async (req, res) => {
 // @route   PUT /api/booking-payments/:id
 // @access  Private
 const updateBookingPayment = async (req, res) => {
+    let release = null;
     try {
-        const payment = await BookingPayment.findById(req.params.id);
+        const initialPayment = await BookingPayment.findById(req.params.id);
 
-        if (!payment) {
+        if (!initialPayment) {
             return res.status(404).json({
                 message: "Payment not found",
             });
+        }
+
+        const initialPayload = buildPaymentPayload(req.body, initialPayment);
+        if (!initialPayload.booking) return res.status(400).json({ message: "Valid booking is required" });
+        release = await acquireBookingPaymentLocks([initialPayment.booking, initialPayload.booking]);
+        const payment = await BookingPayment.findById(req.params.id);
+        if (!payment || payment.__v !== initialPayment.__v ||
+            String(payment.booking) !== String(initialPayment.booking)) {
+            return res.status(409).json({ message: "The payment changed. Refresh and try again." });
         }
 
         if ((payment.status === "Refunded" || payment.paymentType === "Refund") &&
@@ -763,10 +780,13 @@ const updateBookingPayment = async (req, res) => {
             payment: populatedPayment,
         });
     } catch (error) {
+        if (error.code === "PAYMENT_WRITE_BUSY") return res.status(409).json({ message: error.message });
         return res.status(500).json({
             message: "Failed to update booking payment",
             error: error.message,
         });
+    } finally {
+        if (release) await release();
     }
 };
 
@@ -774,16 +794,19 @@ const updateBookingPayment = async (req, res) => {
 // @route   DELETE /api/booking-payments/:id
 // @access  Private
 const deleteBookingPayment = async (req, res) => {
+    let release = null;
     try {
+        const initialPayment = await BookingPayment.findById(req.params.id);
+        if (!initialPayment) return res.status(404).json({ message: "Payment not found" });
+        release = await acquireBookingPaymentLocks([initialPayment.booking]);
         const payment = await BookingPayment.findById(req.params.id).populate(
             "booking",
             "bookingCode currency customer"
         );
 
-        if (!payment) {
-            return res.status(404).json({
-                message: "Payment not found",
-            });
+        if (!payment || payment.__v !== initialPayment.__v ||
+            String(payment.booking?._id || initialPayment.booking) !== String(initialPayment.booking)) {
+            return res.status(409).json({ message: "The payment changed. Refresh and try again." });
         }
 
         if (payment.reconciledAt) {
@@ -843,10 +866,13 @@ const deleteBookingPayment = async (req, res) => {
             message: "Payment deleted successfully",
         });
     } catch (error) {
+        if (error.code === "PAYMENT_WRITE_BUSY") return res.status(409).json({ message: error.message });
         return res.status(500).json({
             message: "Failed to delete booking payment",
             error: error.message,
         });
+    } finally {
+        if (release) await release();
     }
 };
 

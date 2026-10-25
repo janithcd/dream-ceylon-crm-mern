@@ -248,6 +248,10 @@ const bookingSchema = new mongoose.Schema(
             default: "Pending",
         },
 
+        // Internal lease for serializing payment writes across API instances.
+        paymentWriteToken: { type: String, default: null, select: false },
+        paymentWriteExpiresAt: { type: Date, default: null, select: false },
+
         bookingStatus: {
             type: String,
             enum: ["Pending", "Confirmed", "In Progress", "Completed", "Cancelled"],

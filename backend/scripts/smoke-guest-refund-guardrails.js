@@ -75,7 +75,14 @@ const main = async () => {
         assert.equal((await record(payment(300, "Refund", "Refunded"))).status, 201);
         assert.equal((await (await request(`/bookings/${booking._id}`)).json()).paymentStatus, "Refunded");
         assert.equal((await record(payment(0.01, "Refund", "Refunded"))).status, 409);
-        console.log("Refund limits, type/status consistency, receipt protection and correction passed against MongoDB.");
+        assert.equal((await record(payment(100, "Partial Payment"))).status, 201);
+        const simultaneous = await Promise.all([
+            record(payment(60, "Refund", "Refunded")),
+            record(payment(60, "Refund", "Refunded")),
+        ]);
+        assert.deepEqual(simultaneous.map((response) => response.status).sort(), [201, 409]);
+        assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 40);
+        console.log("Refund limits, type/status consistency, concurrent writes, receipt protection and correction passed against MongoDB.");
     } finally {
         if (booking) {
             const payments = await BookingPayment.find({ booking: booking._id }).select("_id");
