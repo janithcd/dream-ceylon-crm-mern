@@ -5,7 +5,9 @@ const { createActivityLog } = require("../utils/createActivityLog");
 const { PERMISSIONS, resolveAdminPermissions } = require("../config/permissions");
 const { parseRegisterQuery, parseReconciliation, guestPaymentsCsv } = require("../utils/guestPaymentReconciliation");
 const { validatePaymentEntry, validateProjectedBalance } = require("../utils/bookingPaymentIntegrity");
+const { validatePaymentCorrection } = require("../utils/paymentCorrection");
 const { acquireBookingPaymentLocks } = require("../utils/bookingPaymentLock");
+const { getBusinessDayBounds } = require("../utils/businessDate");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -548,6 +550,11 @@ const reconcileGuestPayment = async (req, res) => {
         if (matching && (!payment.booking || payment.currency !== payment.booking.currency)) {
             return res.status(409).json({ message: "The payment currency differs from its booking. Correct the amount and currency before matching." });
         }
+        if (matching && (validatePaymentEntry(payment) ||
+            !payment.paymentDate || Number.isNaN(new Date(payment.paymentDate).getTime()) ||
+            getBusinessDayBounds(new Date(payment.paymentDate)).start > getBusinessDayBounds().end)) {
+            return res.status(409).json({ message: "Review the payment amount, direction and date before matching." });
+        }
         const recordedAt = new Date();
         const actorName = String(req.admin.name || "Admin").slice(0, 100);
         const statementReference = matching ? parsed.value.statementReference : payment.statementReference;
@@ -661,6 +668,10 @@ const updateBookingPayment = async (req, res) => {
             String(payment.booking) !== String(initialPayment.booking)) {
             return res.status(409).json({ message: "The payment changed. Refresh and try again." });
         }
+        if (req.body?.expectedVersion !== undefined &&
+            (!Number.isInteger(req.body.expectedVersion) || req.body.expectedVersion !== payment.__v)) {
+            return res.status(409).json({ message: "The payment changed since you opened it. Refresh and review before saving." });
+        }
 
         if ((payment.status === "Refunded" || payment.paymentType === "Refund") &&
             !resolveAdminPermissions(req.admin).includes(PERMISSIONS.PAYMENT_REFUND)) {
@@ -673,8 +684,6 @@ const updateBookingPayment = async (req, res) => {
 
         const previousBookingId = payment.booking?.toString();
         const previousStatus = payment.status;
-        const previousAmount = payment.amount;
-        const previousCurrency = payment.currency;
         const payload = buildPaymentPayload(req.body, payment);
 
         if (!payload.booking) {
@@ -703,19 +712,16 @@ const updateBookingPayment = async (req, res) => {
         if (payload.currency !== payment.currency && !Object.hasOwn(req.body || {}, "amount")) {
             return res.status(400).json({ message: "Enter the converted amount when correcting a payment currency." });
         }
-        let correctionReason = "";
         if (payload.currency !== payment.currency) {
-            correctionReason = req.body?.correctionReason;
-            if (typeof correctionReason !== "string" || correctionReason.trim().length < 3 ||
-                correctionReason.trim().length > 300 ||
-                Math.abs(payload.amount * 100 - Math.round(payload.amount * 100)) > 0.000001) {
-                return res.status(400).json({ message: "Enter a converted amount with at most two decimals and a correction reason (3–300 characters)." });
+            if (Math.abs(payload.amount * 100 - Math.round(payload.amount * 100)) > 0.000001) {
+                return res.status(400).json({ message: "Enter a converted amount with at most two decimals." });
             }
-            correctionReason = correctionReason.trim();
         }
 
         const entryError = validatePaymentEntry(payload);
         if (entryError) return res.status(400).json({ message: entryError });
+        const correction = validatePaymentCorrection(payment, payload, req.body);
+        if (correction.error) return res.status(400).json({ message: correction.error });
         const balanceError = await validatePaymentBalance(booking, payment, payload);
         if (balanceError) return res.status(409).json({ message: balanceError });
 
@@ -754,14 +760,16 @@ const updateBookingPayment = async (req, res) => {
             metadata: {
                 bookingId: booking._id,
                 bookingCode: booking.bookingCode,
-                updatedFields: Object.keys(req.body || {}),
+                updatedFields: correction.value.changedFields,
                 previousStatus,
                 currentStatus: payment.status,
                 amount: payment.amount,
                 currency: payment.currency,
-                previousAmount,
-                previousCurrency,
-                correctionReason,
+                previousAmount: correction.value.before.amount,
+                previousCurrency: correction.value.before.currency,
+                correctionReason: correction.value.reason,
+                correctionBefore: correction.value.before,
+                correctionAfter: correction.value.after,
                 paymentType: payment.paymentType,
                 paymentMethod: payment.paymentMethod,
                 referenceNumber: payment.referenceNumber,

@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
 import PermissionGuard from "./PermissionGuard";
-import { formatCalendarDate, todayCalendarDate } from "../utils/calendarDate";
+import { usePermissions } from "../context/PermissionContext";
+import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
+import { notifyPaymentAttentionChanged } from "../utils/paymentEvents";
 
 const today = todayCalendarDate();
 const initialFilters = { from: `${today.slice(0, 7)}-01`, to: today, reference: "", status: "all" };
 const emptyRegister = { items: [], total: 0, page: 1, limit: 25, pages: 0, totalsByCurrency: [] };
 const statuses = [{ value: "all", label: "All" }, { value: "unreconciled", label: "To match" }, { value: "reconciled", label: "Matched" }];
+const paymentTypes = ["Advance", "Partial Payment", "Final Payment", "Refund", "Other"];
+const paymentMethods = ["Cash", "Bank Transfer", "Card", "Online Payment", "Other"];
 const money = (amount, currency) => `${currency} ${Number(amount).toLocaleString("en-US", {
     minimumFractionDigits: 2, maximumFractionDigits: 2,
 })}`;
@@ -15,6 +19,7 @@ const localTime = (value) => new Date(value).toLocaleString("en-US", {
 });
 
 const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
+    const { hasPermission } = usePermissions();
     const [filters, setFilters] = useState(initialFilters);
     const [applied, setApplied] = useState(initialFilters);
     const [page, setPage] = useState(1);
@@ -72,8 +77,13 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
 
     const openCorrection = (item) => {
         setEditor(null);
-        setCorrection({ id: item._id, paymentNo: item.paymentNo, amount: "",
-            originalAmount: item.amount, fromCurrency: item.currency, bookingCurrency: item.booking.currency, reason: "" });
+        const original = { amount: String(item.amount), currency: item.currency,
+            paymentDate: toCalendarDateInput(item.paymentDate), paymentType: item.paymentType,
+            status: item.status, paymentMethod: item.paymentMethod,
+            referenceNumber: item.referenceNumber || "" };
+        setCorrection({ id: item._id, version: item.__v, paymentNo: item.paymentNo, original,
+            ...original, currency: item.booking.currency,
+            amount: item.currency === item.booking.currency ? original.amount : "", reason: "" });
         setActionError("");
         setSuccess("");
     };
@@ -84,13 +94,26 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
         try {
             setSaving(true);
             setActionError("");
-            await api.put(`/booking-payments/${correction.id}`, {
-                currency: correction.bookingCurrency, amount: Number(correction.amount),
-                correctionReason: correction.reason,
-            });
-            setSuccess("Payment corrected in the booking currency. Review the updated guest balance.");
+            const changes = Object.fromEntries(Object.keys(correction.original)
+                .filter((field) => correction[field] !== correction.original[field])
+                .map((field) => [field, field === "amount" ? Number(correction.amount) : correction[field]]));
+            if (Object.hasOwn(changes, "currency")) changes.amount = Number(correction.amount);
+            if (!Object.keys(changes).length) {
+                setActionError("Change at least one payment detail before saving.");
+                return;
+            }
+            if ((correction.original.status === "Refunded" || correction.original.paymentType === "Refund" ||
+                correction.status === "Refunded" || correction.paymentType === "Refund") &&
+                !hasPermission("payment.refund")) {
+                setActionError("Refund permission is required to correct this entry.");
+                return;
+            }
+            await api.put(`/booking-payments/${correction.id}`, { ...changes, correctionReason: correction.reason,
+                expectedVersion: correction.version });
+            setSuccess("Payment corrected. Review the updated guest balance and payment statement.");
             setCorrection(null);
             setRefreshKey((current) => current + 1);
+            notifyPaymentAttentionChanged();
             onChanged();
         } catch (requestError) {
             setActionError(requestError.response?.data?.message || "Could not correct this payment. Refresh and try again.");
@@ -215,7 +238,9 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                             <td>{item.booking?.customer?.fullName || "—"}</td>
                             <td>{item.status === "Refunded" ? "Refund " : "Received "}{money(item.amount, item.currency)}
                                 {item.booking?.currency !== item.currency &&
-                                    <div className="small text-danger">Booking currency {item.booking?.currency || "unknown"}. Correct the amount and currency before matching.</div>}</td>
+                                    <div className="small text-danger">Booking currency {item.booking?.currency || "unknown"}. Correct the amount and currency before matching.</div>}
+                                {(item.status === "Refunded") !== (item.paymentType === "Refund") &&
+                                    <div className="small text-danger">Type {item.paymentType} conflicts with {item.status}. Correct before issuing a statement.</div>}</td>
                             <td>{item.paymentMethod}{item.referenceNumber && <div className="small text-muted">{item.referenceNumber}</div>}</td>
                             <td>
                                 <span className={item.reconciledAt ? "text-success fw-semibold" : "text-warning-emphasis fw-semibold"}>{item.reconciledAt ? "Matched" : "To match"}</span>
@@ -228,13 +253,16 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                                 </details>}
                                 <PermissionGuard permission="payment.reconcile">
                                     <button type="button" className="btn btn-sm btn-link p-0 mt-1 d-block"
-                                        disabled={!item.reconciledAt && item.booking?.currency !== item.currency} onClick={() => openEditor(item)}>
+                                        disabled={!item.reconciledAt && (item.booking?.currency !== item.currency ||
+                                            (item.status === "Refunded") !== (item.paymentType === "Refund") ||
+                                            toCalendarDateInput(item.paymentDate) > today)} onClick={() => openEditor(item)}>
                                         {item.reconciledAt ? "Reopen match" : "Mark matched"}
                                     </button>
                                 </PermissionGuard>
-                                {!item.reconciledAt && item.booking?.currency !== item.currency && item.booking?.currency &&
-                                    <PermissionGuard all={item.status === "Refunded" ? ["payment.update", "payment.refund"] : ["payment.update"]}>
-                                        <button type="button" className="btn btn-sm btn-link p-0 mt-1 d-block" onClick={() => openCorrection(item)}>Correct currency</button>
+                                {!item.reconciledAt && item.booking?.currency &&
+                                    <PermissionGuard all={item.status === "Refunded" || item.paymentType === "Refund"
+                                        ? ["payment.update", "payment.refund"] : ["payment.update"]}>
+                                        <button type="button" className="btn btn-sm btn-link p-0 mt-1 d-block" onClick={() => openCorrection(item)}>Correct payment</button>
                                     </PermissionGuard>}
                             </td>
                         </tr>)}</tbody>
@@ -254,13 +282,42 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                     </form></PermissionGuard>}
                     {correction && <PermissionGuard permission="payment.update"><form className="border rounded p-3 mt-3" onSubmit={(event) => void saveCorrection(event)}>
                         <h6 className="fw-semibold">Correct {correction.paymentNo}</h6>
-                        <p className="small text-muted">Recorded as {money(correction.originalAmount, correction.fromCurrency)}. Enter its verified equivalent in {correction.bookingCurrency}. This changes the guest paid balance; compare the original bank transaction and agreed rate first.</p>
-                        <label className="form-label" htmlFor="guest-correction-amount">Amount in {correction.bookingCurrency}</label>
-                        <input id="guest-correction-amount" className="form-control mb-2" type="number" step="0.01" min="0.01" required value={correction.amount}
-                            onChange={(event) => setCorrection({ ...correction, amount: event.target.value })} />
+                        <p className="small text-muted">Compare the bank or cashbook entry first. Changes to amount or direction affect the guest balance. Matched records must be reopened. Refund changes require refund permission.</p>
+                        {correction.currency !== correction.original.currency && <p className="small text-danger">
+                            Recorded as {money(correction.original.amount, correction.original.currency)}. Enter the verified amount in {correction.currency}; include the original amount and agreed conversion rate in the reason.
+                        </p>}
+                        <div className="row g-2 mb-2">
+                            <div className="col-sm-6"><label className="form-label" htmlFor="guest-correction-amount">Amount in {correction.currency}</label>
+                                <input id="guest-correction-amount" className="form-control" type="number" step="0.01" min="0.01" required value={correction.amount}
+                                    onChange={(event) => setCorrection({ ...correction, amount: event.target.value })} /></div>
+                            <div className="col-sm-6"><label className="form-label" htmlFor="guest-correction-date">Payment date (Sri Lanka)</label>
+                                <input id="guest-correction-date" className="form-control" type="date" max={today} required value={correction.paymentDate}
+                                    onChange={(event) => setCorrection({ ...correction, paymentDate: event.target.value })} /></div>
+                            <div className="col-sm-6"><label className="form-label" htmlFor="guest-correction-status">Direction</label>
+                                <select id="guest-correction-status" className="form-select" value={correction.status}
+                                    onChange={(event) => setCorrection({ ...correction, status: event.target.value,
+                                        paymentType: event.target.value === "Refunded" ? "Refund" :
+                                            correction.paymentType === "Refund" ? "Partial Payment" : correction.paymentType })}>
+                                    <option value="Received">Received from guest</option><option value="Refunded" disabled={!hasPermission("payment.refund")}>Refunded to guest</option>
+                                </select></div>
+                            <div className="col-sm-6"><label className="form-label" htmlFor="guest-correction-type">Payment type</label>
+                                <select id="guest-correction-type" className="form-select" value={correction.paymentType}
+                                    onChange={(event) => setCorrection({ ...correction, paymentType: event.target.value })}>
+                                    {paymentTypes.map((type) => <option key={type} value={type}
+                                        disabled={type === "Refund" && !hasPermission("payment.refund")}>{type}</option>)}
+                                </select></div>
+                            <div className="col-sm-6"><label className="form-label" htmlFor="guest-correction-method">Method</label>
+                                <select id="guest-correction-method" className="form-select" value={correction.paymentMethod}
+                                    onChange={(event) => setCorrection({ ...correction, paymentMethod: event.target.value })}>
+                                    {paymentMethods.map((method) => <option key={method}>{method}</option>)}
+                                </select></div>
+                            <div className="col-sm-6"><label className="form-label" htmlFor="guest-correction-reference">Payment reference</label>
+                                <input id="guest-correction-reference" className="form-control" maxLength={100} value={correction.referenceNumber}
+                                    onChange={(event) => setCorrection({ ...correction, referenceNumber: event.target.value })} /></div>
+                        </div>
                         <label className="form-label" htmlFor="guest-correction-reason">Correction reason</label>
                         <textarea id="guest-correction-reason" className="form-control mb-2" minLength={3} maxLength={300} required value={correction.reason}
-                            onChange={(event) => setCorrection({ ...correction, reason: event.target.value })} placeholder="Original amount, currency, and agreed conversion rate" />
+                            onChange={(event) => setCorrection({ ...correction, reason: event.target.value })} placeholder="What was wrong and what source confirmed the correction?" />
                         <div className="d-flex gap-2"><button className="btn btn-sm btn-primary" type="submit" disabled={saving}>
                             {saving ? "Saving..." : "Save correction"}</button>
                             <button className="btn btn-sm btn-outline-secondary" type="button" disabled={saving} onClick={() => setCorrection(null)}>Cancel</button></div>

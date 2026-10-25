@@ -41,11 +41,11 @@ const authorizePaymentCreateOrRefund = (req, res, next) => {
 };
 
 const authorizePaymentUpdateOrRefund = (req, res, next) => {
-    const permission = looksLikeRefund(req.body)
-        ? PERMISSIONS.PAYMENT_REFUND
-        : PERMISSIONS.PAYMENT_UPDATE;
+    const permissions = looksLikeRefund(req.body)
+        ? [PERMISSIONS.PAYMENT_UPDATE, PERMISSIONS.PAYMENT_REFUND]
+        : [PERMISSIONS.PAYMENT_UPDATE];
 
-    return authorizePermissions(permission)(req, res, next);
+    return authorizePermissions(...permissions)(req, res, next);
 };
 
 router.post(

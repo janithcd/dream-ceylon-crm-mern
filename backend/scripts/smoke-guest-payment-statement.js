@@ -72,7 +72,44 @@ const main = async () => {
         assert.equal((await request(path, "POST", {})).status, 409);
         await Booking.updateOne({ _id: booking._id }, { $set: { advancePayment: 400 } });
         assert.equal((await request(path, "POST", {})).status, 200);
-        console.log("Guest payment statement permissions, balances, PDF and legacy review passed against MongoDB.");
+
+        // Simulate an older refund saved with a receipt type, then correct it through Finance.
+        const incorrect = await BookingPayment.create({ paymentNo: `CI-MISMATCH-${Date.now()}`,
+            booking: booking._id, amount: 10, currency: "USD", paymentDate: new Date(),
+            paymentType: "Advance", status: "Refunded", paymentMethod: "Bank Transfer",
+            notes: "PRIVATE CORRECTION NOTE" });
+        const editPath = `/booking-payments/${incorrect._id}`;
+        assert.equal((await request(path, "POST", {})).status, 409);
+        assert.equal((await request(`${editPath}/reconciliation`, "PATCH", {
+            reconciled: true, statementReference: "BANK-WRONG",
+        })).status, 409);
+        assert.equal((await request(editPath, "PUT", { paymentType: "Refund" })).status, 400);
+        assert.equal((await request(editPath, "PUT", {
+            paymentType: "Refund", correctionReason: "Checked refund against cashbook",
+        }, sales)).status, 403);
+        assert.equal((await request(editPath, "PUT", {
+            paymentType: "Refund", correctionReason: "Checked refund against cashbook",
+            expectedVersion: 999,
+        })).status, 409);
+        const corrected = await request(editPath, "PUT", {
+            paymentType: "Refund", correctionReason: "Checked refund against cashbook",
+            expectedVersion: incorrect.__v,
+        });
+        assert.equal(corrected.status, 200, `Correct refund: ${await corrected.clone().text()}`);
+        assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 390);
+        assert.equal((await request(path, "POST", {})).status, 200);
+        const audit = await ActivityLog.findOne({ relatedRecordId: incorrect._id,
+            "metadata.correctionReason": "Checked refund against cashbook" });
+        assert.equal(audit?.metadata.correctionBefore.paymentType, "Advance");
+        assert.equal(audit?.metadata.correctionAfter.paymentType, "Refund");
+        assert.equal(JSON.stringify(audit?.metadata).includes("PRIVATE CORRECTION NOTE"), false);
+        assert.equal((await request(`${editPath}/reconciliation`, "PATCH", {
+            reconciled: true, statementReference: "BANK-REFUND-CORRECT",
+        })).status, 200);
+        assert.equal((await request(editPath, "PUT", {
+            amount: 5, correctionReason: "Corrected amount",
+        })).status, 409);
+        console.log("Guest statement and audited legacy refund correction passed against MongoDB.");
     } finally {
         if (booking) {
             await BookingPayment.deleteMany({ booking: booking._id });

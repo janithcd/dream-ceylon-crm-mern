@@ -85,7 +85,9 @@ const main = async () => {
         const history = (await reopened.json()).payment.reconciliationHistory;
         assert.deepEqual(history.map((event) => event.action), ["reconciled", "reopened"]);
         assert.equal(history[1].statementReference, "BANK-42");
-        assert.equal((await request(`/booking-payments/${payment._id}`, "PUT", { amount: 275 })).status, 200);
+        assert.equal((await request(`/booking-payments/${payment._id}`, "PUT", {
+            amount: 275, correctionReason: "Checked bank deposit",
+        })).status, 200);
         assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 275);
         const refundResponse = await request("/booking-payments", "POST", {
             booking: booking._id, amount: 50, currency: "USD", paymentDate: today,

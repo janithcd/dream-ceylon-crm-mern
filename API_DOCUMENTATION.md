@@ -103,6 +103,8 @@ DELETE /booking-payments/:id
 POST   /payment-receipts/:id
 ```
 
+`PUT /booking-payments/:id` corrects an unmatched payment. Include the fields being corrected and a `correctionReason` of 3–300 characters. Send `expectedVersion` from the register row to reject stale edits. A currency correction must include the verified booking-currency `amount`, even if its numeric value is unchanged. Refund edits need both `payment.update` and `payment.refund`; a matched payment must first be reopened through `PATCH /booking-payments/:id/reconciliation`.
+
 ## Supplier Costs and Profit
 
 Requires `cost.view` for read and both `cost.view` and `cost.manage` for writes. `:type` is `quotation` or `booking`.

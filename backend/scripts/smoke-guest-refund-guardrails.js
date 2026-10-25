@@ -64,11 +64,17 @@ const main = async () => {
         assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 50);
         assert.equal((await record(payment(50.01, "Refund", "Refunded"))).status, 409);
         assert.equal((await request(`/booking-payments/${refund._id}`, "PUT", { paymentType: "Advance" })).status, 400);
-        assert.equal((await request(`/booking-payments/${receipt._id}`, "PUT", { amount: 249 })).status, 409);
+        assert.equal((await request(`/booking-payments/${receipt._id}`, "PUT", {
+            amount: 249, correctionReason: "Checked receipt amount",
+        })).status, 409);
         assert.equal((await request(`/booking-payments/${receipt._id}`, "DELETE", undefined, superAdmin)).status, 409);
-        assert.equal((await request(`/booking-payments/${refund._id}`, "PUT", { amount: 100 })).status, 200);
+        assert.equal((await request(`/booking-payments/${refund._id}`, "PUT", {
+            amount: 100, correctionReason: "Verified refund amount",
+        })).status, 200);
         assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 200);
-        assert.equal((await request(`/booking-payments/${refund._id}`, "PUT", { status: "Cancelled" })).status, 200);
+        assert.equal((await request(`/booking-payments/${refund._id}`, "PUT", {
+            status: "Cancelled", correctionReason: "Refund was not sent",
+        })).status, 200);
         assert.equal((await request(`/payment-receipts/${refund._id}`, "POST", {})).status, 409);
         assert.equal((await request("/payment-receipts/not-an-id", "POST", {})).status, 400);
         assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 300);
