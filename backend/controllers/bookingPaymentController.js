@@ -4,6 +4,7 @@ const BookingPayment = require("../models/BookingPayment");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { PERMISSIONS, resolveAdminPermissions } = require("../config/permissions");
 const { parseRegisterQuery, parseReconciliation, guestPaymentsCsv } = require("../utils/guestPaymentReconciliation");
+const { validatePaymentEntry, validateProjectedBalance } = require("../utils/bookingPaymentIntegrity");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -315,6 +316,31 @@ const buildPaymentPayload = (body, existingPayment = null) => {
     return payload;
 };
 
+const validatePaymentBalance = async (booking, previousPayment, nextPayment) => {
+    const previousBookingId = previousPayment?.booking?._id || previousPayment?.booking;
+    const bookingIds = [String(booking._id)];
+    if (previousBookingId && String(previousBookingId) !== String(booking._id)) {
+        bookingIds.push(String(previousBookingId));
+    }
+    const [bookings, payments] = await Promise.all([
+        Booking.find({ _id: { $in: bookingIds } }).select("_id currency bookingCode").lean(),
+        BookingPayment.find({ booking: { $in: bookingIds } })
+            .select("_id booking amount currency status").lean(),
+    ]);
+
+    for (const item of bookings) {
+        const id = String(item._id);
+        const error = validateProjectedBalance(
+            payments.filter((payment) => String(payment.booking) === id),
+            item.currency,
+            previousBookingId && String(previousBookingId) === id ? previousPayment : null,
+            nextPayment && String(nextPayment.booking) === id ? nextPayment : null
+        );
+        if (error) return `${item.bookingCode}: ${error}`;
+    }
+    return null;
+};
+
 // @desc    Create booking payment
 // @route   POST /api/booking-payments
 // @access  Private
@@ -352,13 +378,15 @@ const createBookingPayment = async (req, res) => {
         payload.paymentMethod = payload.paymentMethod || "Cash";
         payload.status = payload.status || "Received";
 
+        const entryError = validatePaymentEntry(payload);
+        if (entryError) return res.status(400).json({ message: entryError });
+        const balanceError = await validatePaymentBalance(booking, null, payload);
+        if (balanceError) return res.status(409).json({ message: balanceError });
+
         const payment = await BookingPayment.create(payload);
         await syncBookingPaymentSummary(booking._id);
 
-        const action =
-            payment.status === "Refunded" || payment.paymentType === "Refund"
-                ? "REFUND"
-                : "CREATE";
+        const action = payment.status === "Refunded" ? "REFUND" : "CREATE";
 
         await createActivityLog({
             req,
@@ -669,6 +697,11 @@ const updateBookingPayment = async (req, res) => {
             correctionReason = correctionReason.trim();
         }
 
+        const entryError = validatePaymentEntry(payload);
+        if (entryError) return res.status(400).json({ message: entryError });
+        const balanceError = await validatePaymentBalance(booking, payment, payload);
+        if (balanceError) return res.status(409).json({ message: balanceError });
+
         Object.assign(payment, payload);
         await payment.validate();
         const updated = await BookingPayment.findOneAndUpdate(
@@ -744,7 +777,7 @@ const deleteBookingPayment = async (req, res) => {
     try {
         const payment = await BookingPayment.findById(req.params.id).populate(
             "booking",
-            "bookingCode customer"
+            "bookingCode currency customer"
         );
 
         if (!payment) {
@@ -771,6 +804,11 @@ const deleteBookingPayment = async (req, res) => {
             status: payment.status,
             referenceNumber: payment.referenceNumber,
         };
+
+        if (payment.booking) {
+            const balanceError = await validatePaymentBalance(payment.booking, payment, null);
+            if (balanceError) return res.status(409).json({ message: balanceError });
+        }
 
         const deleted = await BookingPayment.findOneAndDelete({
             _id: payment._id, reconciledAt: null, __v: payment.__v,

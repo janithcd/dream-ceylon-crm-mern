@@ -41,8 +41,6 @@ const paymentMethodOptions = [
     "Other",
 ];
 
-const statusOptions = ["Received", "Refunded", "Cancelled"];
-
 const formatMoney = (amount, currency = "USD") => {
     const number = Number(amount);
 
@@ -98,9 +96,9 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
         ? paymentTypeOptions
         : paymentTypeOptions.filter((item) => item !== "Refund");
 
-    const availableStatusOptions = canRefundPayment
-        ? statusOptions
-        : statusOptions.filter((item) => item !== "Refunded");
+    const availableStatusOptions = formData.paymentType === "Refund"
+        ? ["Refunded", "Cancelled"]
+        : ["Received", "Cancelled"];
 
     const selectedPaymentNeedsRefundPermission =
         formData.paymentType === "Refund" || formData.status === "Refunded";
@@ -120,6 +118,13 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
             balance,
         };
     }, [currentBooking]);
+    const refundableCents = useMemo(() => payments.reduce((sum, payment) => {
+        if (payment.currency !== currentBooking?.currency) return sum;
+        const amount = Math.round(Number(payment.amount || 0) * 100);
+        if (payment.status === "Received") return sum + amount;
+        if (payment.status === "Refunded") return sum - amount;
+        return sum;
+    }, 0), [payments, currentBooking?.currency]);
     const milestones = useMemo(() => getGuestPaymentMilestones(currentBooking), [currentBooking]);
 
     const fetchPaymentHistory = async () => {
@@ -233,6 +238,10 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
 
             if (!payload.amount || payload.amount <= 0) {
                 setError("Payment amount must be greater than 0.");
+                return;
+            }
+            if (payload.status === "Refunded" && Math.round(payload.amount * 100) > refundableCents) {
+                setError(`Only ${formatMoney(Math.max(refundableCents, 0) / 100, payload.currency)} is available to refund. Refresh the payment history if it has changed.`);
                 return;
             }
 
@@ -539,10 +548,17 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                             className="form-control"
                                                             value={formData.amount}
                                                             onChange={handleChange}
-                                                            min="1"
+                                                            min="0.01"
+                                                            step="0.01"
                                                             required
                                                         />
                                                     </div>
+
+                                                    {formData.paymentType === "Refund" && formData.status === "Refunded" && (
+                                                        <div className="col-12 small text-muted">
+                                                            Available to refund: {formatMoney(Math.max(refundableCents, 0) / 100, currentBooking?.currency)}. Record a refund as a separate entry; the original receipt stays in the history.
+                                                        </div>
+                                                    )}
 
                                                     <div className="col-md-3">
                                                         <label className="form-label fw-semibold">Booking currency</label>
