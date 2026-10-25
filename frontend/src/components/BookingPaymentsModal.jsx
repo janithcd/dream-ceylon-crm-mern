@@ -1,6 +1,7 @@
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useMemo, useState } from "react";
 import {
+    FaFilePdf,
     FaPlus,
     FaReceipt,
     FaSyncAlt,
@@ -86,6 +87,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
     const [formLoading, setFormLoading] = useState(false);
     const [deleteLoadingId, setDeleteLoadingId] = useState("");
     const [receiptLoadingId, setReceiptLoadingId] = useState("");
+    const [statementLoading, setStatementLoading] = useState(false);
 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
@@ -359,6 +361,39 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
         }
     };
 
+    const handleDownloadStatement = async () => {
+        try {
+            setStatementLoading(true);
+            setError("");
+            const response = await api.post(`/booking-pdf/payment-statement/${bookingId}`, {}, {
+                responseType: "blob",
+            });
+            const fileUrl = window.URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
+            const link = document.createElement("a");
+            const cleanCode = (currentBooking?.bookingCode || booking.bookingCode || "booking")
+                .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+            link.href = fileUrl;
+            link.download = `dream-ceylon-payment-statement-${cleanCode}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(fileUrl);
+        } catch (err) {
+            let message = "Failed to download the payment statement.";
+            if (err.response?.data instanceof Blob) {
+                try {
+                    const body = JSON.parse(await err.response.data.text());
+                    message = body.message || message;
+                } catch { /* Keep the safe fallback. */ }
+            } else if (err.response?.data?.message) {
+                message = err.response.data.message;
+            }
+            setError(message);
+        } finally {
+            setStatementLoading(false);
+        }
+    };
+
     if (!booking) {
         return null;
     }
@@ -426,6 +461,13 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                     </div>
 
                                     <div className="d-flex gap-2">
+                                        <PermissionGuard all={["booking.view", "payment.view", "pdf.generate"]}>
+                                            <button type="button" className="btn btn-outline-primary"
+                                                onClick={handleDownloadStatement} disabled={statementLoading || loading}>
+                                                <FaFilePdf className="me-2" />
+                                                {statementLoading ? "Preparing..." : "Download statement"}
+                                            </button>
+                                        </PermissionGuard>
                                         <button
                                             type="button"
                                             className="btn btn-outline-success"
