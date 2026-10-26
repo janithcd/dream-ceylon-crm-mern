@@ -13,6 +13,9 @@ const emptyData = { items: [], summary: { total: 0, withActiveServices: 0 },
 const formatMoney = (amount, currency) => `${currency} ${Number(amount || 0).toLocaleString("en-US", {
     minimumFractionDigits: 2, maximumFractionDigits: 2,
 })}`;
+const formatRecordedAt = (value) => new Date(value).toLocaleString("en-GB", {
+    timeZone: "Asia/Colombo", dateStyle: "medium", timeStyle: "short",
+});
 
 const FinancialSnapshot = ({ item }) => {
     const rows = item.guestLedger || [];
@@ -110,6 +113,9 @@ const CancellationReview = () => {
                         </span>
                         <Link className="btn btn-sm btn-outline-secondary" to={`/bookings?keyword=${encodeURIComponent(item.bookingCode)}`}>Booking</Link>
                     </div>
+                </div>
+                <div className="small mt-2"><strong>Cancellation reason:</strong> {item.cancellationReason || "Not recorded for this older booking"}
+                    {item.cancelledAt && <div className="text-muted">Recorded {formatRecordedAt(item.cancelledAt)} (Sri Lanka){item.cancelledByName && ` by ${item.cancelledByName}`}</div>}
                 </div>
                 {item.activeServiceCount > 0 && <div className="row g-2 mt-2">
                     {item.activeHotels.map((stay) => <div className="col-md-6" key={stay._id}>

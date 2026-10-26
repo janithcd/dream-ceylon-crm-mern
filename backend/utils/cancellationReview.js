@@ -57,7 +57,8 @@ const buildCancellationReviewPipeline = ({ filter = "open", page = 1, includeFin
         { $match: { bookingStatus: "Cancelled" } },
         { $project: {
             bookingCode: 1, customerName: "$customer.fullName", travelStartDate: 1,
-            updatedAt: 1, activeHotels: active("hotelStays", "hotelName", "checkInDate"),
+            updatedAt: 1, cancellationReason: 1, cancelledAt: 1, cancelledByName: 1,
+            activeHotels: active("hotelStays", "hotelName", "checkInDate"),
             activeTransport: active("transportAssignments", "route", "startDate"),
             ...(includeFinance ? { currency: 1, bookedPaidAmount: "$advancePayment" } : {}),
         } },

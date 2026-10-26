@@ -7,6 +7,7 @@ const { createActivityLog } = require("../utils/createActivityLog");
 const { parsePaymentDueDate } = require("../utils/paymentDueDate");
 const { parseGuestPaymentPlan } = require("../utils/guestPaymentPlan");
 const { itineraryFitsTrip } = require("../utils/bookingItinerary");
+const { planBookingCancellation, normalizeReason } = require("../utils/bookingCancellation");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -244,6 +245,10 @@ const markInquiryConverted = async (inquiryId) => {
 const createBooking = async (req, res) => {
     try {
         const payload = buildBookingPayload(req.body);
+        const cancellation = planBookingCancellation({ nextStatus: payload.bookingStatus,
+            reason: req.body?.cancellationReason, admin: req.admin });
+        if (cancellation.error) return res.status(400).json({ message: cancellation.error });
+        Object.assign(payload, cancellation.fields);
 
         if (Object.hasOwn(req.body || {}, "paymentDueDate")) {
             const parsed = parsePaymentDueDate(req.body.paymentDueDate);
@@ -274,7 +279,9 @@ const createBooking = async (req, res) => {
             req,
             action: "CREATE",
             module: "Booking",
-            description: `Booking ${booking.bookingCode} was created for ${booking.customer.fullName}`,
+            description: cancellation.event === "cancelled"
+                ? `Booking ${booking.bookingCode} was created as cancelled. Reason: ${booking.cancellationReason}`
+                : `Booking ${booking.bookingCode} was created for ${booking.customer.fullName}`,
             relatedRecordId: booking._id,
             relatedModel: "Booking",
             referenceNo: booking.bookingCode,
@@ -287,6 +294,8 @@ const createBooking = async (req, res) => {
                 totalPrice: booking.totalPrice,
                 currency: booking.currency,
                 bookingStatus: booking.bookingStatus,
+                cancellationReason: booking.cancellationReason,
+                cancelledAt: booking.cancelledAt,
                 paymentStatus: booking.paymentStatus,
                 paymentDueDate: booking.paymentDueDate,
                 hotelAdvanceAmount: booking.hotelAdvanceAmount,
@@ -381,6 +390,20 @@ const updateBooking = async (req, res) => {
         }
 
         const payload = buildBookingPayload(req.body, booking);
+        const previousStatus = booking.bookingStatus;
+        if (Object.hasOwn(req.body || {}, "expectedBookingStatus") &&
+            req.body.expectedBookingStatus !== previousStatus) {
+            return res.status(409).json({ message: "The booking status changed. Refresh the booking before saving." });
+        }
+        const cancellation = planBookingCancellation({ currentStatus: previousStatus,
+            nextStatus: payload.bookingStatus, reason: req.body?.cancellationReason, admin: req.admin });
+        if (cancellation.error) return res.status(400).json({ message: cancellation.error });
+        if (previousStatus === "Cancelled" && payload.bookingStatus === "Cancelled" &&
+            Object.hasOwn(req.body || {}, "cancellationReason") &&
+            normalizeReason(req.body.cancellationReason) !== booking.cancellationReason) {
+            return res.status(400).json({ message: "A saved cancellation reason cannot be changed through booking edits." });
+        }
+        Object.assign(payload, cancellation.fields);
 
         if (Object.hasOwn(req.body || {}, "paymentDueDate")) {
             const parsed = parsePaymentDueDate(req.body.paymentDueDate);
@@ -439,9 +462,14 @@ const updateBooking = async (req, res) => {
 
         await createActivityLog({
             req,
-            action: "UPDATE",
+            action: cancellation.event === "cancelled" ? "CANCEL" :
+                cancellation.event === "reopened" ? "RESTORE" : "UPDATE",
             module: "Booking",
-            description: `Booking ${booking.bookingCode} was updated`,
+            description: cancellation.event === "cancelled"
+                ? `Booking ${booking.bookingCode} was cancelled. Reason: ${booking.cancellationReason}`
+                : cancellation.event === "reopened"
+                    ? `Booking ${booking.bookingCode} was reopened`
+                    : `Booking ${booking.bookingCode} was updated`,
             relatedRecordId: booking._id,
             relatedModel: "Booking",
             referenceNo: booking.bookingCode,
@@ -454,6 +482,9 @@ const updateBooking = async (req, res) => {
                 advancePayment: booking.advancePayment,
                 currency: booking.currency,
                 bookingStatus: booking.bookingStatus,
+                previousBookingStatus: previousStatus,
+                cancellationReason: cancellation.event === "cancelled" ? booking.cancellationReason : undefined,
+                cancelledAt: cancellation.event === "cancelled" ? booking.cancelledAt : undefined,
                 paymentStatus: booking.paymentStatus,
                 paymentDueDate: booking.paymentDueDate,
                 hotelAdvanceAmount: booking.hotelAdvanceAmount,

@@ -258,6 +258,11 @@ const bookingSchema = new mongoose.Schema(
             default: "Pending",
         },
 
+        cancellationReason: { type: String, trim: true, maxlength: 300, default: "" },
+        cancelledAt: { type: Date, default: null },
+        cancelledBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+        cancelledByName: { type: String, trim: true, maxlength: 120, default: "" },
+
         specialRequests: {
             type: String,
             default: "",

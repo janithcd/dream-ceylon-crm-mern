@@ -5,6 +5,7 @@ const Admin = require("../models/Admin");
 const Booking = require("../models/Booking");
 const BookingPayment = require("../models/BookingPayment");
 const CostEntry = require("../models/CostEntry");
+const ActivityLog = require("../models/ActivityLog");
 
 const main = async () => {
     if (process.env.CI_SMOKE_TESTS !== "true") throw new Error("This smoke test must be explicitly enabled in CI");
@@ -69,12 +70,58 @@ const main = async () => {
             [["Received", 200], ["Refunded", 50]].sort());
         assert.ok(financeData.items.some((item) => item._id === String(settled._id)));
         assert.equal(financeData.items.some((item) => item.bookingCode === `${code}-ACTIVE`), false);
+        const change = (body) => fetch(`http://127.0.0.1:5000/api/bookings/${bookings[2]._id}`, {
+            method: "PUT", headers: { Authorization: `Bearer ${jwt.sign({ id: sales._id, v: 0 }, process.env.JWT_SECRET)}`,
+                "Content-Type": "application/json" }, body: JSON.stringify(body),
+        });
+        assert.equal((await change({ bookingStatus: "Cancelled", expectedBookingStatus: "Confirmed" })).status, 400);
+        assert.equal((await change({ bookingStatus: "Cancelled", cancellationReason: "too short",
+            expectedBookingStatus: "Confirmed" })).status, 400);
+        const reason = "Guests changed travel dates and cancelled the trip";
+        const cancelled = await change({ bookingStatus: "Cancelled", cancellationReason: reason,
+            expectedBookingStatus: "Confirmed" });
+        assert.equal(cancelled.status, 200, await cancelled.clone().text());
+        const cancelledBooking = (await cancelled.json()).booking;
+        assert.equal(cancelledBooking.cancellationReason, reason);
+        assert.equal(cancelledBooking.cancelledByName, sales.name);
+        assert.ok(cancelledBooking.cancelledAt);
+        assert.equal((await change({ bookingStatus: "Confirmed", expectedBookingStatus: "Confirmed" })).status, 409);
+        assert.equal((await change({ bookingStatus: "Cancelled", cancellationReason: "Changed without an audit reason",
+            expectedBookingStatus: "Cancelled" })).status, 400);
+        const salesQueue = await (await request(sales, "?filter=open")).json();
+        assert.ok(salesQueue.items.some((item) => item._id === String(bookings[2]._id) &&
+            item.cancellationReason === reason && item.cancelledByName === sales.name));
+        const audit = await ActivityLog.findOne({ relatedRecordId: bookings[2]._id, action: "CANCEL" });
+        assert.equal(audit?.metadata.cancellationReason, reason);
+        const reopened = await change({ bookingStatus: "Confirmed", expectedBookingStatus: "Cancelled" });
+        assert.equal(reopened.status, 200, await reopened.clone().text());
+        assert.equal((await reopened.json()).booking.cancellationReason, "");
+        assert.equal((await Booking.findById(bookings[2]._id)).cancelledAt, null);
+        assert.ok(await ActivityLog.findOne({ relatedRecordId: bookings[2]._id, action: "RESTORE" }));
+        assert.equal((await ActivityLog.findById(audit._id)).metadata.cancellationReason, reason);
+        const newCancelled = (cancellationReason) => fetch("http://127.0.0.1:5000/api/bookings", {
+            method: "POST", headers: { Authorization: `Bearer ${jwt.sign({ id: sales._id, v: 0 }, process.env.JWT_SECRET)}`,
+                "Content-Type": "application/json" },
+            body: JSON.stringify({ bookingStatus: "Cancelled", cancellationReason,
+                customer: { fullName: "CI Cancelled Guest", email: "cancelled@example.invalid",
+                    whatsappNumber: "+94771234567", country: "UK" },
+                travelStartDate: "2027-05-01", travelEndDate: "2027-05-03",
+                numberOfTravelers: 2, totalPrice: 500, currency: "USD" }),
+        });
+        assert.equal((await newCancelled()).status, 400);
+        const createdCancelled = await newCancelled("Trip withdrawn before arrangements began");
+        assert.equal(createdCancelled.status, 201, await createdCancelled.clone().text());
+        const createdBooking = (await createdCancelled.json()).booking;
+        bookings.push(createdBooking);
+        assert.equal(createdBooking.cancellationReason, "Trip withdrawn before arrangements began");
+        assert.equal(createdBooking.cancelledByName, sales.name);
         console.log("Cancellation review filters live arrangements and protects finance snapshots.");
     } finally {
         const ids = bookings.map((booking) => booking._id);
         if (ids.length) {
             await BookingPayment.deleteMany({ booking: { $in: ids } });
             await CostEntry.deleteMany({ recordType: "Booking", recordId: { $in: ids } });
+            await ActivityLog.deleteMany({ relatedRecordId: { $in: ids } });
             await Booking.deleteMany({ _id: { $in: ids } });
         }
         if (admins.length) await Admin.deleteMany({ _id: { $in: admins.map((admin) => admin._id) } });

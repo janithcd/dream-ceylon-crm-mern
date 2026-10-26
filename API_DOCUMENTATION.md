@@ -94,6 +94,8 @@ POST   /booking-pdf/receipt/:id
 
 The cancellation review requires `booking.view`. `filter=open` (default) lists cancelled trips with requested or confirmed hotel/transport arrangements, while `filter=all` includes every cancelled trip. Pages are 1–1000, 20 bookings each. The response gives `summary.total`, `summary.withActiveServices`, and sanitized active arrangement details. Staff with **both** `payment.view` and `cost.view` additionally receive `bookedPaidAmount`, `currency`, `guestLedger` grouped by payment currency/status (excluding cancelled records), and `supplierCosts` grouped by supplier currency. Lookups run only for the selected page. The response is not cached; amounts are recorded history and do not establish a cancellation fee or refund obligation.
 
+Creating a booking as `Cancelled` or changing an existing booking into `Cancelled` requires `cancellationReason` (10–300 characters). The server stores `cancelledAt`, `cancelledBy`, and `cancelledByName` and records the reason in booking activity. `PUT /bookings/:id` can include `expectedBookingStatus` to reject a stale edit with HTTP 409; the booking form sends it automatically. A later edit while the booking stays cancelled preserves the reason. Reopening clears the current cancellation fields, but the older cancellation remains in the activity log. Older cancelled bookings without a reason remain editable. Hotel/transport statuses and payments are separate records and are not changed automatically.
+
 ## Payments
 
 ```http

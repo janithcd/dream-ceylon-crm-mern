@@ -57,6 +57,7 @@ const initialFormState = {
     paymentDueDate: "",
     paymentStatus: "Pending",
     bookingStatus: "Pending",
+    cancellationReason: "",
     specialRequests: "",
     adminNotes: "",
 };
@@ -74,6 +75,8 @@ const Bookings = () => {
     const [formData, setFormData] = useState(initialFormState);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState(null);
+    const [originalBookingStatus, setOriginalBookingStatus] = useState(null);
+    const [cancellationDetails, setCancellationDetails] = useState(null);
     const [selectedPaymentBooking, setSelectedPaymentBooking] = useState(null);
     const [selectedPreparationBooking, setSelectedPreparationBooking] = useState(null);
     const [selectedHotelBooking, setSelectedHotelBooking] = useState(null);
@@ -261,6 +264,8 @@ const Bookings = () => {
     const resetForm = () => {
         setFormData(initialFormState);
         setEditingId(null);
+        setOriginalBookingStatus(null);
+        setCancellationDetails(null);
         setShowForm(false);
     };
 
@@ -281,6 +286,10 @@ const Bookings = () => {
                 advancePayment: Number(formData.advancePayment),
                 hotelAdvanceAmount: Number(formData.hotelAdvanceAmount),
             };
+            const enteringCancellation = formData.bookingStatus === "Cancelled" &&
+                originalBookingStatus !== "Cancelled";
+            if (!enteringCancellation) delete payload.cancellationReason;
+            if (editingId) payload.expectedBookingStatus = originalBookingStatus;
 
             if (editingId) {
                 await api.put(`/bookings/${editingId}`, payload);
@@ -304,6 +313,8 @@ const Bookings = () => {
 
     const handleEdit = (booking) => {
         setEditingId(booking._id);
+        setOriginalBookingStatus(booking.bookingStatus);
+        setCancellationDetails({ at: booking.cancelledAt, by: booking.cancelledByName });
 
         setFormData({
             inquiry: booking.inquiry?._id || "",
@@ -326,6 +337,7 @@ const Bookings = () => {
             paymentDueDate: toCalendarDateInput(booking.paymentDueDate),
             paymentStatus: booking.paymentStatus || "Pending",
             bookingStatus: booking.bookingStatus || "Pending",
+            cancellationReason: booking.cancellationReason || "",
             specialRequests: booking.specialRequests || "",
             adminNotes: booking.adminNotes || "",
         });
@@ -529,6 +541,8 @@ const Bookings = () => {
                             onClick={() => {
                                 setShowForm((prev) => !prev);
                                 setEditingId(null);
+                                setOriginalBookingStatus(null);
+                                setCancellationDetails(null);
                                 setFormData(initialFormState);
                             }}
                         >
@@ -829,6 +843,27 @@ const Bookings = () => {
                                         disabled
                                     />
                                 </div>
+
+                                {formData.bookingStatus === "Cancelled" && originalBookingStatus !== "Cancelled" &&
+                                    <div className="col-12">
+                                        <label className="form-label fw-semibold" htmlFor="booking-cancellation-reason">Cancellation reason *</label>
+                                        <textarea id="booking-cancellation-reason" name="cancellationReason" className="form-control" rows="2"
+                                            value={formData.cancellationReason} onChange={handleChange}
+                                            minLength={10} maxLength={300} required
+                                            placeholder="Record why the trip was cancelled" />
+                                        <small className="text-muted">This reason appears in booking history. Review hotel, transport and finance separately after saving.</small>
+                                    </div>}
+                                {formData.bookingStatus === "Cancelled" && originalBookingStatus === "Cancelled" &&
+                                    <div className="col-12"><div className="alert alert-secondary mb-0 small">
+                                        <strong>Cancellation:</strong> {formData.cancellationReason || "No reason recorded for this older booking."}
+                                        {cancellationDetails?.at && <div>Recorded {new Date(cancellationDetails.at).toLocaleString("en-GB", {
+                                            timeZone: "Asia/Colombo", dateStyle: "medium", timeStyle: "short",
+                                        })} (Sri Lanka) {cancellationDetails.by && `by ${cancellationDetails.by}`}</div>}
+                                    </div></div>}
+                                {originalBookingStatus === "Cancelled" && formData.bookingStatus !== "Cancelled" &&
+                                    <div className="col-12"><div className="alert alert-info mb-0 small">
+                                        Reopening clears the current cancellation details; the earlier reason remains in booking history.
+                                    </div></div>}
 
                                 <div className="col-12">
                                     <label className="form-label fw-semibold">
