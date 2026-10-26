@@ -1,6 +1,7 @@
 const { formatDocumentDate } = require("./documentDate");
 const { getBusinessDayBounds } = require("./businessDate");
 const { ACTIVE_BOOKING_STATUSES } = require("./myTasks");
+const { roomingPlanState } = require("./roomingPlan");
 
 const oneLine = (value) => String(value || "").replace(/\s+/gu, " ").trim();
 const day = (value) => {
@@ -49,9 +50,11 @@ const buildHotelRoomingDetails = (booking, stay, company = {}) => {
         hotelReference: oneLine(stay.confirmationNumber),
         recipient: oneLine(stay.supplierEmail),
         travelerNames: names.map(oneLine),
+        rosterVersion: booking.travelerRosterVersion ?? 0,
         companyName: oneLine(company.companyName) || "Dream Ceylon Journeys",
         companyEmail: oneLine(company.email),
         missingDetails,
+        roomingPlan: roomingPlanState(booking, stay),
     } };
 };
 

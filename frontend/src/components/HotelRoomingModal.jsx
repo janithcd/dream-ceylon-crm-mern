@@ -9,6 +9,7 @@ const HotelRoomingModal = ({ bookingId, stayId, onClose, onOpenRoster }) => {
     const [assignments, setAssignments] = useState([]);
     const [draft, setDraft] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [status, setStatus] = useState("");
     const [reloadKey, setReloadKey] = useState(0);
@@ -22,7 +23,7 @@ const HotelRoomingModal = ({ bookingId, stayId, onClose, onOpenRoster }) => {
             .then(({ data }) => {
                 if (!active) return;
                 setDetails(data);
-                setAssignments(data.travelerNames.map(() => ""));
+                setAssignments(data.roomingPlan.status === "current" ? data.roomingPlan.assignments : data.travelerNames.map(() => ""));
             })
             .catch((err) => { if (active) setError(err.response?.data?.message || "Failed to load rooming details."); })
             .finally(() => { if (active) setLoading(false); });
@@ -62,15 +63,18 @@ const HotelRoomingModal = ({ bookingId, stayId, onClose, onOpenRoster }) => {
         };
     }, []);
 
-    const hasWork = assignments.some(Boolean) || Boolean(draft);
+    const savedAssignments = details?.roomingPlan?.status === "current"
+        ? details.roomingPlan.assignments : details?.travelerNames.map(() => "") || [];
+    const dirty = JSON.stringify(assignments) !== JSON.stringify(savedAssignments);
+    const hasWork = dirty || Boolean(draft);
     const close = () => {
-        if (hasWork && !window.confirm("Discard this unsaved room grouping and email draft?")) return;
+        if (busy || (hasWork && !window.confirm("Discard the unsaved room changes or email draft?"))) return;
         onClose();
     };
     closeRef.current = close;
 
     const reload = () => {
-        if (hasWork && !window.confirm("Discard this room grouping and load the latest saved details?")) return;
+        if (busy || (hasWork && !window.confirm("Discard unsaved changes and load the latest saved details?"))) return;
         setDetails(null);
         setAssignments([]);
         setDraft(null);
@@ -80,6 +84,7 @@ const HotelRoomingModal = ({ bookingId, stayId, onClose, onOpenRoster }) => {
         setReloadKey((value) => value + 1);
     };
     const setRoom = (index, room) => {
+        if (busy) return;
         if (draft && !window.confirm("Changing a room group will clear the prepared email. Continue?")) return;
         setAssignments((previous) => previous.map((entry, position) => position === index ? room : entry));
         setDraft(null);
@@ -87,12 +92,76 @@ const HotelRoomingModal = ({ bookingId, stayId, onClose, onOpenRoster }) => {
         setError("");
     };
     const prepared = details ? buildHotelRoomingEmail(details, assignments) : null;
-    const prepare = () => {
-        if (prepared?.error) { setError(prepared.error); return; }
-        if (draft && !window.confirm("Replace the edited email with a fresh rooming draft?")) return;
+    const planUrl = `/bookings/${bookingId}/hotel-stays/${stayId}/rooming-plan`;
+    const detailsUrl = `/bookings/${bookingId}/hotel-stays/${stayId}/rooming-details`;
+    const savePlan = async () => {
+        if (busy || !prepared?.value || !details) return;
+        setBusy(true);
         setError("");
         setStatus("");
-        setDraft(prepared.value);
+        try {
+            const { data } = await api.put(planUrl, {
+                assignments,
+                expectedRosterVersion: details.rosterVersion,
+                expectedRooms: details.rooms,
+                expectedRevision: details.roomingPlan.revision,
+            });
+            setDetails((previous) => ({ ...previous, roomingPlan: data.roomingPlan }));
+            setAssignments(data.roomingPlan.assignments);
+            setDraft(null);
+            setStatus("Rooming plan saved. You can now prepare the supplier email.");
+        } catch (err) {
+            setError(err.response?.data?.message || "Failed to save the rooming plan. Reload and try again.");
+        } finally {
+            setBusy(false);
+        }
+    };
+    const clearPlan = async () => {
+        if (busy || !details || details.roomingPlan.status === "none" ||
+            !window.confirm("Clear this saved hotel rooming plan?")) return;
+        setBusy(true);
+        setError("");
+        setStatus("");
+        try {
+            const { data } = await api.delete(planUrl, { data: { expectedRevision: details.roomingPlan.revision } });
+            setDetails((previous) => ({ ...previous, roomingPlan: data.roomingPlan }));
+            setAssignments(details.travelerNames.map(() => ""));
+            setDraft(null);
+            setStatus("Saved rooming plan cleared.");
+        } catch (err) {
+            setError(err.response?.data?.message || "Failed to clear the rooming plan. Reload and try again.");
+        } finally {
+            setBusy(false);
+        }
+    };
+    const prepare = async () => {
+        if (busy || dirty || details?.roomingPlan.status !== "current" || prepared?.error) return;
+        if (draft && !window.confirm("Replace the edited email with a fresh rooming draft?")) return;
+        setBusy(true);
+        setError("");
+        setStatus("");
+        try {
+            const { data } = await api.get(detailsUrl);
+            if (data.roomingPlan.status !== "current" ||
+                data.roomingPlan.revision !== details.roomingPlan.revision ||
+                data.rosterVersion !== details.rosterVersion || data.rooms !== details.rooms) {
+                setDetails(data);
+                setAssignments(data.roomingPlan.status === "current" ? data.roomingPlan.assignments : data.travelerNames.map(() => ""));
+                setDraft(null);
+                setError("The hotel or traveler roster changed. Review and save the rooming plan again.");
+                return;
+            }
+            const result = buildHotelRoomingEmail(data, data.roomingPlan.assignments);
+            if (result.error) { setError(result.error); return; }
+            setDetails(data);
+            setAssignments(data.roomingPlan.assignments);
+            setDraft(result.value);
+        } catch (err) {
+            setDraft(null);
+            setError(err.response?.data?.message || "Failed to refresh rooming details.");
+        } finally {
+            setBusy(false);
+        }
     };
     const edit = (field, value) => {
         setDraft((current) => ({ ...current, [field]: value }));
@@ -127,12 +196,14 @@ const HotelRoomingModal = ({ bookingId, stayId, onClose, onOpenRoster }) => {
                         {!loading && !details && <div className="d-flex gap-2"><button type="button" className="btn btn-outline-primary" onClick={reload}>Try again</button>{error.toLowerCase().includes("traveler roster") && <button type="button" className="btn btn-outline-secondary" onClick={onOpenRoster}>Open traveler roster</button>}</div>}
                         {!loading && details && <>
                             <p className="small mb-1"><strong>{details.hotelName}</strong> · {details.checkIn} – {details.checkOut} · {details.rooms} {details.rooms === 1 ? "room" : "rooms"}</p>
-                            <p className="text-muted small">{included} of {details.travelerNames.length} travelers selected for this hotel. Every traveler needs a choice and every reserved room group needs an occupant. Selections are not saved. <button type="button" className="btn btn-link btn-sm p-0" onClick={() => { if (!hasWork || window.confirm("Discard this room grouping and open the traveler roster?")) onOpenRoster(); }}>Edit traveler roster</button></p>
+                            <p className="text-muted small">{included} of {details.travelerNames.length} travelers selected for this hotel. Every traveler needs a choice and every reserved room group needs an occupant. <button type="button" className="btn btn-link btn-sm p-0" disabled={busy} onClick={() => { if (!hasWork || window.confirm("Discard unsaved changes and open the traveler roster?")) onOpenRoster(); }}>Edit traveler roster</button></p>
+                            {details.roomingPlan.status === "stale" && <div className="alert alert-warning small">The saved rooming plan needs review because the traveler roster or reserved room count changed. Choose each room group again and save.</div>}
+                            {details.roomingPlan.status === "current" && <p className="small text-success">Saved plan loaded{details.roomingPlan.savedByName ? ` by ${details.roomingPlan.savedByName}` : ""}. Review it before emailing the hotel.</p>}
                             {details.missingDetails.length > 0 && <div className="alert alert-warning small">Missing from the saved stay: {details.missingDetails.join(", ")}. Add or review these details before sending.</div>}
                             <div className="d-grid gap-2 mb-3">
                                 {details.travelerNames.map((name, index) => <div className="row align-items-center g-2" key={index}>
                                     <label className="col-sm-7 text-break" htmlFor={`rooming-guest-${index}`}>{index + 1}. {name}</label>
-                                    <div className="col-sm-5"><select id={`rooming-guest-${index}`} className="form-select form-select-sm" value={assignments[index] || ""} onChange={(event) => setRoom(index, event.target.value)}>
+                                    <div className="col-sm-5"><select id={`rooming-guest-${index}`} className="form-select form-select-sm" value={assignments[index] || ""} onChange={(event) => setRoom(index, event.target.value)} disabled={busy}>
                                         <option value="">Choose a room group</option>
                                         {Array.from({ length: details.rooms }, (_, room) => <option value={String(room + 1)} key={room}>Room group {room + 1}</option>)}
                                         <option value="not-staying">Not staying at this hotel</option>
@@ -140,7 +211,12 @@ const HotelRoomingModal = ({ bookingId, stayId, onClose, onOpenRoster }) => {
                                 </div>)}
                             </div>
                             {!prepared?.value && <p className="text-muted small">{prepared?.error}</p>}
-                            <button type="button" className="btn btn-primary btn-sm" onClick={prepare} disabled={!prepared?.value}>{draft ? "Regenerate email" : "Prepare rooming email"}</button>
+                            <div className="d-flex flex-wrap gap-2">
+                                <button type="button" className="btn btn-primary btn-sm" onClick={savePlan} disabled={busy || !prepared?.value || (!dirty && details.roomingPlan.status === "current")}>{busy ? "Saving or loading..." : "Save rooming plan"}</button>
+                                <button type="button" className="btn btn-outline-primary btn-sm" onClick={prepare} disabled={busy || dirty || details.roomingPlan.status !== "current" || !prepared?.value}>{draft ? "Regenerate email" : "Prepare rooming email"}</button>
+                                {details.roomingPlan.status !== "none" && <button type="button" className="btn btn-outline-danger btn-sm" onClick={clearPlan} disabled={busy}>Clear saved plan</button>}
+                            </div>
+                            {prepared?.value && (dirty || details.roomingPlan.status !== "current") && <p className="text-muted small mt-2">Save the rooming plan before preparing an email. Saving records the groups, but does not contact the hotel.</p>}
                             {draft && <div className="border-top mt-4 pt-3">
                                 <p className="text-muted small">Review the guest names, room groups, dates, and recipient. Drafting or opening an email app does not send or log a message in the CRM.</p>
                                 <label htmlFor="rooming-recipient" className="form-label fw-semibold">Supplier email</label>
@@ -155,8 +231,8 @@ const HotelRoomingModal = ({ bookingId, stayId, onClose, onOpenRoster }) => {
                         </>}
                     </div>
                     <div className="modal-footer flex-wrap">
-                        <button type="button" className="btn btn-outline-secondary" onClick={reload} disabled={loading}>Reload details</button>
-                        <button type="button" className="btn btn-outline-secondary" onClick={close}>Close</button>
+                        <button type="button" className="btn btn-outline-secondary" onClick={reload} disabled={loading || busy}>Reload details</button>
+                        <button type="button" className="btn btn-outline-secondary" onClick={close} disabled={busy}>Close</button>
                         {draft && <>
                             <button type="button" className="btn btn-outline-secondary" onClick={copy} disabled={!draft.body.trim()}><FaCopy className="me-2" />Copy email</button>
                             {mailto && <a className="btn btn-primary" href={mailto}><FaEnvelope className="me-2" />Open email app</a>}

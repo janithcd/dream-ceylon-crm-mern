@@ -97,6 +97,15 @@ const supplierContactSchema = new mongoose.Schema({
     nextFollowUpDate: { type: Date, default: null },
 });
 
+const roomingPlanSchema = new mongoose.Schema({
+    assignments: { type: [String], required: true },
+    rosterVersion: { type: Number, required: true, min: 0 },
+    roomCount: { type: Number, required: true, min: 1, max: 20 },
+    savedAt: { type: Date, required: true },
+    savedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+    savedByName: { type: String, trim: true, maxlength: 120, default: "" },
+}, { _id: false });
+
 const hotelStaySchema = new mongoose.Schema({
     hotelName: { type: String, required: true, trim: true, maxlength: 120 },
     location: { type: String, trim: true, maxlength: 120, default: "" },
@@ -114,6 +123,8 @@ const hotelStaySchema = new mongoose.Schema({
     followUpDate: { type: Date, default: null },
     contacts: { type: [supplierContactSchema], default: [] },
     confirmationNumber: { type: String, trim: true, maxlength: 100, default: "" },
+    roomingPlan: { type: roomingPlanSchema, default: null },
+    roomingRevision: { type: Number, min: 0, default: 0 },
     cancellationDeadline: { type: Date, default: null },
     cancellationTerms: { type: String, trim: true, maxlength: 300, default: "" },
     notes: { type: String, trim: true, maxlength: 500, default: "" },

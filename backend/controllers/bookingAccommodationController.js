@@ -64,10 +64,12 @@ const updateHotelStay = async (req, res) => {
         const fields = Object.fromEntries(
             Object.entries(value).map(([key, fieldValue]) => [`hotelStays.$.${key}`, fieldValue])
         );
+        // A cancelled or re-requested stay must not retain an approved rooming plan.
+        if (existing.status !== value.status) fields["hotelStays.$.roomingPlan"] = null;
 
         const booking = await Booking.findOneAndUpdate(
             { _id: req.params.id, "hotelStays._id": req.params.stayId },
-            { $set: fields },
+            { $set: fields, ...(existing.status !== value.status ? { $inc: { "hotelStays.$.roomingRevision": 1 } } : {}) },
             { new: true, runValidators: true }
         );
         if (!booking) return res.status(404).json({ message: "Hotel stay not found" });

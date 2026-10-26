@@ -26,7 +26,9 @@ const main = async () => {
                 supplierEmail: "reservations@example.invalid", confirmationNumber: "CI-REF" }],
         });
         // Existing bookings do not have the roster version field.
-        await Booking.collection.updateOne({ _id: booking._id }, { $unset: { travelerRosterVersion: "" } });
+        await Booking.collection.updateOne({ _id: booking._id }, {
+            $unset: { travelerRosterVersion: "", "hotelStays.0.roomingRevision": "" },
+        });
         const url = `http://127.0.0.1:5000/api/bookings/${booking._id}`;
         const request = (admin, path, method = "GET", body) => fetch(path, {
             method, headers: { Authorization: `Bearer ${jwt.sign({ id: admin._id, v: 0 }, process.env.JWT_SECRET)}`,
@@ -56,18 +58,64 @@ const main = async () => {
         assert.equal(rooming.headers.get("cache-control"), "no-store");
         const roomingDetails = await rooming.json();
         assert.deepEqual(roomingDetails.travelerNames, ["First Traveler", "Second Traveler"]);
+        assert.equal(roomingDetails.roomingPlan.status, "none");
+        assert.equal(roomingDetails.rosterVersion, 1);
         assert.equal(roomingDetails.recipient, "reservations@example.invalid");
         assert.ok(!JSON.stringify(roomingDetails).includes("roster@example.invalid"));
         assert.ok(!JSON.stringify(roomingDetails).includes("600"));
+        const planUrl = `${url}/hotel-stays/${booking.hotelStays[0]._id}/rooming-plan`;
+        const firstPlan = { assignments: ["1", "not-staying"], expectedRosterVersion: 1,
+            expectedRooms: 1, expectedRevision: 0 };
+        assert.equal((await request(viewer, planUrl, "PUT", firstPlan)).status, 403);
+        const savedPlan = await request(sales, planUrl, "PUT", firstPlan);
+        assert.equal(savedPlan.status, 200, await savedPlan.clone().text());
+        assert.deepEqual((await savedPlan.json()).roomingPlan.assignments, ["1", "not-staying"]);
+        assert.equal((await request(sales, planUrl, "PUT", firstPlan)).status, 409);
+        assert.equal((await request(viewer, planUrl, "DELETE", { expectedRevision: 1 })).status, 403);
+        const rosterChanged = await request(sales, `${url}/travelers`, "PUT", {
+            expectedVersion: 1, expectedHeadcount: 2, travelerNames: ["Updated Traveler", "Second Traveler"],
+        });
+        assert.equal(rosterChanged.status, 200, await rosterChanged.clone().text());
+        const stalePlan = (await (await request(sales, roomingUrl)).json()).roomingPlan;
+        assert.equal(stalePlan.status, "stale");
+        assert.deepEqual(stalePlan.assignments, []);
+        assert.equal((await request(sales, planUrl, "PUT", {
+            ...firstPlan, expectedRevision: 1,
+        })).status, 409);
+        const revisedPlan = await request(sales, planUrl, "PUT", {
+            ...firstPlan, expectedRosterVersion: 2, expectedRevision: 1,
+        });
+        assert.equal(revisedPlan.status, 200, await revisedPlan.clone().text());
+        assert.equal((await revisedPlan.json()).roomingPlan.revision, 2);
+        const hotelUrl = `${url}/hotel-stays/${booking.hotelStays[0]._id}`;
+        assert.equal((await request(sales, hotelUrl, "PUT", { rooms: 2 })).status, 200);
+        assert.equal((await (await request(sales, roomingUrl)).json()).roomingPlan.status, "stale");
+        const twoRooms = await request(sales, planUrl, "PUT", {
+            assignments: ["1", "2"], expectedRosterVersion: 2, expectedRooms: 2, expectedRevision: 2,
+        });
+        assert.equal(twoRooms.status, 200, await twoRooms.clone().text());
+        assert.equal((await twoRooms.json()).roomingPlan.status, "current");
+        const cleared = await request(sales, planUrl, "DELETE", { expectedRevision: 3 });
+        assert.equal(cleared.status, 200, await cleared.clone().text());
+        assert.equal((await cleared.json()).roomingPlan.revision, 4);
+        assert.equal((await request(sales, planUrl, "DELETE", { expectedRevision: 3 })).status, 409);
+        assert.equal((await request(sales, planUrl, "PUT", {
+            assignments: ["1", "2"], expectedRosterVersion: 2, expectedRooms: 2, expectedRevision: 4,
+        })).status, 200);
+        assert.equal((await request(sales, hotelUrl, "PUT", { status: "Cancelled" })).status, 200);
+        const cancelledStay = (await Booking.findById(booking._id)).hotelStays[0];
+        assert.equal(cancelledStay.roomingPlan, null);
+        assert.equal(cancelledStay.roomingRevision, 6);
+        assert.equal((await request(sales, roomingUrl)).status, 409);
         assert.equal((await request(sales, `${url}/travelers`, "PUT", {
             expectedVersion: 0, expectedHeadcount: 2, travelerNames: [],
         })).status, 409);
         assert.equal((await request(sales, url, "PUT", { numberOfTravelers: 1 })).status, 400);
-        assert.deepEqual(Array.from((await Booking.findById(booking._id)).travelerNames), ["First Traveler", "Second Traveler"]);
+        assert.deepEqual(Array.from((await Booking.findById(booking._id)).travelerNames), ["Updated Traveler", "Second Traveler"]);
         const audit = await ActivityLog.findOne({ relatedRecordId: booking._id, description: /Traveler roster updated/ });
         assert.equal(audit?.metadata.namedTravelerCount, 2);
         assert.equal(JSON.stringify(audit).includes("First Traveler"), false);
-        console.log("Traveler roster persists on legacy bookings and supplies permissioned hotel rooming details.");
+        console.log("Hotel rooming plans persist, reject stale roster and room edits, and clear on cancellation.");
     } finally {
         if (booking) {
             await ActivityLog.deleteMany({ relatedRecordId: booking._id });

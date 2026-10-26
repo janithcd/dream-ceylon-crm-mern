@@ -89,6 +89,7 @@ test("hotel stays require booking edit permission and can be added, confirmed an
                 for (const [key, value] of Object.entries(update.$set)) {
                     stay[key.replace("hotelStays.$.", "")] = value;
                 }
+                if (update.$inc) stay.roomingRevision += update.$inc["hotelStays.$.roomingRevision"];
             } else if (update.$pull) {
                 stay.deleteOne();
             }
@@ -130,6 +131,13 @@ test("hotel stays require booking edit permission and can be added, confirmed an
     assert.equal(booking.hotelStays[0].supplierEmail, "reception@pelwehera.com");
     assert.equal(booking.hotelStays[0].cancellationTerms, "One night charged");
     assert.equal((await request(stayUrl, "PUT", viewerId, { status: "Cancelled" })).status, 403);
+
+    booking.hotelStays[0].roomingPlan = { assignments: ["1", "1"], rosterVersion: 0,
+        roomCount: 1, savedAt: new Date() };
+    const revision = booking.hotelStays[0].roomingRevision;
+    assert.equal((await request(stayUrl, "PUT", salesId, { status: "Cancelled" })).status, 200);
+    assert.equal(booking.hotelStays[0].roomingPlan, null);
+    assert.equal(booking.hotelStays[0].roomingRevision, revision + 1);
 
     assert.equal((await request(stayUrl, "DELETE", salesId)).status, 200);
     assert.equal(booking.hotelStays.length, 0);

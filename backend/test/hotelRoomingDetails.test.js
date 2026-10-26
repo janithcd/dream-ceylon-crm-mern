@@ -36,6 +36,8 @@ test("rooming details expose only the roster and selected confirmed stay", () =>
     assert.equal(value.checkOut, "Mar 12, 2027");
     assert.equal(value.recipient, "reservations@hotel.example");
     assert.equal(value.rooms, 2);
+    assert.equal(value.rosterVersion, 0);
+    assert.deepEqual(value.roomingPlan, { status: "none", revision: 0, assignments: [] });
     assert.deepEqual(value.missingDetails, []);
     for (const secret of ["PRIVATE", "1200", "+447700900123", "Booking Contact"]) {
         assert.ok(!JSON.stringify(value).includes(secret), secret);
@@ -100,6 +102,13 @@ test("rooming endpoint checks both permissions and reloads the current roster wi
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.deepEqual((await response.json()).travelerNames, ["Ashlee Reed", "Demelza Peake", "Third Guest"]);
+    booking.hotelStays[0].roomingPlan = { assignments: ["1", "2", "1"], rosterVersion: 0,
+        roomCount: 2, savedAt: new Date(), savedByName: "Sales Agent" };
+    assert.deepEqual((await (await request()).json()).roomingPlan.assignments, ["1", "2", "1"]);
+    booking.travelerRosterVersion = 1;
+    const stale = (await (await request()).json()).roomingPlan;
+    assert.equal(stale.status, "stale");
+    assert.deepEqual(stale.assignments, []);
     booking.travelerNames = ["Updated Guest", "Demelza Peake", "Third Guest"];
     assert.equal((await (await request()).json()).travelerNames[0], "Updated Guest");
     booking.travelerNames = [];
