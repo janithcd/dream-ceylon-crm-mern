@@ -8,6 +8,7 @@ const { validatePaymentEntry, validateProjectedBalance } = require("../utils/boo
 const { validatePaymentCorrection } = require("../utils/paymentCorrection");
 const { acquireBookingPaymentLocks } = require("../utils/bookingPaymentLock");
 const { getBusinessDayBounds } = require("../utils/businessDate");
+const { planGuestPaymentSummaryReconciliation } = require("../utils/guestPaymentStatement");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -177,6 +178,60 @@ const syncBookingPaymentSummary = async (bookingId) => {
     await booking.save();
 
     return booking;
+};
+
+const reconcileBookingPaymentSummary = async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    if (!mongoose.Types.ObjectId.isValid(req.params.bookingId)) {
+        return res.status(400).json({ message: "Invalid booking ID" });
+    }
+    let release = null;
+    try {
+        release = await acquireBookingPaymentLocks([req.params.bookingId]);
+        const booking = await Booking.findById(req.params.bookingId);
+        if (!booking) return res.status(404).json({ message: "Booking not found" });
+        const payments = await BookingPayment.find({ booking: booking._id })
+            .sort({ paymentDate: 1, _id: 1 }).limit(1001).lean();
+        if (payments.length > 1000) {
+            return res.status(413).json({ message: "This booking has more than 1,000 payments. Contact Finance for a ledger review." });
+        }
+        const planned = planGuestPaymentSummaryReconciliation(booking, payments, req.body);
+        if (planned.error) return res.status(planned.status).json({ message: planned.error });
+        const correction = planned.value;
+        const updated = await Booking.findOneAndUpdate({
+            _id: booking._id, __v: booking.__v, advancePayment: booking.advancePayment,
+            paymentStatus: booking.paymentStatus, totalPrice: booking.totalPrice,
+            currency: booking.currency, bookingStatus: booking.bookingStatus,
+        }, { $set: { advancePayment: correction.targetPaidCents / 100,
+            paymentStatus: correction.paymentStatus }, $inc: { __v: 1 } },
+        { new: true, runValidators: true });
+        if (!updated) return res.status(409).json({ message: "The booking changed. Refresh and review before reconciling." });
+
+        await createActivityLog({
+            req, action: "UPDATE", module: "Payment",
+            description: `Booking ${booking.bookingCode} paid total reconciled from guest payment history`,
+            relatedRecordId: booking._id, relatedModel: "Booking",
+            referenceNo: booking.bookingCode, customerName: booking.customer?.fullName,
+            metadata: { bookingId: booking._id, bookingCode: booking.bookingCode,
+                correctionReason: correction.reason, previousPaid: correction.previousPaidCents / 100,
+                correctedPaid: correction.targetPaidCents / 100,
+                ledgerNet: correction.ledgerNetCents / 100,
+                received: correction.receivedCents / 100, refunded: correction.refundedCents / 100,
+                previousPaymentStatus: correction.previousPaymentStatus,
+                correctedPaymentStatus: correction.paymentStatus, paymentCount: payments.length,
+                currency: booking.currency, ledgerConfirmedComplete: true },
+        });
+        return res.json({ message: "Booking paid total reconciled from the payment history.",
+            booking: { _id: updated._id, advancePayment: updated.advancePayment,
+                paymentStatus: updated.paymentStatus, currency: updated.currency } });
+    } catch (error) {
+        console.error("Guest payment summary reconciliation failed:", error.message);
+        return res.status(error.code === "PAYMENT_WRITE_BUSY" ? 409 : 500).json({
+            message: error.code === "PAYMENT_WRITE_BUSY" ? error.message : "Failed to reconcile booking paid total",
+        });
+    } finally {
+        if (release) await release();
+    }
 };
 
 const buildPaymentQuery = async (queryParams) => {
@@ -886,6 +941,7 @@ const deleteBookingPayment = async (req, res) => {
 
 module.exports = {
     createBookingPayment,
+    reconcileBookingPaymentSummary,
     getBookingPayments,
     getGuestPaymentRegister,
     exportGuestPaymentRegister,

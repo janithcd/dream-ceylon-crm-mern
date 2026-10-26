@@ -102,9 +102,12 @@ PUT    /booking-payments/:id
 DELETE /booking-payments/:id
 POST   /payment-receipts/:id
 GET    /booking-pdf/payment-statement/:id/readiness
+POST   /booking-payments/booking/:bookingId/reconcile-summary
 ```
 
 Statement readiness returns `{ "ready": true, "issues": [], "checkedAt": "..." }` or actionable issues with a `code`, `message`, optional `paymentNo` and `paymentDate`. It requires `booking.view` and `payment.view` and does not cache results. A blocked statement still returns HTTP 200 for the readiness check; downloading the PDF rechecks the ledger and returns a conflict until the data is corrected.
+
+A `paid_mismatch` issue also includes `bookedPaidCents`, `ledgerNetCents`, `targetPaidCents`, `receivedCents`, and `refundedCents`. After reviewing all historical entries, Finance may post `{ "confirmLedgerComplete": true, "reason": "Checked bank entries", "expectedBookedPaidCents": 90000, "expectedLedgerNetCents": 40000, "expectedTargetPaidCents": 40000 }` to `reconcile-summary`. The route requires `booking.view`, `payment.view`, `payment.update`, and `payment.reconcile`. It recalculates the booking summary only when the ledger is otherwise valid and still matches those reviewed totals. Missing actual receipts should be recorded as payment entries with their real dates and references first.
 
 `PUT /booking-payments/:id` corrects an unmatched payment. Include the fields being corrected and a `correctionReason` of 3–300 characters. Send `expectedVersion` from the register row to reject stale edits. A currency correction must include the verified booking-currency `amount`, even if its numeric value is unchanged. Refund edits need both `payment.update` and `payment.refund`; a matched payment must first be reopened through `PATCH /booking-payments/:id/reconciliation`.
 

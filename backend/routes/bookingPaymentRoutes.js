@@ -6,6 +6,7 @@ const {
     getGuestPaymentRegister,
     exportGuestPaymentRegister,
     reconcileGuestPayment,
+    reconcileBookingPaymentSummary,
     getBookingPaymentsByBooking,
     getBookingPaymentById,
     updateBookingPayment,
@@ -81,6 +82,14 @@ router.patch(
     protect,
     authorizePermissions(PERMISSIONS.PAYMENT_VIEW, PERMISSIONS.PAYMENT_RECONCILE),
     reconcileGuestPayment
+);
+
+router.post(
+    "/booking/:bookingId/reconcile-summary",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.PAYMENT_VIEW,
+        PERMISSIONS.PAYMENT_UPDATE, PERMISSIONS.PAYMENT_RECONCILE),
+    reconcileBookingPaymentSummary
 );
 
 router.get(

@@ -91,6 +91,10 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
     const [statementLoading, setStatementLoading] = useState(false);
     const [statementReadiness, setStatementReadiness] = useState(null);
     const [readinessError, setReadinessError] = useState("");
+    const [summaryReviewOpen, setSummaryReviewOpen] = useState(false);
+    const [summaryReason, setSummaryReason] = useState("");
+    const [summaryConfirmed, setSummaryConfirmed] = useState(false);
+    const [summarySaving, setSummarySaving] = useState(false);
 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
@@ -131,6 +135,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
         return sum;
     }, 0), [payments, currentBooking?.currency]);
     const milestones = useMemo(() => getGuestPaymentMilestones(currentBooking), [currentBooking]);
+    const paidMismatch = statementReadiness?.issues?.find((issue) => issue.code === "paid_mismatch");
 
     const fetchPaymentHistory = async () => {
         if (!bookingId || !canViewPayments) {
@@ -142,6 +147,9 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
             setError("");
             setReadinessError("");
             setStatementReadiness(null);
+            setSummaryReviewOpen(false);
+            setSummaryReason("");
+            setSummaryConfirmed(false);
 
             const [response, bookingResponse, readiness] = await Promise.allSettled([
                 api.get(`/booking-payments/booking/${bookingId}`),
@@ -408,6 +416,31 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
         }
     };
 
+    const handleReconcilePaidTotal = async (event) => {
+        event.preventDefault();
+        if (!paidMismatch || summarySaving) return;
+        try {
+            setSummarySaving(true);
+            setError("");
+            setSuccess("");
+            await api.post(`/booking-payments/booking/${bookingId}/reconcile-summary`, {
+                confirmLedgerComplete: summaryConfirmed, reason: summaryReason,
+                expectedBookedPaidCents: paidMismatch.bookedPaidCents,
+                expectedLedgerNetCents: paidMismatch.ledgerNetCents,
+                expectedTargetPaidCents: paidMismatch.targetPaidCents,
+            });
+            await fetchPaymentHistory();
+            notifyPaymentAttentionChanged();
+            if (onPaymentChanged) onPaymentChanged();
+            setSuccess("Booking paid amount reconciled to the verified payment history.");
+        } catch (err) {
+            if (err.response?.status === 409) await fetchPaymentHistory();
+            setError(err.response?.data?.message || "Could not reconcile the booking paid amount.");
+        } finally {
+            setSummarySaving(false);
+        }
+    };
+
     if (!booking) {
         return null;
     }
@@ -523,6 +556,37 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                 })}
                                             </ul>
                                             {statementReadiness.issues.length > 10 && <div className="small mt-1">{statementReadiness.issues.length - 10} more records need review.</div>}
+                                            {paidMismatch && <div className="border border-warning-subtle rounded-3 bg-white p-3 mt-3">
+                                                <strong>Paid amount review</strong>
+                                                <div className="small mt-1">Booking shows {paidMismatch.bookedPaidCents === null ? "an invalid paid amount" :
+                                                    formatMoney(paidMismatch.bookedPaidCents / 100, currentBooking?.currency)} paid.
+                                                    The payment history shows {formatMoney(paidMismatch.receivedCents / 100, currentBooking?.currency)} received and {formatMoney(paidMismatch.refundedCents / 100, currentBooking?.currency)} refunded,
+                                                    leaving {formatMoney(paidMismatch.ledgerNetCents / 100, currentBooking?.currency)} net.</div>
+                                                <p className="small mt-2 mb-2">If older receipts or refunds are missing, verify and record <strong>all</strong> of them using Add Payment below, with their actual dates and references. Adding a payment recalculates the booking paid amount from the full recorded history.</p>
+                                                {paidMismatch.bookedPaidCents !== null && <PermissionGuard all={["payment.update", "payment.reconcile"]}>
+                                                    <div>
+                                                        <button type="button" className="btn btn-sm btn-outline-warning" disabled={summarySaving}
+                                                            onClick={() => setSummaryReviewOpen((open) => !open)}>
+                                                            {summaryReviewOpen ? "Close review" : "Reconcile from complete ledger"}
+                                                        </button>
+                                                        {summaryReviewOpen && <form className="mt-3" onSubmit={handleReconcilePaidTotal}>
+                                                            <p className="small mb-2">This will set the booking paid amount to <strong>{formatMoney(paidMismatch.targetPaidCents / 100, currentBooking?.currency)}</strong> and update its payment status. It will not create a receipt or move money.</p>
+                                                            <label className="form-label" htmlFor="ledger-summary-reason">Reason and evidence checked</label>
+                                                            <textarea id="ledger-summary-reason" className="form-control mb-2" required minLength={10} maxLength={300}
+                                                                value={summaryReason} onChange={(event) => setSummaryReason(event.target.value)}
+                                                                placeholder="Which bank statement or cashbook entries did you verify?" />
+                                                            <div className="form-check mb-2">
+                                                                <input id="ledger-summary-confirm" className="form-check-input" type="checkbox" required checked={summaryConfirmed}
+                                                                    onChange={(event) => setSummaryConfirmed(event.target.checked)} />
+                                                                <label className="form-check-label small" htmlFor="ledger-summary-confirm">I checked that every guest receipt and refund for this booking is recorded in the payment history.</label>
+                                                            </div>
+                                                            <button type="submit" className="btn btn-sm btn-warning" disabled={summarySaving || !summaryConfirmed}>
+                                                                {summarySaving ? "Reconciling..." : "Confirm paid amount correction"}
+                                                            </button>
+                                                        </form>}
+                                                    </div>
+                                                </PermissionGuard>}
+                                            </div>}
                                         </> : <strong>Checking guest statement...</strong>}
                                 </div>
 

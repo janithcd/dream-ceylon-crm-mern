@@ -77,6 +77,11 @@ const buildGuestPaymentStatement = (booking, payments, issuedAt = new Date()) =>
     if (recordedPaid === null || recordedPaid !== Math.min(netPaid, total || netPaid)) {
         addIssue("paid_mismatch", "The booking paid amount differs from the recorded payment history. Check the bank or cashbook entries and record only verified missing payments.",
             "The booking paid amount differs from its payment history. Reconcile it before issuing a statement.");
+        Object.assign(issues[issues.length - 1], {
+            bookedPaidCents: recordedPaid, ledgerNetCents: netPaid,
+            targetPaidCents: Math.min(netPaid, total || netPaid),
+            receivedCents: received, refundedCents: refunded,
+        });
         return { error: firstError, issues };
     }
 
@@ -104,4 +109,35 @@ const buildGuestPaymentStatement = (booking, payments, issuedAt = new Date()) =>
     } };
 };
 
-module.exports = { buildGuestPaymentStatement };
+const planGuestPaymentSummaryReconciliation = (booking, payments, input, now = new Date()) => {
+    const reason = input?.reason;
+    if (input?.confirmLedgerComplete !== true || typeof reason !== "string" ||
+        reason.trim().length < 10 || reason.trim().length > 300) {
+        return { status: 400, error: "Confirm that the ledger is complete and enter a reason (10–300 characters)." };
+    }
+    const result = buildGuestPaymentStatement(booking, payments, now);
+    if (result.issues.length !== 1 || result.issues[0].code !== "paid_mismatch") {
+        return { status: 409, error: result.error || "The booking paid amount already matches its payment history." };
+    }
+    const issue = result.issues[0];
+    if (issue.bookedPaidCents === null) {
+        return { status: 409, error: "Review the invalid booking paid amount with Finance before reconciling." };
+    }
+    if (![input.expectedBookedPaidCents, input.expectedLedgerNetCents,
+        input.expectedTargetPaidCents].every(Number.isSafeInteger) ||
+        input.expectedBookedPaidCents !== issue.bookedPaidCents ||
+        input.expectedLedgerNetCents !== issue.ledgerNetCents ||
+        input.expectedTargetPaidCents !== issue.targetPaidCents) {
+        return { status: 409, error: "The booking or ledger changed. Refresh and review the totals again." };
+    }
+    const { receivedCents, refundedCents, ledgerNetCents, targetPaidCents } = issue;
+    const totalCents = cents(booking.totalPrice);
+    const paymentStatus = refundedCents > 0 && ledgerNetCents === 0 ? "Refunded" :
+        totalCents > 0 && ledgerNetCents >= totalCents ? "Paid" :
+            ledgerNetCents > 0 ? "Partially Paid" : "Pending";
+    return { value: { reason: reason.trim(), previousPaidCents: issue.bookedPaidCents,
+        targetPaidCents, ledgerNetCents, receivedCents, refundedCents,
+        previousPaymentStatus: booking.paymentStatus, paymentStatus } };
+};
+
+module.exports = { buildGuestPaymentStatement, planGuestPaymentSummaryReconciliation };

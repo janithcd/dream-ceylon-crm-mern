@@ -1,7 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { PDFDocument } = require("pdf-lib");
-const { buildGuestPaymentStatement } = require("../utils/guestPaymentStatement");
+const { buildGuestPaymentStatement, planGuestPaymentSummaryReconciliation } = require("../utils/guestPaymentStatement");
 const { createGuestPaymentStatementPdf } = require("../controllers/guestPaymentStatementPdfController");
 
 const booking = () => ({
@@ -85,6 +85,39 @@ test("readiness separates refund deficits and booking summary mismatches", () =>
     assert.deepEqual(deficit.issues.map(({ code }) => code), ["refund_excess"]);
     const mismatch = buildGuestPaymentStatement({ ...booking(), advancePayment: 50 }, [payment()], issuedAt);
     assert.deepEqual(mismatch.issues.map(({ code, paymentNo }) => [code, paymentNo]), [["paid_mismatch", null]]);
+});
+
+test("Finance can plan a ledger-backed paid-total correction only after an explicit review", () => {
+    const original = { ...booking(), advancePayment: 200, paymentStatus: "Partially Paid" };
+    const receipt = payment({ amount: 500 });
+    const confirmed = { confirmLedgerComplete: true, reason: "Checked all deposits against the bank statement",
+        expectedBookedPaidCents: 20000, expectedLedgerNetCents: 50000, expectedTargetPaidCents: 50000 };
+    const plan = planGuestPaymentSummaryReconciliation(original, [receipt], confirmed, issuedAt).value;
+    assert.equal(plan.previousPaidCents, 20000);
+    assert.equal(plan.targetPaidCents, 50000);
+    assert.equal(plan.paymentStatus, "Partially Paid");
+    assert.equal(plan.reason, confirmed.reason);
+    assert.equal(planGuestPaymentSummaryReconciliation(original, [receipt],
+        { ...confirmed, confirmLedgerComplete: false }, issuedAt).status, 400);
+    assert.equal(planGuestPaymentSummaryReconciliation(original, [receipt],
+        { ...confirmed, expectedLedgerNetCents: 40000 }, issuedAt).status, 409);
+    assert.equal(planGuestPaymentSummaryReconciliation({ ...original, advancePayment: 500 },
+        [receipt], confirmed, issuedAt).status, 409);
+    assert.equal(planGuestPaymentSummaryReconciliation(original,
+        [receipt, payment({ currency: "LKR" })], confirmed, issuedAt).status, 409);
+    const refunded = planGuestPaymentSummaryReconciliation(
+        { ...original, advancePayment: 50 }, [payment({ amount: 100 }),
+            payment({ status: "Refunded", paymentType: "Refund", amount: 100 })],
+        { ...confirmed, expectedBookedPaidCents: 5000, expectedLedgerNetCents: 0,
+            expectedTargetPaidCents: 0 }, issuedAt).value;
+    assert.equal(refunded.targetPaidCents, 0);
+    assert.equal(refunded.paymentStatus, "Refunded");
+    const unitemized = planGuestPaymentSummaryReconciliation(
+        { ...original, advancePayment: 100 }, [],
+        { ...confirmed, expectedBookedPaidCents: 10000, expectedLedgerNetCents: 0,
+            expectedTargetPaidCents: 0 }, issuedAt).value;
+    assert.equal(unitemized.targetPaidCents, 0);
+    assert.equal(unitemized.paymentStatus, "Pending");
 });
 
 test("statement PDF carries the guest totals across pages without private notes", async () => {

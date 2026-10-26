@@ -20,12 +20,12 @@ const main = async () => {
     const admins = [];
     let booking;
     try {
-        for (const role of ["Sales", "Finance", "Viewer"]) {
+        for (const role of ["Sales", "Finance", "Viewer", "Manager"]) {
             admins.push(await Admin.create({ name: `CI Statement ${role}`,
                 email: `ci-statement-${role}-${Date.now()}@example.invalid`,
                 password: "disposable-ci-only-password", role }));
         }
-        const [sales, finance, viewer] = admins;
+        const [sales, finance, viewer, manager] = admins;
         const token = (admin) => jwt.sign({ id: admin._id, v: 0 }, process.env.JWT_SECRET);
         const request = (path, method = "GET", body, admin = finance) => fetch(`http://127.0.0.1:5000/api${path}`, {
             method, headers: { Authorization: `Bearer ${token(admin)}`, "Content-Type": "application/json" },
@@ -82,8 +82,32 @@ const main = async () => {
         await BookingPayment.deleteOne({ _id: legacy._id });
         await Booking.updateOne({ _id: booking._id }, { $set: { advancePayment: 900 } });
         assert.equal((await request(path, "POST", {})).status, 409);
-        assert.equal((await (await request(readinessPath)).json()).issues[0].code, "paid_mismatch");
-        await Booking.updateOne({ _id: booking._id }, { $set: { advancePayment: 400 } });
+        const mismatch = (await (await request(readinessPath)).json()).issues[0];
+        assert.equal(mismatch.code, "paid_mismatch");
+        assert.deepEqual([mismatch.bookedPaidCents, mismatch.ledgerNetCents,
+            mismatch.targetPaidCents], [90000, 40000, 40000]);
+        const reconcilePath = `/booking-payments/booking/${booking._id}/reconcile-summary`;
+        const reviewedLedger = { expectedBookedPaidCents: 90000, expectedLedgerNetCents: 40000,
+            expectedTargetPaidCents: 40000, reason: "Checked every bank receipt and refund",
+            confirmLedgerComplete: true };
+        assert.equal((await request(reconcilePath, "POST", reviewedLedger, sales)).status, 403);
+        assert.equal((await request(reconcilePath, "POST", reviewedLedger, viewer)).status, 403);
+        assert.equal((await request(reconcilePath, "POST", reviewedLedger, manager)).status, 403);
+        assert.equal((await request(reconcilePath, "POST", {
+            ...reviewedLedger, confirmLedgerComplete: false,
+        })).status, 400);
+        assert.equal((await request(reconcilePath, "POST", {
+            ...reviewedLedger, expectedLedgerNetCents: 30000,
+        })).status, 409);
+        const reconciled = await request(reconcilePath, "POST", reviewedLedger);
+        assert.equal(reconciled.status, 200, `Reconcile paid total: ${await reconciled.clone().text()}`);
+        assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 400);
+        assert.equal((await (await request(readinessPath)).json()).ready, true);
+        assert.equal((await request(reconcilePath, "POST", reviewedLedger)).status, 409);
+        const reconciliationAudit = await ActivityLog.findOne({ relatedRecordId: booking._id,
+            "metadata.correctionReason": reviewedLedger.reason });
+        assert.equal(reconciliationAudit?.metadata.previousPaid, 900);
+        assert.equal(reconciliationAudit?.metadata.correctedPaid, 400);
         assert.equal((await request(path, "POST", {})).status, 200);
 
         // Simulate an older refund saved with a receipt type, then correct it through Finance.
