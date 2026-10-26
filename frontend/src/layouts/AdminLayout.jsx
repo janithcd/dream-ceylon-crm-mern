@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
     FaBell,
+    FaBan,
     FaCalendarAlt,
     FaCalendarCheck,
     FaCar,
@@ -168,6 +169,13 @@ const AdminLayout = () => {
                         <NavLink to="/hotel-cancellation-deadlines">
                             <FaHotel />
                             Hotel Deadlines
+                        </NavLink>
+                    </PermissionGuard>
+
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.bookings}>
+                        <NavLink to="/cancellation-review">
+                            <FaBan />
+                            Cancellation Review
                         </NavLink>
                     </PermissionGuard>
 

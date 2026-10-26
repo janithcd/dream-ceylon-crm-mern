@@ -16,6 +16,7 @@ import MyTasks from "./pages/MyTasks";
 import TeamTasks from "./pages/TeamTasks";
 import SupplierConfirmations from "./pages/SupplierConfirmations";
 import HotelCancellationDeadlines from "./pages/HotelCancellationDeadlines";
+import CancellationReview from "./pages/CancellationReview";
 import AirportTransfers from "./pages/AirportTransfers";
 import Vehicles from "./pages/Vehicles";
 import Quotations from "./pages/Quotations";
@@ -191,6 +192,11 @@ const App = () => {
                         <Route path="hotel-cancellation-deadlines" element={
                             <PermissionRoute permission={ROUTE_PERMISSIONS.hotelDeadlines}>
                                 <HotelCancellationDeadlines />
+                            </PermissionRoute>
+                        } />
+                        <Route path="cancellation-review" element={
+                            <PermissionRoute permission={ROUTE_PERMISSIONS.bookings}>
+                                <CancellationReview />
                             </PermissionRoute>
                         } />
                         <Route

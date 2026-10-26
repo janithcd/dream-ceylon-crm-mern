@@ -29,6 +29,7 @@ const {
 const { getTeamTasks } = require("../controllers/teamTasksController");
 const { getSupplierConfirmations } = require("../controllers/supplierConfirmationsController");
 const { getHotelCancellationDeadlines } = require("../controllers/hotelCancellationDeadlinesController");
+const { getCancellationReview } = require("../controllers/cancellationReviewController");
 const { getSupplierContacts, logSupplierContact } = require("../controllers/supplierContactController");
 const { getAirportTransfers } = require("../controllers/airportTransfersController");
 const { getGuestTransferMessage } = require("../controllers/guestTransferMessageController");
@@ -77,6 +78,7 @@ router.get(
 );
 
 router.get("/hotel-cancellation-deadlines", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getHotelCancellationDeadlines);
+router.get("/cancellation-review", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getCancellationReview);
 
 router.get("/:id/supplier-contacts/:type/:itemId", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getSupplierContacts);
 router.post("/:id/supplier-contacts/:type/:itemId", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), logSupplierContact);

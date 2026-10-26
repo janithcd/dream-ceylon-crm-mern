@@ -85,11 +85,14 @@ POST   /quotations/pdf
 GET    /bookings
 POST   /bookings
 GET    /bookings/:id
+GET    /bookings/cancellation-review?filter=open&page=1
 PUT    /bookings/:id
 DELETE /bookings/:id
 POST   /booking-pdf/invoice/:id
 POST   /booking-pdf/receipt/:id
 ```
+
+The cancellation review requires `booking.view`. `filter=open` (default) lists cancelled trips with requested or confirmed hotel/transport arrangements, while `filter=all` includes every cancelled trip. Pages are 1–1000, 20 bookings each. The response gives `summary.total`, `summary.withActiveServices`, and sanitized active arrangement details. Staff with **both** `payment.view` and `cost.view` additionally receive `bookedPaidAmount`, `currency`, `guestLedger` grouped by payment currency/status (excluding cancelled records), and `supplierCosts` grouped by supplier currency. Lookups run only for the selected page. The response is not cached; amounts are recorded history and do not establish a cancellation fee or refund obligation.
 
 ## Payments
 
