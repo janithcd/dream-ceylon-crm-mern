@@ -3,7 +3,8 @@ import { FaCopy, FaEnvelope } from "react-icons/fa";
 import api from "../api/axios";
 import { buildSupplierMailtoUrl } from "../utils/supplierEmail";
 
-const HotelSupplierEmailModal = ({ bookingId, stayId, onClose }) => {
+const HotelSupplierEmailModal = ({ bookingId, stayId, onClose, purpose = "confirmation" }) => {
+    const isCancellation = purpose === "cancellation";
     const [draft, setDraft] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -16,14 +17,14 @@ const HotelSupplierEmailModal = ({ bookingId, stayId, onClose }) => {
     useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
     useEffect(() => {
         let active = true;
-        api.get(`/bookings/${bookingId}/hotel-stays/${stayId}/confirmation-draft`)
+        api.get(`/bookings/${bookingId}/hotel-stays/${stayId}/${isCancellation ? "cancellation" : "confirmation"}-draft`)
             .then(({ data }) => { if (active) setDraft(data); })
             .catch((err) => {
-                if (active) setError(err.response?.data?.message || "Failed to prepare hotel confirmation request.");
+                if (active) setError(err.response?.data?.message || `Failed to prepare hotel ${purpose} request.`);
             })
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
-    }, [bookingId, stayId, reloadKey]);
+    }, [bookingId, stayId, purpose, isCancellation, reloadKey]);
 
     useEffect(() => {
         const previousFocus = document.activeElement;
@@ -88,7 +89,7 @@ const HotelSupplierEmailModal = ({ bookingId, stayId, onClose }) => {
             <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
                 <div className="modal-content">
                     <div className="modal-header">
-                        <h5 className="modal-title" id="hotel-supplier-email-title">Hotel confirmation request{draft?.bookingCode && ` · ${draft.bookingCode}`}</h5>
+                        <h5 className="modal-title" id="hotel-supplier-email-title">Hotel {purpose} request{draft?.bookingCode && ` · ${draft.bookingCode}`}</h5>
                         <button type="button" className="btn-close" aria-label="Close hotel email draft" onClick={onClose} />
                     </div>
                     <div className="modal-body">
@@ -96,7 +97,9 @@ const HotelSupplierEmailModal = ({ bookingId, stayId, onClose }) => {
                         {error && <div className="alert alert-danger" role="alert">{error}</div>}
                         {!loading && !draft && <button type="button" className="btn btn-outline-primary" onClick={reload}>Try again</button>}
                         {!loading && draft && <>
-                            <p className="text-muted">Review the recipient, dates, rooms, and meal plan. Open your email app to send it yourself. Preparing this draft does not mark the supplier contacted or confirm the stay.</p>
+                            <p className="text-muted">{isCancellation
+                                ? "Review the reservation details and recipient before sending. Ask the hotel for written confirmation and any applicable charges; a saved cutoff does not guarantee a free cancellation. This draft is not sent or logged by the CRM."
+                                : "Review the recipient, dates, rooms, and meal plan. Open your email app to send it yourself. Preparing this draft does not mark the supplier contacted or confirm the stay."}</p>
                             <p><strong>Hotel:</strong> {draft.hotelName}</p>
                             {draft.missingDetails.length > 0 && <div className="alert alert-warning small">Missing from the saved stay: {draft.missingDetails.join(", ")}. Review those details before sending.</div>}
                             <label htmlFor="hotel-supplier-recipient" className="form-label fw-semibold">Supplier email</label>

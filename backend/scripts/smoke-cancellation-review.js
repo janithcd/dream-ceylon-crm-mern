@@ -29,7 +29,8 @@ const main = async () => {
                 travelStartDate: new Date("2027-04-01"), travelEndDate: new Date("2027-04-05"),
                 numberOfTravelers: 2, totalPrice: 600, advancePayment: 200, currency: "USD",
                 bookingStatus, hotelStays: [{ hotelName: "CI Hotel", checkInDate: new Date("2027-04-01"),
-                    checkOutDate: new Date("2027-04-02"), status: hotelStatus }],
+                    checkOutDate: new Date("2027-04-02"), status: hotelStatus,
+                    supplierEmail: "reservations@example.invalid" }],
                 transportAssignments: [{ route: "CI Airport", startDate: new Date("2027-04-01"),
                     endDate: new Date("2027-04-01"), status: "Cancelled" }],
             });
@@ -85,6 +86,20 @@ const main = async () => {
         assert.equal(cancelledBooking.cancellationReason, reason);
         assert.equal(cancelledBooking.cancelledByName, sales.name);
         assert.ok(cancelledBooking.cancelledAt);
+        const draftPath = `http://127.0.0.1:5000/api/bookings/${bookings[2]._id}/hotel-stays/${bookings[2].hotelStays[0]._id}/cancellation-draft`;
+        const draftRequest = (admin) => fetch(draftPath, { headers: {
+            Authorization: `Bearer ${jwt.sign({ id: admin._id, v: 0 }, process.env.JWT_SECRET)}`,
+        } });
+        assert.equal((await draftRequest(finance)).status, 403);
+        const draftResponse = await draftRequest(sales);
+        assert.equal(draftResponse.status, 200, await draftResponse.clone().text());
+        assert.equal(draftResponse.headers.get("cache-control"), "no-store");
+        const draft = await draftResponse.json();
+        assert.equal(draft.recipient, "reservations@example.invalid");
+        assert.match(draft.body, /reservation request/);
+        assert.match(draft.body, /confirm in writing/);
+        assert.equal(draft.body.includes(reason), false);
+        assert.equal((await Booking.findById(bookings[2]._id)).hotelStays[0].status, "Requested");
         assert.equal((await change({ bookingStatus: "Confirmed", expectedBookingStatus: "Confirmed" })).status, 409);
         assert.equal((await change({ bookingStatus: "Cancelled", cancellationReason: "Changed without an audit reason",
             expectedBookingStatus: "Cancelled" })).status, 400);
@@ -96,6 +111,7 @@ const main = async () => {
         const reopened = await change({ bookingStatus: "Confirmed", expectedBookingStatus: "Cancelled" });
         assert.equal(reopened.status, 200, await reopened.clone().text());
         assert.equal((await reopened.json()).booking.cancellationReason, "");
+        assert.equal((await draftRequest(sales)).status, 409);
         assert.equal((await Booking.findById(bookings[2]._id)).cancelledAt, null);
         assert.ok(await ActivityLog.findOne({ relatedRecordId: bookings[2]._id, action: "RESTORE" }));
         assert.equal((await ActivityLog.findById(audit._id)).metadata.cancellationReason, reason);

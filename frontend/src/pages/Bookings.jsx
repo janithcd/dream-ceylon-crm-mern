@@ -1311,7 +1311,11 @@ const Bookings = () => {
                     onClose={() => setSelectedHotelBooking(null)}
                     onChanged={fetchBookings}
                     onPrepareEmail={(stayId) => {
-                        setSelectedHotelEmail({ bookingId: selectedHotelBooking._id, stayId });
+                        setSelectedHotelEmail({ bookingId: selectedHotelBooking._id, stayId, purpose: "confirmation" });
+                        setSelectedHotelBooking(null);
+                    }}
+                    onPrepareCancellation={(stayId) => {
+                        setSelectedHotelEmail({ bookingId: selectedHotelBooking._id, stayId, purpose: "cancellation" });
                         setSelectedHotelBooking(null);
                     }}
                     onOpenContacts={(itemId) => {
@@ -1321,9 +1325,10 @@ const Bookings = () => {
                 />
             )}
             {selectedHotelEmail && <HotelSupplierEmailModal
-                key={`${selectedHotelEmail.bookingId}-${selectedHotelEmail.stayId}`}
+                key={`${selectedHotelEmail.bookingId}-${selectedHotelEmail.stayId}-${selectedHotelEmail.purpose}`}
                 bookingId={selectedHotelEmail.bookingId}
                 stayId={selectedHotelEmail.stayId}
+                purpose={selectedHotelEmail.purpose}
                 onClose={() => setSelectedHotelEmail(null)}
             />}
             {selectedSupplierContact && <SupplierContactModal

@@ -96,6 +96,8 @@ The cancellation review requires `booking.view`. `filter=open` (default) lists c
 
 Creating a booking as `Cancelled` or changing an existing booking into `Cancelled` requires `cancellationReason` (10–300 characters). The server stores `cancelledAt`, `cancelledBy`, and `cancelledByName` and records the reason in booking activity. `PUT /bookings/:id` can include `expectedBookingStatus` to reject a stale edit with HTTP 409; the booking form sends it automatically. A later edit while the booking stays cancelled preserves the reason. Reopening clears the current cancellation fields, but the older cancellation remains in the activity log. Older cancelled bookings without a reason remain editable. Hotel/transport statuses and payments are separate records and are not changed automatically.
 
+`GET /bookings/:id/hotel-stays/:stayId/cancellation-draft` requires `booking.view` and `booking.update`. It returns an editable recipient, subject, body and missing-detail warnings for a requested or confirmed hotel stay on a cancelled booking. The body asks the hotel to confirm cancellation and disclose charges under the agreed terms, without asserting a refund or including internal cancellation reasons or financial data. It returns HTTP 409 if the booking is active or the stay is already cancelled. The response uses `Cache-Control: no-store`. It does not send an email or change records.
+
 ## Payments
 
 ```http

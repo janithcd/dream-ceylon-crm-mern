@@ -5,6 +5,7 @@ import api from "../api/axios";
 import BookingHotelsModal from "../components/BookingHotelsModal";
 import BookingTransportModal from "../components/BookingTransportModal";
 import BookingPaymentsModal from "../components/BookingPaymentsModal";
+import HotelSupplierEmailModal from "../components/HotelSupplierEmailModal";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate } from "../utils/calendarDate";
 
@@ -47,6 +48,7 @@ const FinancialSnapshot = ({ item }) => {
 
 const CancellationReview = () => {
     const { hasPermission } = usePermissions();
+    const canRequestCancellation = hasPermission("booking.update");
     const canSeeFinance = hasPermission("payment.view") && hasPermission("cost.view");
     const [filter, setFilter] = useState("open");
     const [page, setPage] = useState(1);
@@ -123,7 +125,10 @@ const CancellationReview = () => {
                             <strong>Hotel · {stay.name}</strong> <span className="text-muted">({stay.status})</span>
                             <div>Check-in: {formatCalendarDate(stay.date)}{stay.cancellationDeadline && ` · Cutoff: ${formatCalendarDate(stay.cancellationDeadline)}`}</div>
                             {stay.cancellationTerms && <div className="text-muted">{stay.cancellationTerms}</div>}
-                            <button type="button" className="btn btn-sm btn-outline-primary mt-2" onClick={() => openPanel(item, "hotel", stay._id)}>Review hotel</button>
+                            <div className="d-flex flex-wrap gap-2 mt-2">
+                                <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => openPanel(item, "hotel", stay._id)}>Review hotel</button>
+                                {canRequestCancellation && <button type="button" className="btn btn-sm btn-outline-warning" onClick={() => openPanel(item, "cancellation-email", stay._id)}>Prepare cancellation email</button>}
+                            </div>
                         </div>
                     </div>)}
                     {item.activeTransport.map((leg) => <div className="col-md-6" key={leg._id}>
@@ -152,7 +157,11 @@ const CancellationReview = () => {
             </div>}
         </div></div>
         {selected?.type === "hotel" && <BookingHotelsModal key={`${selected.item._id}-${selected.itemId}`} booking={selectedBooking}
-            focusItemId={selected.itemId} onClose={() => { setSelected(null); refresh(); }} onChanged={refresh} />}
+            focusItemId={selected.itemId} onClose={() => { setSelected(null); refresh(); }} onChanged={refresh}
+            onPrepareCancellation={(stayId) => openPanel(selected.item, "cancellation-email", stayId)} />}
+        {selected?.type === "cancellation-email" && canRequestCancellation && <HotelSupplierEmailModal
+            key={`${selected.item._id}-${selected.itemId}`} bookingId={selected.item._id} stayId={selected.itemId}
+            purpose="cancellation" onClose={() => setSelected(null)} />}
         {selected?.type === "transport" && <BookingTransportModal key={`${selected.item._id}-${selected.itemId}`} booking={selectedBooking}
             focusItemId={selected.itemId} onClose={() => { setSelected(null); refresh(); }} onChanged={refresh} />}
         {selected?.type === "payment" && canSeeFinance && <BookingPaymentsModal booking={selectedBooking}

@@ -27,7 +27,7 @@ const emptyForm = () => ({
     notes: "",
 });
 
-const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onOpenContacts, focusItemId }) => {
+const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onPrepareCancellation, onOpenContacts, focusItemId }) => {
     const { hasPermission } = usePermissions();
     const canUpdate = hasPermission("booking.update");
     const canDownloadVoucher = hasPermission("booking.view") && hasPermission("pdf.generate");
@@ -267,6 +267,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onOpe
                                                             <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => editStay(stay)} disabled={busy}><FaEdit className="me-1" />Edit</button>
                                                             <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => removeStay(stay)} disabled={busy}><FaTrash className="me-1" />Remove</button>
                                                             {stay.status === "Requested" && trip.bookingStatus !== "Cancelled" && trip.bookingStatus !== "Completed" && onPrepareEmail && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => onPrepareEmail(stay._id)} disabled={busy || showForm}><FaEnvelope className="me-1" />Prepare email</button>}
+                                                            {trip.bookingStatus === "Cancelled" && stay.status !== "Cancelled" && onPrepareCancellation && <button type="button" className="btn btn-sm btn-outline-warning" onClick={() => onPrepareCancellation(stay._id)} disabled={busy || showForm}><FaEnvelope className="me-1" />Cancellation email</button>}
                                                         </>}
                                                         {canDownloadVoucher && stay.status === "Confirmed" && trip.bookingStatus !== "Cancelled" && (
                                                             <button type="button" className="btn btn-sm btn-outline-success" onClick={() => downloadVoucher(stay)} disabled={busy || showForm}>
