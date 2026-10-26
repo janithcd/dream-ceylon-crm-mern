@@ -1,5 +1,6 @@
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
     FaFilePdf,
     FaPlus,
@@ -88,6 +89,8 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
     const [deleteLoadingId, setDeleteLoadingId] = useState("");
     const [receiptLoadingId, setReceiptLoadingId] = useState("");
     const [statementLoading, setStatementLoading] = useState(false);
+    const [statementReadiness, setStatementReadiness] = useState(null);
+    const [readinessError, setReadinessError] = useState("");
 
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
@@ -137,13 +140,23 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
         try {
             setLoading(true);
             setError("");
+            setReadinessError("");
+            setStatementReadiness(null);
 
-            const response = await api.get(`/booking-payments/booking/${bookingId}`);
-            const bookingResponse = await api.get(`/bookings/${bookingId}`);
+            const [response, bookingResponse, readiness] = await Promise.allSettled([
+                api.get(`/booking-payments/booking/${bookingId}`),
+                api.get(`/bookings/${bookingId}`),
+                api.get(`/booking-pdf/payment-statement/${bookingId}/readiness`),
+            ]);
+            if (response.status !== "fulfilled") throw response.reason;
+            if (bookingResponse.status !== "fulfilled") throw bookingResponse.reason;
 
-            setPayments(response.data.payments || []);
-            setCurrentBooking(bookingResponse.data);
+            setPayments(response.value.data.payments || []);
+            setCurrentBooking(bookingResponse.value.data);
+            if (readiness.status === "fulfilled") setStatementReadiness(readiness.value.data);
+            else setReadinessError(readiness.reason.response?.data?.message || "Could not check statement readiness. Refresh and try again.");
         } catch (err) {
+            setReadinessError("Could not complete the statement check. Refresh and try again.");
             setError(
                 err.response?.data?.message ||
                 err.response?.data?.error ||
@@ -388,6 +401,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
             } else if (err.response?.data?.message) {
                 message = err.response.data.message;
             }
+            if (err.response?.status === 409) await fetchPaymentHistory();
             setError(message);
         } finally {
             setStatementLoading(false);
@@ -463,7 +477,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                     <div className="d-flex gap-2">
                                         <PermissionGuard all={["booking.view", "payment.view", "pdf.generate"]}>
                                             <button type="button" className="btn btn-outline-primary"
-                                                onClick={handleDownloadStatement} disabled={statementLoading || loading}>
+                                                onClick={handleDownloadStatement} disabled={statementLoading || loading || !statementReadiness?.ready}>
                                                 <FaFilePdf className="me-2" />
                                                 {statementLoading ? "Preparing..." : "Download statement"}
                                             </button>
@@ -490,6 +504,27 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
 
                                 {error && <div className="alert alert-danger">{error}</div>}
                                 {success && <div className="alert alert-success">{success}</div>}
+
+                                <div className={`alert ${statementReadiness?.ready ? "alert-success" : "alert-warning"}`} role="status">
+                                    {loading ? <strong>Checking guest statement...</strong> : readinessError ?
+                                        <><strong>Statement check unavailable.</strong> {readinessError}</> : statementReadiness?.ready ?
+                                        <><strong>Statement ready.</strong> The booking price and recorded payments agree. The ledger is checked again when downloading.</> :
+                                        statementReadiness ? <>
+                                            <strong>Statement needs review.</strong> Resolve these items before downloading:
+                                            <ul className="mb-0 mt-2">
+                                                {statementReadiness.issues.slice(0, 10).map((issue, index) => {
+                                                    const date = toCalendarDateInput(issue.paymentDate);
+                                                    return <li key={`${issue.code}-${issue.paymentNo || index}`}>
+                                                        {issue.paymentNo && <strong>{issue.paymentNo}: </strong>}{issue.message}{" "}
+                                                        {issue.paymentNo && date && <PermissionGuard all={["report.view", "payment.view"]}>
+                                                            <Link to={`/payment-reports?payment=${encodeURIComponent(issue.paymentNo)}&date=${date}#guest-payment-matching`}>Find in matching register</Link>
+                                                        </PermissionGuard>}
+                                                    </li>;
+                                                })}
+                                            </ul>
+                                            {statementReadiness.issues.length > 10 && <div className="small mt-1">{statementReadiness.issues.length - 10} more records need review.</div>}
+                                        </> : <strong>Checking guest statement...</strong>}
+                                </div>
 
                                 <div className="row g-3 mb-4">
                                     <div className="col-md-4">

@@ -101,7 +101,10 @@ GET    /booking-payments/:id
 PUT    /booking-payments/:id
 DELETE /booking-payments/:id
 POST   /payment-receipts/:id
+GET    /booking-pdf/payment-statement/:id/readiness
 ```
+
+Statement readiness returns `{ "ready": true, "issues": [], "checkedAt": "..." }` or actionable issues with a `code`, `message`, optional `paymentNo` and `paymentDate`. It requires `booking.view` and `payment.view` and does not cache results. A blocked statement still returns HTTP 200 for the readiness check; downloading the PDF rechecks the ledger and returns a conflict until the data is corrected.
 
 `PUT /booking-payments/:id` corrects an unmatched payment. Include the fields being corrected and a `correctionReason` of 3–300 characters. Send `expectedVersion` from the register row to reject stale edits. A currency correction must include the verified booking-currency `amount`, even if its numeric value is unchanged. Refund edits need both `payment.update` and `payment.refund`; a matched payment must first be reopened through `PATCH /booking-payments/:id/reconciliation`.
 

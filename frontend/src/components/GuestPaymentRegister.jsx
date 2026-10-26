@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../api/axios";
 import PermissionGuard from "./PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
@@ -7,6 +8,15 @@ import { notifyPaymentAttentionChanged } from "../utils/paymentEvents";
 
 const today = todayCalendarDate();
 const initialFilters = { from: `${today.slice(0, 7)}-01`, to: today, reference: "", status: "all" };
+const filtersFromLink = (params) => {
+    const payment = params.get("payment")?.trim();
+    if (!payment || payment.length > 100) return initialFilters;
+    const date = params.get("date");
+    const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date || "") &&
+        toCalendarDateInput(`${date}T00:00:00Z`) === date;
+    return { ...initialFilters, from: validDate ? date : initialFilters.from,
+        to: validDate ? date : initialFilters.to, reference: payment };
+};
 const emptyRegister = { items: [], total: 0, page: 1, limit: 25, pages: 0, totalsByCurrency: [] };
 const statuses = [{ value: "all", label: "All" }, { value: "unreconciled", label: "To match" }, { value: "reconciled", label: "Matched" }];
 const paymentTypes = ["Advance", "Partial Payment", "Final Payment", "Refund", "Other"];
@@ -20,8 +30,10 @@ const localTime = (value) => new Date(value).toLocaleString("en-US", {
 
 const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
     const { hasPermission } = usePermissions();
-    const [filters, setFilters] = useState(initialFilters);
-    const [applied, setApplied] = useState(initialFilters);
+    const [searchParams] = useSearchParams();
+    const linkedPayment = searchParams.get("payment");
+    const [filters, setFilters] = useState(() => filtersFromLink(searchParams));
+    const [applied, setApplied] = useState(() => filtersFromLink(searchParams));
     const [page, setPage] = useState(1);
     const [register, setRegister] = useState(emptyRegister);
     const [refreshKey, setRefreshKey] = useState(0);
@@ -35,6 +47,12 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
     const [statementReference, setStatementReference] = useState("");
     const [reason, setReason] = useState("");
     const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (linkedPayment) {
+            document.getElementById("guest-payment-matching")?.scrollIntoView({ block: "start" });
+        }
+    }, [linkedPayment]);
 
     useEffect(() => {
         let cancelled = false;
@@ -176,7 +194,7 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
     };
 
     return (
-        <div className="card border-0 shadow-sm rounded-4 mb-4">
+        <div id="guest-payment-matching" className="card border-0 shadow-sm rounded-4 mb-4">
             <div className="card-body p-4">
                 <h4 className="fw-bold mb-1">Guest payment matching</h4>
                 <p className="text-muted small mb-3">Compare recorded receipts and refunds with your bank statement or cashbook. Matching verifies a record; it does not change the guest balance. Cancelled records are excluded.</p>

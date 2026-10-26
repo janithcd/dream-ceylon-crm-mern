@@ -41,9 +41,13 @@ const main = async () => {
         assert.equal(created.status, 201, `Create booking: ${await created.clone().text()}`);
         booking = (await created.json()).booking;
         const path = `/booking-pdf/payment-statement/${booking._id}`;
+        const readinessPath = `${path}/readiness`;
         assert.equal((await request(path, "POST", {}, sales)).status, 403);
         assert.equal((await request(path, "POST", {}, viewer)).status, 403);
+        assert.equal((await request(readinessPath, "GET", undefined, sales)).status, 403);
+        assert.equal((await request(readinessPath, "GET", undefined, viewer)).status, 200);
         assert.equal((await request("/booking-pdf/payment-statement/invalid", "POST", {})).status, 400);
+        assert.equal((await request("/booking-pdf/payment-statement/invalid/readiness")).status, 400);
         const plan = await request(`/bookings/${booking._id}/hotel-advance`, "PATCH", {
             hotelAdvanceAmount: 500, hotelAdvanceDueDate: calendarDate(new Date(Date.now() + 3 * day)),
         });
@@ -54,6 +58,10 @@ const main = async () => {
         });
         assert.equal((await record(500, "Advance")).status, 201);
         assert.equal((await record(100, "Refund", "Refunded")).status, 201);
+        const ready = await request(readinessPath);
+        assert.equal(ready.status, 200);
+        assert.equal(ready.headers.get("cache-control"), "no-store");
+        assert.deepEqual((await ready.json()).issues, []);
         const pdf = await request(path, "POST", {});
         assert.equal(pdf.status, 200, `Statement PDF: ${await pdf.clone().text()}`);
         assert.match(pdf.headers.get("content-disposition"), /payment-statement/);
@@ -67,9 +75,14 @@ const main = async () => {
             booking: booking._id, amount: 10, currency: "LKR", status: "Received",
             paymentType: "Advance" });
         assert.equal((await request(path, "POST", {})).status, 409);
+        const foreignCheck = await (await request(readinessPath)).json();
+        assert.equal(foreignCheck.ready, false);
+        assert.deepEqual(foreignCheck.issues.map(({ code, paymentNo }) => [code, paymentNo]),
+            [["payment_currency", legacy.paymentNo]]);
         await BookingPayment.deleteOne({ _id: legacy._id });
         await Booking.updateOne({ _id: booking._id }, { $set: { advancePayment: 900 } });
         assert.equal((await request(path, "POST", {})).status, 409);
+        assert.equal((await (await request(readinessPath)).json()).issues[0].code, "paid_mismatch");
         await Booking.updateOne({ _id: booking._id }, { $set: { advancePayment: 400 } });
         assert.equal((await request(path, "POST", {})).status, 200);
 
@@ -80,6 +93,10 @@ const main = async () => {
             notes: "PRIVATE CORRECTION NOTE" });
         const editPath = `/booking-payments/${incorrect._id}`;
         assert.equal((await request(path, "POST", {})).status, 409);
+        const directionCheck = await (await request(readinessPath)).json();
+        assert.deepEqual(directionCheck.issues.map(({ code, paymentNo }) => [code, paymentNo]),
+            [["payment_direction", incorrect.paymentNo]]);
+        assert.equal(JSON.stringify(directionCheck).includes("PRIVATE CORRECTION NOTE"), false);
         assert.equal((await request(`${editPath}/reconciliation`, "PATCH", {
             reconciled: true, statementReference: "BANK-WRONG",
         })).status, 409);
@@ -98,6 +115,7 @@ const main = async () => {
         assert.equal(corrected.status, 200, `Correct refund: ${await corrected.clone().text()}`);
         assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 390);
         assert.equal((await request(path, "POST", {})).status, 200);
+        assert.equal((await (await request(readinessPath)).json()).ready, true);
         const audit = await ActivityLog.findOne({ relatedRecordId: incorrect._id,
             "metadata.correctionReason": "Checked refund against cashbook" });
         assert.equal(audit?.metadata.correctionBefore.paymentType, "Advance");

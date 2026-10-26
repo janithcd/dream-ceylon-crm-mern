@@ -155,31 +155,59 @@ const createGuestPaymentStatementPdf = async (statement, company) => {
     return output;
 };
 
+const readGuestPaymentStatementSnapshot = async (bookingId) => {
+    let release = null;
+    try {
+        release = await acquireBookingPaymentLocks([bookingId]);
+        const booking = await Booking.findById(bookingId);
+        if (!booking) return { status: 404, message: "Booking not found" };
+        const payments = await BookingPayment.find({ booking: booking._id })
+            .sort({ paymentDate: 1, _id: 1 }).limit(1001).lean();
+        if (payments.length > 1000) {
+            return { status: 413, message: "This booking has more than 1,000 payment records. Contact Finance for an export." };
+        }
+        const checkedAt = new Date();
+        return { result: buildGuestPaymentStatement(booking, payments, checkedAt), checkedAt };
+    } finally {
+        if (release) await release();
+    }
+};
+
+const getGuestPaymentStatementReadiness = async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ message: "Invalid booking ID" });
+    }
+    try {
+        const snapshot = await readGuestPaymentStatementSnapshot(req.params.id);
+        if (snapshot.status === 404) return res.status(404).json({ message: snapshot.message });
+        if (snapshot.status === 413) return res.json({ ready: false, checkedAt: new Date(),
+            issues: [{ code: "too_many_payments", message: snapshot.message, paymentNo: null, paymentDate: null }] });
+        return res.json({ ready: !snapshot.result.error, issues: snapshot.result.issues,
+            checkedAt: snapshot.checkedAt });
+    } catch (error) {
+        console.error("Payment statement readiness failed:", error.message);
+        return res.status(error.code === "PAYMENT_WRITE_BUSY" ? 409 : 500).json({
+            message: error.code === "PAYMENT_WRITE_BUSY" ? error.message : "Failed to check the payment statement",
+        });
+    }
+};
+
 const generateGuestPaymentStatementPdf = async (req, res) => {
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
         return res.status(400).json({ message: "Invalid booking ID" });
     }
-    let release = null;
     let statement;
     try {
-        release = await acquireBookingPaymentLocks([req.params.id]);
-        const booking = await Booking.findById(req.params.id);
-        if (!booking) return res.status(404).json({ message: "Booking not found" });
-        const payments = await BookingPayment.find({ booking: booking._id })
-            .sort({ paymentDate: 1, _id: 1 }).limit(1001).lean();
-        if (payments.length > 1000) {
-            return res.status(413).json({ message: "This booking has more than 1,000 payment records. Contact Finance for an export." });
-        }
-        const result = buildGuestPaymentStatement(booking, payments);
-        if (result.error) return res.status(409).json({ message: result.error });
-        statement = result.value;
+        const snapshot = await readGuestPaymentStatementSnapshot(req.params.id);
+        if (snapshot.status) return res.status(snapshot.status).json({ message: snapshot.message });
+        if (snapshot.result.error) return res.status(409).json({ message: snapshot.result.error });
+        statement = snapshot.result.value;
     } catch (error) {
         console.error("Payment statement snapshot failed:", error.message);
         return res.status(error.code === "PAYMENT_WRITE_BUSY" ? 409 : 500).json({
             message: error.code === "PAYMENT_WRITE_BUSY" ? error.message : "Failed to load the payment statement",
         });
-    } finally {
-        if (release) await release();
     }
     try {
         const company = await getDocumentBrandConfig();
@@ -205,4 +233,5 @@ const generateGuestPaymentStatementPdf = async (req, res) => {
     }
 };
 
-module.exports = { createGuestPaymentStatementPdf, generateGuestPaymentStatementPdf };
+module.exports = { createGuestPaymentStatementPdf, generateGuestPaymentStatementPdf,
+    getGuestPaymentStatementReadiness };

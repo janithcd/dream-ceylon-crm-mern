@@ -58,6 +58,35 @@ test("a statement stops when the ledger would mislead the guest", () => {
     assert.equal(credit.balanceCents, 0);
 });
 
+test("readiness identifies every affected payment without exposing private fields", () => {
+    const result = buildGuestPaymentStatement(booking(), [
+        payment({ paymentNo: "PAY-TYPE", status: "Refunded", notes: "PRIVATE TYPE NOTE" }),
+        payment({ paymentNo: "PAY-CURRENCY", currency: "LKR", notes: "PRIVATE CURRENCY NOTE" }),
+        payment({ paymentNo: "PAY-FUTURE", paymentDate: new Date("2026-10-26") }),
+        payment({ paymentNo: "PAY-CANCELLED", status: "Cancelled", currency: "LKR" }),
+    ], issuedAt);
+    assert.deepEqual(result.issues.map(({ code, paymentNo }) => [code, paymentNo]), [
+        ["payment_direction", "PAY-TYPE"], ["payment_currency", "PAY-CURRENCY"],
+        ["future_payment", "PAY-FUTURE"],
+    ]);
+    assert.equal(result.issues[0].paymentDate, "2026-10-23T00:00:00.000Z");
+    assert.equal(JSON.stringify(result).includes("PRIVATE"), false);
+    assert.match(result.error, /type and status/);
+    assert.deepEqual(buildGuestPaymentStatement(booking(), [
+        payment({ paymentNo: "PAY-2", status: "Refunded", paymentType: "Refund", amount: 100 }),
+        payment(),
+    ], issuedAt).issues, []);
+});
+
+test("readiness separates refund deficits and booking summary mismatches", () => {
+    const deficit = buildGuestPaymentStatement({ ...booking(), advancePayment: 0 }, [
+        payment({ paymentNo: "REF-1", paymentType: "Refund", status: "Refunded", amount: 10 }),
+    ], issuedAt);
+    assert.deepEqual(deficit.issues.map(({ code }) => code), ["refund_excess"]);
+    const mismatch = buildGuestPaymentStatement({ ...booking(), advancePayment: 50 }, [payment()], issuedAt);
+    assert.deepEqual(mismatch.issues.map(({ code, paymentNo }) => [code, paymentNo]), [["paid_mismatch", null]]);
+});
+
 test("statement PDF carries the guest totals across pages without private notes", async () => {
     const rows = [payment(), payment({ paymentNo: "REF-1", status: "Refunded",
         paymentType: "Refund", amount: 100, paymentDate: new Date("2026-10-24") })];
