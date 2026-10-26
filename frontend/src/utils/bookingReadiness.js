@@ -41,6 +41,20 @@ export const getBookingReadiness = (booking, now = new Date()) => {
     }
     const sections = [section("booking", "Booking & guest", "Checks booking status, travel dates, guest name, contact fields, and traveler count.", details)];
 
+    const namedCount = Array.isArray(booking.travelerNames) ? booking.travelerNames.length : 0;
+    const headcount = booking.numberOfTravelers;
+    const rosterIssues = [];
+    if (namedCount > 0 && Number.isInteger(headcount) && namedCount < headcount) {
+        rosterIssues.push(`${count(headcount - namedCount, "traveler name")} still missing.`);
+    }
+    if (namedCount > 0 && Number.isInteger(headcount) && namedCount > headcount) {
+        rosterIssues.push("More names are saved than the booking traveler count. Check the booking headcount.");
+    }
+    sections.push(section("travelers", "Traveler roster", !namedCount
+        ? "No traveler names are recorded. The booking contact may not be traveling."
+        : `${namedCount} of ${Number.isInteger(headcount) && headcount > 0 ? headcount : "the booked"} travelers named. Names stay in the roster and are not shown in this review.`,
+    rosterIssues, Boolean(namedCount && Number.isInteger(headcount) && headcount > 0)));
+
     const days = booking.itineraryDays || [];
     const itineraryIssues = [];
     if (days.length && trip) {

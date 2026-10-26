@@ -9,6 +9,7 @@ const completeBooking = () => ({
     travelEndDate: "2027-03-04",
     customer: { fullName: "Test Guest", email: "guest@example.com", whatsappNumber: "+44 7700 900123" },
     numberOfTravelers: 2,
+    travelerNames: ["First Traveler", "Second Traveler"],
     itineraryDays: [2, 3, 4].map((day) => ({ date: `2027-03-0${day}`, title: "Day plan" })),
     hotelStays: [{ hotelName: "Test Hotel", checkInDate: "2027-03-02", checkOutDate: "2027-03-04", status: "Confirmed" }],
     transportAssignments: [{
@@ -27,7 +28,7 @@ test("a fully recorded trip passes with an overnight airport pickup and no input
     const review = getBookingReadiness(booking, now);
     assert.equal(review.attentionCount, 0);
     assert.equal(review.unassessedCount, 0);
-    assert.equal(review.sections.length, 5);
+    assert.equal(review.sections.length, 6);
     assert.ok(review.sections.every((item) => item.status === "clear"));
     assert.deepEqual(booking, before);
     // No second-day pickup requirement is inferred from the scheduled flight.
@@ -47,6 +48,19 @@ test("transport-only bookings do not fail hotel coverage or claim unsaved plans 
     assert.match(findSection(review, "hotels").summary, /guest-arranged/);
     booking.transportAssignments = [];
     assert.equal(getBookingReadiness(booking, now).unassessedCount, 4);
+});
+
+test("traveler roster flags partial or mismatched names without exposing their identities", () => {
+    const booking = completeBooking();
+    booking.travelerNames = ["PRIVATE_TRAVELER_NAME"];
+    const review = getBookingReadiness(booking, now);
+    assert.equal(findSection(review, "travelers").status, "attention");
+    assert.match(findSection(review, "travelers").issues.join(" "), /1 traveler name still missing/);
+    assert.ok(!JSON.stringify(review).includes("PRIVATE_TRAVELER_NAME"));
+    booking.travelerNames = [];
+    assert.equal(findSection(getBookingReadiness(booking, now), "travelers").status, "unassessed");
+    booking.travelerNames = ["One", "Two", "Three"];
+    assert.match(findSection(getBookingReadiness(booking, now), "travelers").issues.join(" "), /More names/);
 });
 
 test("hotel review finds gaps, requested stays, overlaps and out-of-trip reservations", () => {
@@ -143,7 +157,7 @@ test("same-day trips, invalid ranges and bookings with old incomplete records st
 
     const legacy = getBookingReadiness({ bookingStatus: "Pending", customer: { whatsappNumber: "0771234567" } }, now);
     assert.equal(legacy.attentionCount, 1);
-    assert.equal(legacy.unassessedCount, 4);
+    assert.equal(legacy.unassessedCount, 5);
     assert.match(findSection(legacy, "booking").issues.join("\n"), /full international number/);
 });
 

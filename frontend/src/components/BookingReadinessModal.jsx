@@ -7,7 +7,7 @@ import { getBookingReadiness } from "../utils/bookingReadiness";
 
 const statusLabels = { attention: "Needs attention", clear: "No gaps found", unassessed: "Not assessed" };
 const statusClasses = { attention: "text-bg-warning", clear: "text-bg-success", unassessed: "text-bg-secondary" };
-const actionLabels = { booking: "Edit booking", itinerary: "Open itinerary", hotels: "Open hotels", transport: "Open transport", tasks: "Open checklist" };
+const actionLabels = { booking: "Edit booking", travelers: "Open traveler roster", itinerary: "Open itinerary", hotels: "Open hotels", transport: "Open transport", tasks: "Open checklist" };
 
 const BookingReadinessModal = ({ bookingId, onClose, onOpenSection }) => {
     const { hasPermission } = usePermissions();

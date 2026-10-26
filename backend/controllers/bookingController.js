@@ -450,6 +450,12 @@ const updateBooking = async (req, res) => {
             });
         }
 
+        if (payload.numberOfTravelers < (booking.travelerNames?.length || 0)) {
+            return res.status(400).json({
+                message: "Reduce the named traveler roster before lowering the booking traveler count.",
+            });
+        }
+
         if (!payload.customer.fullName) {
             return res.status(400).json({
                 message: "Customer name is required",

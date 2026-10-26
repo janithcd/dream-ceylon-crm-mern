@@ -35,6 +35,7 @@ const { getAirportTransfers } = require("../controllers/airportTransfersControll
 const { getGuestTransferMessage } = require("../controllers/guestTransferMessageController");
 const { getHotelConfirmationDraft } = require("../controllers/hotelConfirmationDraftController");
 const { getHotelCancellationDraft } = require("../controllers/hotelCancellationDraftController");
+const { getTravelerRoster, saveTravelerRoster } = require("../controllers/bookingTravelerController");
 const { getOutstandingBalances, getPaymentAttention, updatePaymentDueDate, updateHotelAdvance, logPaymentContact } = require("../controllers/outstandingBalancesController");
 const {
     addHotelStay,
@@ -137,6 +138,8 @@ router.get(
 );
 
 router.get("/:id/itinerary", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getItinerary);
+router.get("/:id/travelers", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getTravelerRoster);
+router.put("/:id/travelers", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), saveTravelerRoster);
 router.post("/:id/itinerary", protect, authorizePermissions(PERMISSIONS.BOOKING_UPDATE), addItineraryDay);
 router.get("/:id/itinerary/package-preview", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.PACKAGE_VIEW), previewPackageItinerary);
 router.post("/:id/itinerary/import-package", protect, authorizePermissions(PERMISSIONS.BOOKING_UPDATE, PERMISSIONS.PACKAGE_VIEW), importPackageItinerary);

@@ -17,6 +17,7 @@ import {
     FaReceipt,
     FaSearch,
     FaTrash,
+    FaUsers,
     FaWallet,
 } from "react-icons/fa";
 import api from "../api/axios";
@@ -29,6 +30,7 @@ import BookingActivityModal from "../components/BookingActivityModal";
 import BookingTransportModal from "../components/BookingTransportModal";
 import SupplierContactModal from "../components/SupplierContactModal";
 import BookingReadinessModal from "../components/BookingReadinessModal";
+import BookingTravelersModal from "../components/BookingTravelersModal";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
@@ -86,6 +88,7 @@ const Bookings = () => {
     const [selectedActivityBooking, setSelectedActivityBooking] = useState(null);
     const [selectedTransportBooking, setSelectedTransportBooking] = useState(null);
     const [selectedReadinessBooking, setSelectedReadinessBooking] = useState(null);
+    const [selectedTravelerBooking, setSelectedTravelerBooking] = useState(null);
 
     const [searchInput, setSearchInput] = useState(initialKeyword);
     const [keyword, setKeyword] = useState(initialKeyword);
@@ -1041,6 +1044,14 @@ const Bookings = () => {
                                                 <small className="d-block text-muted">
                                                     Preparation: {(booking.preparationTasks || []).filter((task) => task.completedAt).length}/{booking.preparationTasks?.length || 0}
                                                 </small>
+                                                <button
+                                                    type="button"
+                                                    className="btn btn-link btn-sm p-0 text-start d-block"
+                                                    onClick={() => setSelectedTravelerBooking(booking)}
+                                                    aria-label={`Traveler roster for ${booking.bookingCode}`}
+                                                >
+                                                    <FaUsers className="me-1" />{booking.travelerNames?.length || 0}/{booking.numberOfTravelers} travelers named
+                                                </button>
                                                 {!["Completed", "Cancelled"].includes(booking.bookingStatus) && <button
                                                     type="button"
                                                     className="btn btn-link btn-sm p-0 text-start d-block mb-1"
@@ -1291,6 +1302,7 @@ const Bookings = () => {
                     onOpenSection={(section, booking) => {
                         setSelectedReadinessBooking(null);
                         if (section === "booking") handleEdit(booking);
+                        if (section === "travelers") setSelectedTravelerBooking(booking);
                         if (section === "itinerary") setSelectedItineraryBooking(booking);
                         if (section === "hotels") setSelectedHotelBooking(booking);
                         if (section === "transport") setSelectedTransportBooking(booking);
@@ -1298,6 +1310,12 @@ const Bookings = () => {
                     }}
                 />
             )}
+            {selectedTravelerBooking && <BookingTravelersModal
+                key={selectedTravelerBooking._id}
+                bookingId={selectedTravelerBooking._id}
+                onClose={() => setSelectedTravelerBooking(null)}
+                onChanged={fetchBookings}
+            />}
             {selectedPreparationBooking && (
                 <BookingPreparationModal
                     booking={selectedPreparationBooking}

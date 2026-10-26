@@ -190,6 +190,18 @@ const bookingSchema = new mongoose.Schema(
             min: 1,
         },
 
+        travelerNames: {
+            type: [{ type: String, trim: true, maxlength: 120 }],
+            default: [],
+            validate: [
+                { validator: (names) => names.length <= 60, message: "A booking can have at most 60 named travelers" },
+                { validator: function (names) {
+                    return !(this instanceof mongoose.Document) || names.length <= this.numberOfTravelers;
+                }, message: "Named travelers cannot exceed the booking traveler count" },
+            ],
+        },
+        travelerRosterVersion: { type: Number, default: 0, min: 0 },
+
         vehicleType: {
             type: String,
             enum: ["Car", "SUV", "Van", "Mini Bus", "Other"],
