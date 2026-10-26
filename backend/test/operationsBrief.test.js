@@ -38,9 +38,11 @@ const exampleBooking = () => new Booking({
 
 test("departure brief selects operational details without prices or private notes", () => {
     const brief = buildOperationsBrief(exampleBooking());
-    assert.equal(brief.sections[0].items.length, 1);
+    assert.equal(brief.sections[0].title, "Named travelers");
+    assert.equal(brief.sections[0].items.length, 0);
     assert.equal(brief.sections[1].items.length, 1);
     assert.equal(brief.sections[2].items.length, 1);
+    assert.equal(brief.sections[3].items.length, 1);
     assert.match(JSON.stringify(brief), /HV-123/);
     assert.match(JSON.stringify(brief), /Confirm guide/);
     assert.match(JSON.stringify(brief), /KDH Hiace/);
@@ -56,10 +58,10 @@ test("departure brief prints dated itinerary entries in order", async () => {
         { date: new Date("2027-03-01"), title: "Arrival", plan: "Airport pickup" }
     );
     const brief = buildOperationsBrief(booking);
-    assert.equal(brief.sections[0].title, "Daily itinerary");
-    assert.match(brief.sections[0].items[0].title, /Arrival/);
-    assert.match(brief.sections[0].items[1].title, /Sigiriya/);
-    assert.deepEqual(brief.sections[0].items[1].lines, ["Plan: Climb the rock", "Overnight: Habarana"]);
+    const itinerary = brief.sections.find((group) => group.title === "Daily itinerary");
+    assert.match(itinerary.items[0].title, /Arrival/);
+    assert.match(itinerary.items[1].title, /Sigiriya/);
+    assert.deepEqual(itinerary.items[1].lines, ["Plan: Climb the rock", "Overnight: Habarana"]);
     const bytes = await createOperationsBriefPdf(brief, { companyName: "Dream Ceylon Journeys" });
     const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
     const task = getDocument({ data: new Uint8Array(bytes), disableFontFace: true, useSystemFonts: false });
@@ -130,6 +132,7 @@ test("departure brief PDF keeps sections readable across multiple pages", async 
 test("departure brief PDF keeps Sinhala, Tamil, Cyrillic, and accented names", async () => {
     const booking = exampleBooking();
     booking.customer.fullName = "José සිංහල தமிழ் Жанна";
+    booking.travelerNames = ["Demelza සිංහල", "Мария தமிழ்"];
     booking.hotelStays[0].hotelName = "කොළඹ ஹோட்டல்";
     assert.equal(cleanPdfText(booking.customer.fullName), booking.customer.fullName);
 
@@ -141,12 +144,24 @@ test("departure brief PDF keeps Sinhala, Tamil, Cyrillic, and accented names", a
         assert.equal(document.numPages, 1);
         const content = await (await document.getPage(1)).getTextContent();
         const printed = content.items.map(({ str }) => str).join("").replace(/\s+/gu, "");
-        for (const name of ["José", "සිංහල", "தமிழ்", "Жанна"]) {
+        for (const name of ["José", "සිංහල", "தமிழ்", "Жанна", "Demelza", "Мария"]) {
             assert.ok(printed.includes(name), `${name} must remain searchable in the PDF`);
         }
     } finally {
         await task.destroy();
     }
+});
+
+test("departure brief labels incomplete traveler names without assuming the contact is traveling", () => {
+    const booking = exampleBooking();
+    booking.travelerNames = ["Named Passenger"];
+    const names = buildOperationsBrief(booking).sections.find((group) => group.title === "Named travelers");
+    assert.deepEqual(names.items, [{ title: "Named Passenger", lines: [] }]);
+    assert.match(names.notice, /1 of 2 names saved/);
+    booking.travelerNames = [];
+    const empty = buildOperationsBrief(booking).sections[0];
+    assert.match(empty.empty, /No traveler names recorded/);
+    assert.equal(empty.items.length, 0);
 });
 
 test("departure PDF requires booking and PDF permissions and rejects cancelled trips", async (t) => {

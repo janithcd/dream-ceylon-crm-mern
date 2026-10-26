@@ -21,6 +21,9 @@ const main = async () => {
                 whatsappNumber: "+94771234567", country: "UK" },
             travelStartDate: new Date("2027-04-01"), travelEndDate: new Date("2027-04-05"),
             numberOfTravelers: 2, totalPrice: 600,
+            hotelStays: [{ hotelName: "CI Hotel", checkInDate: new Date("2027-04-01"),
+                checkOutDate: new Date("2027-04-02"), rooms: 1, status: "Confirmed",
+                supplierEmail: "reservations@example.invalid", confirmationNumber: "CI-REF" }],
         });
         // Existing bookings do not have the roster version field.
         await Booking.collection.updateOne({ _id: booking._id }, { $unset: { travelerRosterVersion: "" } });
@@ -32,6 +35,8 @@ const main = async () => {
         });
         const viewer = admins[1];
         const sales = admins[0];
+        const roomingUrl = `${url}/hotel-stays/${booking.hotelStays[0]._id}/rooming-details`;
+        assert.equal((await request(sales, roomingUrl)).status, 409);
         const read = await request(viewer, `${url}/travelers`);
         assert.equal(read.status, 200, await read.clone().text());
         assert.equal(read.headers.get("cache-control"), "no-store");
@@ -45,6 +50,15 @@ const main = async () => {
         assert.equal(saved.status, 200, await saved.clone().text());
         assert.equal((await saved.json()).version, 1);
         assert.deepEqual(Array.from((await Booking.findById(booking._id)).travelerNames), ["First Traveler", "Second Traveler"]);
+        assert.equal((await request(viewer, roomingUrl)).status, 403);
+        const rooming = await request(sales, roomingUrl);
+        assert.equal(rooming.status, 200, await rooming.clone().text());
+        assert.equal(rooming.headers.get("cache-control"), "no-store");
+        const roomingDetails = await rooming.json();
+        assert.deepEqual(roomingDetails.travelerNames, ["First Traveler", "Second Traveler"]);
+        assert.equal(roomingDetails.recipient, "reservations@example.invalid");
+        assert.ok(!JSON.stringify(roomingDetails).includes("roster@example.invalid"));
+        assert.ok(!JSON.stringify(roomingDetails).includes("600"));
         assert.equal((await request(sales, `${url}/travelers`, "PUT", {
             expectedVersion: 0, expectedHeadcount: 2, travelerNames: [],
         })).status, 409);
@@ -53,7 +67,7 @@ const main = async () => {
         const audit = await ActivityLog.findOne({ relatedRecordId: booking._id, description: /Traveler roster updated/ });
         assert.equal(audit?.metadata.namedTravelerCount, 2);
         assert.equal(JSON.stringify(audit).includes("First Traveler"), false);
-        console.log("Traveler roster persists on legacy bookings and prevents stale or oversized updates.");
+        console.log("Traveler roster persists on legacy bookings and supplies permissioned hotel rooming details.");
     } finally {
         if (booking) {
             await ActivityLog.deleteMany({ relatedRecordId: booking._id });

@@ -35,6 +35,7 @@ const { getAirportTransfers } = require("../controllers/airportTransfersControll
 const { getGuestTransferMessage } = require("../controllers/guestTransferMessageController");
 const { getHotelConfirmationDraft } = require("../controllers/hotelConfirmationDraftController");
 const { getHotelCancellationDraft } = require("../controllers/hotelCancellationDraftController");
+const { getHotelRoomingDetails } = require("../controllers/hotelRoomingDetailsController");
 const { getTravelerRoster, saveTravelerRoster } = require("../controllers/bookingTravelerController");
 const { getOutstandingBalances, getPaymentAttention, updatePaymentDueDate, updateHotelAdvance, logPaymentContact } = require("../controllers/outstandingBalancesController");
 const {
@@ -200,6 +201,13 @@ router.get(
     protect,
     authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE),
     getHotelCancellationDraft
+);
+
+router.get(
+    "/:id/hotel-stays/:stayId/rooming-details",
+    protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE),
+    getHotelRoomingDetails
 );
 
 router.put(

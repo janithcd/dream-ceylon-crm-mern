@@ -72,6 +72,7 @@ const createOperationsBriefPdf = async (brief, company, generatedAt = new Date()
 
     for (const group of brief.sections) {
         section(`${group.title} (${group.items.length})`);
+        if (group.notice) write(group.notice, { color: muted });
         if (group.items.length === 0) {
             write(group.empty, { color: muted });
             continue;

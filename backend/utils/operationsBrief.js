@@ -17,6 +17,7 @@ const buildOperationsBrief = (booking) => {
     const openTasks = (booking.preparationTasks || [])
         .filter((task) => !task.completedAt)
         .sort(byDate("dueDate"));
+    const travelerNames = (booking.travelerNames || []).filter((name) => typeof name === "string" && name.trim());
 
     return {
         bookingCode: display(booking.bookingCode),
@@ -28,6 +29,14 @@ const buildOperationsBrief = (booking) => {
             `Travelers: ${display(booking.numberOfTravelers)} | Country: ${display(booking.customer?.country)}`,
         ],
         sections: [
+            {
+                title: "Named travelers",
+                empty: "No traveler names recorded. Verify the roster before departure.",
+                notice: travelerNames.length && travelerNames.length !== booking.numberOfTravelers
+                    ? `${travelerNames.length} of ${display(booking.numberOfTravelers)} names saved. Confirm the remaining travelers before departure.`
+                    : "",
+                items: travelerNames.map((name) => ({ title: name, lines: [] })),
+            },
             ...(itinerary.length ? [{
                 title: "Daily itinerary",
                 items: itinerary.map((day) => ({

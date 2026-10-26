@@ -31,6 +31,7 @@ import BookingTransportModal from "../components/BookingTransportModal";
 import SupplierContactModal from "../components/SupplierContactModal";
 import BookingReadinessModal from "../components/BookingReadinessModal";
 import BookingTravelersModal from "../components/BookingTravelersModal";
+import HotelRoomingModal from "../components/HotelRoomingModal";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
@@ -89,6 +90,7 @@ const Bookings = () => {
     const [selectedTransportBooking, setSelectedTransportBooking] = useState(null);
     const [selectedReadinessBooking, setSelectedReadinessBooking] = useState(null);
     const [selectedTravelerBooking, setSelectedTravelerBooking] = useState(null);
+    const [selectedRooming, setSelectedRooming] = useState(null);
 
     const [searchInput, setSearchInput] = useState(initialKeyword);
     const [keyword, setKeyword] = useState(initialKeyword);
@@ -1336,6 +1338,10 @@ const Bookings = () => {
                         setSelectedHotelEmail({ bookingId: selectedHotelBooking._id, stayId, purpose: "cancellation" });
                         setSelectedHotelBooking(null);
                     }}
+                    onPrepareRooming={(stayId) => {
+                        setSelectedRooming({ bookingId: selectedHotelBooking._id, stayId });
+                        setSelectedHotelBooking(null);
+                    }}
                     onOpenContacts={(itemId) => {
                         setSelectedSupplierContact({ bookingId: selectedHotelBooking._id, type: "hotel", itemId });
                         setSelectedHotelBooking(null);
@@ -1348,6 +1354,15 @@ const Bookings = () => {
                 stayId={selectedHotelEmail.stayId}
                 purpose={selectedHotelEmail.purpose}
                 onClose={() => setSelectedHotelEmail(null)}
+            />}
+            {selectedRooming && <HotelRoomingModal
+                key={`${selectedRooming.bookingId}-${selectedRooming.stayId}`}
+                {...selectedRooming}
+                onClose={() => setSelectedRooming(null)}
+                onOpenRoster={() => {
+                    setSelectedTravelerBooking({ _id: selectedRooming.bookingId });
+                    setSelectedRooming(null);
+                }}
             />}
             {selectedSupplierContact && <SupplierContactModal
                 key={`${selectedSupplierContact.bookingId}-${selectedSupplierContact.itemId}`}

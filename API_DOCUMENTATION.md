@@ -102,6 +102,8 @@ Creating a booking as `Cancelled` or changing an existing booking into `Cancelle
 
 `GET /bookings/:id/hotel-stays/:stayId/cancellation-draft` requires `booking.view` and `booking.update`. It returns an editable recipient, subject, body and missing-detail warnings for a requested or confirmed hotel stay on a cancelled booking. The body asks the hotel to confirm cancellation and disclose charges under the agreed terms, without asserting a refund or including internal cancellation reasons or financial data. It returns HTTP 409 if the booking is active or the stay is already cancelled. The response uses `Cache-Control: no-store`. It does not send an email or change records.
 
+`GET /bookings/:id/hotel-stays/:stayId/rooming-details` requires `booking.view` and `booking.update`. It returns the current saved traveler names and confirmed hotel reservation fields needed to prepare an editable rooming email. The roster must match the booking headcount, the booking must be active, and every reserved room must be capable of receiving a named guest; otherwise it returns HTTP 409. The staff member explicitly excludes travelers not staying at this hotel and assigns each included traveler to a sharing group in the browser before preparing the draft. The response omits guest contacts and financial/internal fields, uses `Cache-Control: no-store`, and does not send an email or log contact.
+
 ## Payments
 
 ```http
