@@ -76,7 +76,8 @@ test("rooming endpoint checks both permissions and reloads the current roster wi
     t.mock.method(Admin, "findById", (id) => ({ select: async () => ({
         _id: id, role: String(id) === viewerId ? "Viewer" : "Sales", status: "Active", tokenVersion: 0,
     }) }));
-    t.mock.method(Booking, "findById", (id) => ({ select: async () => {
+    t.mock.method(Booking, "findById", (id) => ({ select: async (projection) => {
+        assert.match(projection, /travelerRosterVersion/);
         reads += 1;
         return String(id) === String(booking._id) ? booking : null;
     } }));
@@ -106,7 +107,9 @@ test("rooming endpoint checks both permissions and reloads the current roster wi
         roomCount: 2, savedAt: new Date(), savedByName: "Sales Agent" };
     assert.deepEqual((await (await request()).json()).roomingPlan.assignments, ["1", "2", "1"]);
     booking.travelerRosterVersion = 1;
-    const stale = (await (await request()).json()).roomingPlan;
+    const changed = await (await request()).json();
+    assert.equal(changed.rosterVersion, 1);
+    const stale = changed.roomingPlan;
     assert.equal(stale.status, "stale");
     assert.deepEqual(stale.assignments, []);
     booking.travelerNames = ["Updated Guest", "Demelza Peake", "Third Guest"];

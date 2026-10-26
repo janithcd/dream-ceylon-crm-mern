@@ -10,7 +10,7 @@ const getHotelRoomingDetails = async (req, res) => {
     }
     try {
         const booking = await Booking.findById(req.params.id)
-            .select("bookingCode bookingStatus numberOfTravelers travelerNames hotelStays");
+            .select("bookingCode bookingStatus numberOfTravelers travelerNames travelerRosterVersion hotelStays");
         if (!booking) return res.status(404).json({ message: "Booking not found" });
         const stay = booking.hotelStays.id(req.params.stayId);
         if (!stay) return res.status(404).json({ message: "Hotel stay not found in this booking" });
