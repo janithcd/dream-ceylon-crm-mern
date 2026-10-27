@@ -3,7 +3,7 @@ const Booking = require("../models/Booking");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { getDocumentBrandConfig } = require("../utils/documentSettings");
 const { buildPostTripMessage } = require("../utils/postTripMessage");
-const { PAGE_SIZE, FILTERS, getPostTripQuery, buildRecoveryAlertsPipeline,
+const { PAGE_SIZE, FILTERS, getPostTripQuery, buildRecoveryAlertsPipeline, buildContactAlertsPipeline,
     endedBeforeToday, isLowRating, parseCareAction, summarizeCare } = require("../utils/postTripCare");
 
 const validId = (id) => mongoose.Types.ObjectId.isValid(id);
@@ -44,12 +44,15 @@ const getPostTripCareQueue = async (req, res) => {
 const getRecoveryAlerts = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     try {
-        const [result] = await Booking.aggregate(buildRecoveryAlertsPipeline());
-        return res.json({ summary: result?.summary?.[0] || { count: 0, overdue: 0, dueToday: 0, unscheduled: 0 },
-            items: result?.items || [] });
+        const [recovery, contact] = await Promise.all([
+            Booking.aggregate(buildRecoveryAlertsPipeline()), Booking.aggregate(buildContactAlertsPipeline()),
+        ]);
+        return res.json({ summary: recovery[0]?.summary?.[0] || { count: 0, overdue: 0, dueToday: 0, unscheduled: 0 },
+            items: recovery[0]?.items || [],
+            contact: { count: contact[0]?.summary?.[0]?.count || 0, items: contact[0]?.items || [] } });
     } catch (error) {
-        console.error("Post-trip recovery alerts failed:", error.message);
-        return res.status(500).json({ message: "Failed to load recovery alerts." });
+        console.error("Guest care alerts failed:", error.message);
+        return res.status(500).json({ message: "Failed to load guest care alerts." });
     }
 };
 

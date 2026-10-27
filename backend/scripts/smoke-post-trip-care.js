@@ -57,6 +57,9 @@ const main = async () => {
         assert.ok(!JSON.stringify(due).includes("private-post-trip@example.invalid"));
         assert.ok(!JSON.stringify(due).includes("PRIVATE-POST-TRIP-NOTE"));
         assert.ok((await queue("closeout")).items.some((item) => item.bookingCode === open.bookingCode));
+        const contactAlerts = await recoveryAlerts();
+        assert.ok(contactAlerts.contact.count > 0);
+        assert.ok(contactAlerts.contact.items.some((item) => item.bookingCode === completed.bookingCode));
         const path = `/${completed._id}/post-trip-care`;
         const draftPath = `/${completed._id}/post-trip-message`;
         assert.equal((await request(viewer, draftPath)).status, 403);
@@ -66,8 +69,10 @@ const main = async () => {
         assert.equal(draft.headers.get("cache-control"), "no-store");
         assert.match((await draft.json()).message, /thank you for traveling/i);
         assert.equal((await Booking.findById(completed._id)).postTripCare, null, "Drafting must not record contact");
+        assert.ok((await recoveryAlerts()).contact.items.some((item) => item.bookingCode === completed.bookingCode));
         const contact = { action: "contacted", note: "Sent after the tour", channel: "WhatsApp", expectedRevision: 0 };
         assert.equal((await request(sales, path, "PATCH", contact)).status, 200);
+        assert.ok(!(await recoveryAlerts()).contact.items.some((item) => item.bookingCode === completed.bookingCode));
         assert.equal((await request(sales, path, "PATCH", contact)).status, 409);
         assert.ok((await queue("waiting")).items.some((item) => item.bookingCode === completed.bookingCode));
         const feedback = await request(sales, path, "PATCH", { action: "feedback", note: "Loved the trip", rating: 5, expectedRevision: 1 });

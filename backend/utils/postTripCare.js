@@ -52,6 +52,17 @@ const buildRecoveryAlertsPipeline = (now = new Date()) => {
     ];
 };
 
+// Completed trips in the 90-day care window that have not had their first recorded contact.
+const buildContactAlertsPipeline = (now = new Date()) => [
+    { $match: getPostTripQuery("due", now) },
+    { $project: { bookingCode: 1, travelEndDate: 1 } },
+    { $facet: {
+        summary: [{ $count: "count" }],
+        items: [{ $sort: { travelEndDate: 1, _id: 1 } }, { $limit: 5 },
+            { $project: { _id: 0, bookingId: "$_id", bookingCode: 1, travelEndDate: 1 } }],
+    } },
+];
+
 const endedBeforeToday = (booking, now = new Date()) => {
     const { start } = getBusinessDayBounds(now);
     const end = new Date(booking.travelEndDate);
@@ -165,5 +176,5 @@ const summarizeCare = (booking) => ({
     revision: booking.postTripCareRevision ?? 0,
 });
 
-module.exports = { PAGE_SIZE, FILTERS, getPostTripQuery, buildRecoveryAlertsPipeline,
+module.exports = { PAGE_SIZE, FILTERS, getPostTripQuery, buildRecoveryAlertsPipeline, buildContactAlertsPipeline,
     endedBeforeToday, isLowRating, parseCareAction, summarizeCare };

@@ -10,7 +10,8 @@ const Admin = require("../models/Admin");
 const ActivityLog = require("../models/ActivityLog");
 const CompanySetting = require("../models/CompanySetting");
 const { getBusinessDayBounds } = require("../utils/businessDate");
-const { getPostTripQuery, buildRecoveryAlertsPipeline, parseCareAction, summarizeCare } = require("../utils/postTripCare");
+const { getPostTripQuery, buildRecoveryAlertsPipeline, buildContactAlertsPipeline,
+    parseCareAction, summarizeCare } = require("../utils/postTripCare");
 const { buildPostTripMessage } = require("../utils/postTripMessage");
 
 const makeBooking = () => {
@@ -108,6 +109,21 @@ test("recovery alert bounds follow Sri Lanka days and omit private feedback", ()
     }
 });
 
+test("first-contact alerts use the 90-day Colombo window and expose only safe fields", () => {
+    const pipeline = buildContactAlertsPipeline(new Date("2026-10-26T19:00:00Z"));
+    assert.equal(pipeline[0].$match.bookingStatus, "Completed");
+    assert.equal(pipeline[0].$match.travelEndDate.$gte.toISOString(), "2026-07-28T18:30:00.000Z");
+    assert.equal(pipeline[0].$match.travelEndDate.$lt.toISOString(), "2026-10-26T18:30:00.000Z");
+    assert.deepEqual(pipeline[0].$match["postTripCare.status"].$nin, ["Contacted", "Feedback received", "Declined"]);
+    assert.equal(pipeline[2].$facet.items[0].$sort.travelEndDate, 1);
+    assert.equal(pipeline[2].$facet.items[1].$limit, 5);
+    assert.deepEqual(Object.keys(pipeline[2].$facet.items[2].$project).sort(),
+        ["_id", "bookingId", "bookingCode", "travelEndDate"].sort());
+    for (const key of ["customer", "contactNote", "feedbackNote", "totalPrice"]) {
+        assert.ok(!JSON.stringify(pipeline[2]).includes(key));
+    }
+});
+
 test("queue summary and message omit financial and internal booking information", () => {
     const booking = makeBooking();
     const before = booking.toObject();
@@ -133,10 +149,14 @@ test("post-trip API separates message drafting from versioned writes and enforce
     }) }));
     t.mock.method(Booking, "findById", (id) => ({ select: async () => String(id) === String(booking._id) ? booking : null }));
     t.mock.method(Booking, "aggregate", async (pipeline) => {
-        assert.equal(pipeline[0].$match["postTripCare.status"], "Feedback received");
-        return [{ summary: [{ count: 1, overdue: 0, dueToday: 0, unscheduled: 1 }],
-            items: [{ bookingId: booking._id, bookingCode: booking.bookingCode,
-                followUpDate: null, overdue: false, dueToday: false, unscheduled: true }] }];
+        if (pipeline[0].$match["postTripCare.status"] === "Feedback received") {
+            return [{ summary: [{ count: 1, overdue: 0, dueToday: 0, unscheduled: 1 }],
+                items: [{ bookingId: booking._id, bookingCode: booking.bookingCode,
+                    followUpDate: null, overdue: false, dueToday: false, unscheduled: true }] }];
+        }
+        assert.deepEqual(pipeline[0].$match["postTripCare.status"].$nin, ["Contacted", "Feedback received", "Declined"]);
+        return [{ summary: [{ count: 1 }],
+            items: [{ bookingId: booking._id, bookingCode: booking.bookingCode, travelEndDate: booking.travelEndDate }] }];
     });
     t.mock.method(Booking, "findOneAndUpdate", async (query, update) => {
         const expected = typeof query.postTripCareRevision === "object" ? 0 : query.postTripCareRevision;
@@ -161,7 +181,11 @@ test("post-trip API separates message drafting from versioned writes and enforce
     const alert = await request(alertUrl, viewer);
     assert.equal(alert.status, 200);
     assert.equal(alert.headers.get("cache-control"), "no-store");
-    assert.equal((await alert.json()).summary.unscheduled, 1);
+    const alertBody = await alert.json();
+    assert.equal(alertBody.summary.unscheduled, 1);
+    assert.equal(alertBody.contact.count, 1);
+    assert.equal(alertBody.contact.items[0].bookingCode, booking.bookingCode);
+    assert.ok(!JSON.stringify(alertBody).includes("PRIVATE@example.invalid"));
     assert.equal((await request(`${base}/post-trip-message`, viewer)).status, 403);
     assert.equal((await request(`${base}/post-trip-care`, viewer, "PATCH", { action: "contacted", expectedRevision: 0, channel: "Phone", note: "" })).status, 403);
     assert.equal((await request(`${base}/post-trip-care`, sales, "PATCH", { action: "contacted", expectedRevision: "0", channel: "Phone", note: "" })).status, 400);
