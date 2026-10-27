@@ -42,6 +42,16 @@ const main = async () => {
             assert.equal(response.status, 200, `Post-trip ${filter}: ${await response.clone().text()}`);
             return response.json();
         };
+        const recoveryAlerts = async () => {
+            const response = await request(viewer, "/post-trip-care/alerts");
+            assert.equal(response.status, 200, await response.clone().text());
+            assert.equal(response.headers.get("cache-control"), "no-store");
+            const result = await response.json();
+            for (const secret of ["Pickup was late", "private-post-trip@example.invalid", "PRIVATE-POST-TRIP-NOTE"]) {
+                assert.ok(!JSON.stringify(result).includes(secret), `Recovery alert exposed ${secret}`);
+            }
+            return result;
+        };
         const due = await queue("due");
         assert.ok(due.items.some((item) => item.bookingCode === completed.bookingCode));
         assert.ok(!JSON.stringify(due).includes("private-post-trip@example.invalid"));
@@ -72,9 +82,16 @@ const main = async () => {
         const needsRecovery = await queue("recovery");
         assert.ok(needsRecovery.items.some((item) => item.bookingCode === completed.bookingCode));
         assert.ok(!JSON.stringify(needsRecovery).includes("Pickup was late"), "Queue must not expose feedback notes");
+        assert.equal((await recoveryAlerts()).summary.unscheduled, 1);
+        assert.equal((await recoveryAlerts()).items[0].bookingCode, completed.bookingCode);
         const plan = await request(sales, path, "PATCH", { action: "recovery-plan", note: "Call the guest tomorrow",
             nextFollowUpDate: dateOnly(new Date(Date.now() + dayMs)), expectedRevision: 3 });
         assert.equal(plan.status, 200, await plan.clone().text());
+        assert.equal((await recoveryAlerts()).summary.count, 0);
+        await Booking.updateOne({ _id: completed._id }, { $set: { "postTripCare.recovery.nextFollowUpDate": new Date(dateOnly(new Date())) } });
+        assert.equal((await recoveryAlerts()).summary.dueToday, 1);
+        await Booking.updateOne({ _id: completed._id }, { $set: { "postTripCare.recovery.nextFollowUpDate": new Date(dateOnly(new Date(Date.now() - dayMs))) } });
+        assert.equal((await recoveryAlerts()).summary.overdue, 1);
         assert.equal((await request(viewer, path, "PATCH", { action: "recovery-resolve", note: "Guest accepted our remedy", nextFollowUpDate: null, expectedRevision: 4 })).status, 403);
         assert.equal((await request(sales, path, "PATCH", { action: "recovery-resolve", note: "Guest accepted our remedy", nextFollowUpDate: null, expectedRevision: 3 })).status, 409);
         const resolved = await request(sales, path, "PATCH", { action: "recovery-resolve", note: "Guest accepted our remedy",
@@ -82,6 +99,7 @@ const main = async () => {
         assert.equal(resolved.status, 200, await resolved.clone().text());
         assert.ok(!(await queue("recovery")).items.some((item) => item.bookingCode === completed.bookingCode));
         assert.ok((await queue("recovery-closed")).items.some((item) => item.bookingCode === completed.bookingCode));
+        assert.equal((await recoveryAlerts()).summary.count, 0);
         assert.equal((await (await request(viewer, path)).json()).recovery.events[0].action, "resolve");
         const audit = await ActivityLog.find({ relatedRecordId: completed._id, description: /Guest (contact|feedback) recorded/ });
         assert.equal(audit.length, 3);

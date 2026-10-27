@@ -33,7 +33,7 @@ const { getCancellationReview } = require("../controllers/cancellationReviewCont
 const { getSupplierContacts, logSupplierContact } = require("../controllers/supplierContactController");
 const { getAirportTransfers } = require("../controllers/airportTransfersController");
 const { getDepartureReadiness } = require("../controllers/departureReadinessController");
-const { getPostTripCareQueue, getPostTripCare, getPostTripMessage, recordPostTripCare } = require("../controllers/postTripCareController");
+const { getPostTripCareQueue, getRecoveryAlerts, getPostTripCare, getPostTripMessage, recordPostTripCare } = require("../controllers/postTripCareController");
 const { getTripSupportQueue, getTripSupportAlerts, getTripSupportAttention,
     getTripIssues, addTripIssue, updateTripIssue, assignTripIssue } = require("../controllers/tripSupportController");
 const { getGuestTransferMessage } = require("../controllers/guestTransferMessageController");
@@ -80,6 +80,7 @@ router.get(
 
 router.get("/departure-readiness", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getDepartureReadiness);
 router.get("/post-trip-care", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getPostTripCareQueue);
+router.get("/post-trip-care/alerts", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getRecoveryAlerts);
 router.get("/trip-support", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getTripSupportQueue);
 router.get("/trip-support/alerts", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getTripSupportAlerts);
 router.get("/trip-support/attention", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getTripSupportAttention);

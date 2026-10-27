@@ -3,6 +3,7 @@ import api from "../api/axios";
 import { buildWhatsAppUrl } from "../utils/whatsappFollowUp";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, todayCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
+import { notifyRecoveryChanged } from "../utils/recoveryEvents";
 
 const PostTripCareModal = ({ booking, onClose, onChanged }) => {
     const { hasPermission } = usePermissions();
@@ -109,7 +110,7 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
                 rating: action === "feedback" && rating ? Number(rating) : null,
                 note,
             });
-            onChanged();
+            notifyRecoveryChanged(); onChanged();
             onClose();
         } catch (err) {
             setError(err.response?.data?.message || "Could not save the post-trip record. Reload and try again.");
@@ -126,7 +127,7 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
                 note: recoveryNote, nextFollowUpDate: recoveryAction === "recovery-resolve" ? null : recoveryDueDate || null,
                 channel: recoveryAction === "recovery-contact" ? recoveryChannel : undefined,
             });
-            onChanged(); onClose();
+            notifyRecoveryChanged(); onChanged(); onClose();
         } catch (err) {
             setError(err.response?.data?.message || "Could not save recovery. Reload and try again.");
         } finally { setBusy(false); }
@@ -136,13 +137,13 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
     return <>
         <div ref={dialogRef} className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="post-trip-title">
             <div className="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable"><div className="modal-content">
-                <div className="modal-header"><h5 id="post-trip-title" className="modal-title">Post-trip care · {booking.bookingCode}</h5>
+                <div className="modal-header"><h5 id="post-trip-title" className="modal-title">Post-trip care · {care?.bookingCode || booking.bookingCode || "Booking"}</h5>
                     <button type="button" className="btn-close" aria-label="Close post-trip care" onClick={close} /></div>
                 <div className="modal-body">
                     {loading && <p role="status">Loading the latest post-trip record...</p>}
                     {error && <div className="alert alert-danger" role="alert">{error}</div>}
                     {!loading && care && <>
-                        <p className="mb-2"><strong>{booking.customerName}</strong> · {care.status}</p>
+                        <p className="mb-2"><strong>{care.customerName || booking.customerName || "Guest"}</strong> · {care.status}</p>
                         <p className="small text-muted">{care.contactCount} recorded {care.contactCount === 1 ? "contact" : "contacts"}{care.lastContactChannel ? ` · Last channel: ${care.lastContactChannel}` : ""}. The draft below is editable and opening WhatsApp does not mark a message as sent.</p>
                         {care.contactNote && <p className="small"><strong>Last contact note:</strong> {care.contactNote}</p>}
                         {care.feedbackNote && <p className="small"><strong>Feedback note:</strong> {care.feedbackNote}</p>}

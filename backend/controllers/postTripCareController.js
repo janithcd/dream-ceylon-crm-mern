@@ -3,7 +3,8 @@ const Booking = require("../models/Booking");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { getDocumentBrandConfig } = require("../utils/documentSettings");
 const { buildPostTripMessage } = require("../utils/postTripMessage");
-const { PAGE_SIZE, FILTERS, getPostTripQuery, endedBeforeToday, isLowRating, parseCareAction, summarizeCare } = require("../utils/postTripCare");
+const { PAGE_SIZE, FILTERS, getPostTripQuery, buildRecoveryAlertsPipeline,
+    endedBeforeToday, isLowRating, parseCareAction, summarizeCare } = require("../utils/postTripCare");
 
 const validId = (id) => mongoose.Types.ObjectId.isValid(id);
 const revisionMatch = (revision) => revision === 0 ? { $in: [null, 0] } : revision;
@@ -40,14 +41,27 @@ const getPostTripCareQueue = async (req, res) => {
     }
 };
 
+const getRecoveryAlerts = async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+        const [result] = await Booking.aggregate(buildRecoveryAlertsPipeline());
+        return res.json({ summary: result?.summary?.[0] || { count: 0, overdue: 0, dueToday: 0, unscheduled: 0 },
+            items: result?.items || [] });
+    } catch (error) {
+        console.error("Post-trip recovery alerts failed:", error.message);
+        return res.status(500).json({ message: "Failed to load recovery alerts." });
+    }
+};
+
 const getPostTripCare = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     if (!validId(req.params.id)) return res.status(400).json({ message: "Invalid booking ID" });
     try {
-        const booking = await Booking.findById(req.params.id).select("bookingStatus travelEndDate postTripCare postTripCareRevision");
+        const booking = await Booking.findById(req.params.id).select("bookingCode customer.fullName bookingStatus travelEndDate postTripCare postTripCareRevision");
         if (!booking) return res.status(404).json({ message: "Booking not found" });
         if (!available(booking) && !recoveryAvailable(booking)) return res.status(409).json({ message: "This trip is outside the post-trip care window." });
-        return res.json({ status: booking.postTripCare?.status || "Not contacted", careWindowOpen: available(booking),
+        return res.json({ bookingCode: booking.bookingCode, customerName: booking.customer?.fullName || "",
+            status: booking.postTripCare?.status || "Not contacted", careWindowOpen: available(booking),
             revision: booking.postTripCareRevision ?? 0,
             contactCount: booking.postTripCare?.contactCount || 0,
             lastContactedAt: booking.postTripCare?.lastContactedAt || null,
@@ -129,4 +143,4 @@ const recordPostTripCare = async (req, res) => {
     }
 };
 
-module.exports = { getPostTripCareQueue, getPostTripCare, getPostTripMessage, recordPostTripCare };
+module.exports = { getPostTripCareQueue, getRecoveryAlerts, getPostTripCare, getPostTripMessage, recordPostTripCare };

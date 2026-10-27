@@ -25,6 +25,33 @@ const getPostTripQuery = (filter = "due", now = new Date()) => {
     return base;
 };
 
+// Return only booking identifiers, codes and follow-up timing; recovery notes remain in the detail endpoint.
+const buildRecoveryAlertsPipeline = (now = new Date()) => {
+    const { start, end } = getBusinessDayBounds(now);
+    return [
+        { $match: { ...getPostTripQuery("recovery", now), $or: [
+            { "postTripCare.recovery.nextFollowUpDate": null },
+            { "postTripCare.recovery.nextFollowUpDate": { $lte: end } },
+        ] } },
+        { $project: { bookingCode: 1, followUpDate: { $ifNull: ["$postTripCare.recovery.nextFollowUpDate", null] } } },
+        { $addFields: {
+            overdue: { $and: [{ $ne: ["$followUpDate", null] }, { $lt: ["$followUpDate", start] }] },
+            dueToday: { $and: [{ $gte: ["$followUpDate", start] }, { $lte: ["$followUpDate", end] }] },
+            unscheduled: { $eq: ["$followUpDate", null] },
+        } },
+        { $facet: {
+            summary: [{ $group: { _id: null, count: { $sum: 1 },
+                overdue: { $sum: { $cond: ["$overdue", 1, 0] } },
+                dueToday: { $sum: { $cond: ["$dueToday", 1, 0] } },
+                unscheduled: { $sum: { $cond: ["$unscheduled", 1, 0] } },
+            } }],
+            items: [{ $sort: { overdue: -1, dueToday: -1, unscheduled: -1, followUpDate: 1, bookingCode: 1 } },
+                { $limit: 5 }, { $project: { _id: 0, bookingId: "$_id", bookingCode: 1,
+                    followUpDate: 1, overdue: 1, dueToday: 1, unscheduled: 1 } }],
+        } },
+    ];
+};
+
 const endedBeforeToday = (booking, now = new Date()) => {
     const { start } = getBusinessDayBounds(now);
     const end = new Date(booking.travelEndDate);
@@ -138,4 +165,5 @@ const summarizeCare = (booking) => ({
     revision: booking.postTripCareRevision ?? 0,
 });
 
-module.exports = { PAGE_SIZE, FILTERS, getPostTripQuery, endedBeforeToday, isLowRating, parseCareAction, summarizeCare };
+module.exports = { PAGE_SIZE, FILTERS, getPostTripQuery, buildRecoveryAlertsPipeline,
+    endedBeforeToday, isLowRating, parseCareAction, summarizeCare };
