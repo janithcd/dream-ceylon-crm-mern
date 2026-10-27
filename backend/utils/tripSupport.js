@@ -49,8 +49,8 @@ const summarizeTripSupport = (booking, now = new Date(), adminId = null) => {
 };
 // Count individual issues so a booking with several problems appears only once in the alert list.
 // Keep private titles, notes, guest details and issue history out of this response.
-const buildTripSupportAlertsPipeline = (adminId, now = new Date()) => {
-    const { start } = getBusinessDayBounds(now);
+const buildTripSupportAlertsPipeline = (adminId, now = new Date(), limit = 5, page = 1) => {
+    const { start, end } = getBusinessDayBounds(now);
     return [
         { $match: { "tripIssues.status": "Open" } },
         { $project: { bookingCode: 1, "tripIssues.status": 1, "tripIssues.assignedTo": 1,
@@ -64,22 +64,27 @@ const buildTripSupportAlertsPipeline = (adminId, now = new Date()) => {
             overdue: { $and: [
                 { $ne: [{ $ifNull: ["$tripIssues.nextFollowUpDate", null] }, null] },
                 { $lt: ["$tripIssues.nextFollowUpDate", start] },
+            ] },
+            dueToday: { $and: [
+                { $gte: ["$tripIssues.nextFollowUpDate", start] },
+                { $lte: ["$tripIssues.nextFollowUpDate", end] },
             ] } } },
-        { $match: { $or: [{ urgent: true }, { overdue: true }, { owner: null }] } },
+        { $match: { $or: [{ urgent: true }, { overdue: true }, { dueToday: true }, { owner: null }] } },
         { $group: { _id: "$_id", bookingCode: { $first: "$bookingCode" }, count: { $sum: 1 },
             urgent: { $sum: { $cond: ["$urgent", 1, 0] } },
             overdue: { $sum: { $cond: ["$overdue", 1, 0] } },
+            dueToday: { $sum: { $cond: ["$dueToday", 1, 0] } },
             unassigned: { $sum: { $cond: [{ $eq: ["$owner", null] }, 1, 0] } },
         } },
         { $facet: {
             summary: [{ $group: { _id: null, count: { $sum: "$count" },
                 bookings: { $sum: 1 }, urgent: { $sum: "$urgent" }, overdue: { $sum: "$overdue" },
-                unassigned: { $sum: "$unassigned" },
+                dueToday: { $sum: "$dueToday" }, unassigned: { $sum: "$unassigned" },
             } }],
-            items: [{ $sort: { overdue: -1, urgent: -1, unassigned: -1, bookingCode: 1 } },
-                { $limit: 5 },
+            items: [{ $sort: { overdue: -1, urgent: -1, dueToday: -1, unassigned: -1, bookingCode: 1 } },
+                { $skip: (page - 1) * limit }, { $limit: limit },
                 { $project: { _id: 0, bookingId: "$_id", bookingCode: 1,
-                    count: 1, urgent: 1, overdue: 1, unassigned: 1 } }],
+                    count: 1, urgent: 1, overdue: 1, dueToday: 1, unassigned: 1 } }],
         } },
     ];
 };

@@ -77,10 +77,16 @@ test("trip alert aggregation applies Sri Lanka overdue bounds and projects only 
     assert.equal(pipeline[3].$match.$or[0]["tripIssues.assignedTo"], "507f1f77bcf86cd799439322");
     assert.equal(pipeline[3].$match.$or[1]["tripIssues.assignedTo"], null);
     assert.equal(pipeline[4].$project.overdue.$and[1].$lt[1].toISOString(), "2026-10-26T18:30:00.000Z");
-    assert.deepEqual(pipeline[5].$match.$or, [{ urgent: true }, { overdue: true }, { owner: null }]);
-    assert.equal(pipeline[7].$facet.items[1].$limit, 5);
-    assert.deepEqual(Object.keys(pipeline[7].$facet.items[2].$project).sort(),
-        ["_id", "bookingId", "bookingCode", "count", "urgent", "overdue", "unassigned"].sort());
+    assert.equal(pipeline[4].$project.dueToday.$and[0].$gte[1].toISOString(), "2026-10-26T18:30:00.000Z");
+    assert.equal(pipeline[4].$project.dueToday.$and[1].$lte[1].toISOString(), "2026-10-27T18:29:59.999Z");
+    assert.deepEqual(pipeline[5].$match.$or, [{ urgent: true }, { overdue: true }, { dueToday: true }, { owner: null }]);
+    assert.equal(pipeline[7].$facet.items[1].$skip, 0);
+    assert.deepEqual(Object.keys(pipeline[7].$facet.items[0].$sort),
+        ["overdue", "urgent", "dueToday", "unassigned", "bookingCode"]);
+    assert.equal(pipeline[7].$facet.items[2].$limit, 5);
+    assert.equal(buildTripSupportAlertsPipeline("507f1f77bcf86cd799439322", new Date(), 20, 2)[7].$facet.items[1].$skip, 20);
+    assert.deepEqual(Object.keys(pipeline[7].$facet.items[3].$project).sort(),
+        ["_id", "bookingId", "bookingCode", "count", "urgent", "overdue", "dueToday", "unassigned"].sort());
     for (const field of ["title", "note", "customer", "events", "email"]) {
         assert.ok(!JSON.stringify(pipeline[7]).includes(field));
     }
@@ -107,9 +113,9 @@ test("trip issue API enforces permissions, atomic revisions and separate read-on
     t.mock.method(Booking, "countDocuments", async () => 1);
     t.mock.method(Booking, "aggregate", async (pipeline) => {
         assert.equal(pipeline[3].$match.$or[0]["tripIssues.assignedTo"].toString(), sales);
-        return [{ summary: [{ count: 1, bookings: 1, urgent: 1, overdue: 0, unassigned: 0 }],
+        return [{ summary: [{ count: 1, bookings: 21, urgent: 1, overdue: 0, dueToday: 0, unassigned: 0 }],
             items: [{ bookingId: booking._id, bookingCode: booking.bookingCode,
-                count: 1, urgent: 1, overdue: 0, unassigned: 0 }] }];
+                count: 1, urgent: 1, overdue: 0, dueToday: 0, unassigned: 0 }] }];
     });
     t.mock.method(Booking, "find", () => ({ select() { return this; }, sort() { return this; }, skip() { return this; },
         limit() { return this; }, lean: async () => [booking.toObject()] }));
@@ -146,6 +152,16 @@ test("trip issue API enforces permissions, atomic revisions and separate read-on
     } : {}, body: body === undefined ? undefined : JSON.stringify(body) });
     assert.equal((await request("/trip-support", null)).status, 401);
     assert.equal((await request("/trip-support/alerts", null)).status, 401);
+    assert.equal((await request("/trip-support/attention", null)).status, 401);
+    assert.equal((await request("/trip-support/attention?page=0", sales)).status, 400);
+    assert.equal((await request("/trip-support/attention?page=1.5", sales)).status, 400);
+    const attention = await request("/trip-support/attention?page=2", sales);
+    assert.equal(attention.status, 200);
+    assert.equal(attention.headers.get("cache-control"), "no-store");
+    const worklist = await attention.json();
+    assert.equal(worklist.pages, 2);
+    assert.equal(worklist.total, 21);
+    assert.equal(worklist.filter, "attention");
     assert.equal((await request("/trip-support?filter=nope", sales)).status, 400);
     const queue = await request("/trip-support?filter=active", viewer);
     assert.equal(queue.status, 200);

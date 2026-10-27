@@ -56,16 +56,36 @@ const getTripSupportQueue = async (req, res) => {
     }
 };
 
+const loadAttention = async (adminId, limit = 5, page = 1) => {
+    const [result] = await Booking.aggregate(buildTripSupportAlertsPipeline(adminId, new Date(), limit, page));
+    return { summary: result?.summary?.[0] || {
+        count: 0, bookings: 0, urgent: 0, overdue: 0, dueToday: 0, unassigned: 0,
+    }, items: result?.items || [] };
+};
+
 const getTripSupportAlerts = async (req, res) => {
     noStore(res);
     try {
-        const [result] = await Booking.aggregate(buildTripSupportAlertsPipeline(req.admin._id));
-        return res.json({ summary: result?.summary?.[0] || {
-            count: 0, bookings: 0, urgent: 0, overdue: 0, unassigned: 0,
-        }, items: result?.items || [] });
+        return res.json(await loadAttention(req.admin._id));
     } catch (error) {
         console.error("Trip support alerts failed:", error.message);
         return res.status(500).json({ message: "Failed to load trip support alerts." });
+    }
+};
+
+const getTripSupportAttention = async (req, res) => {
+    noStore(res);
+    const page = req.query.page === undefined ? 1 : Number(req.query.page);
+    if (!Number.isSafeInteger(page) || page < 1 || page > 1000) {
+        return res.status(400).json({ message: "Choose a valid trip support page." });
+    }
+    try {
+        const result = await loadAttention(req.admin._id, PAGE_SIZE, page);
+        return res.json({ ...result, filter: "attention", page, pages: Math.ceil(result.summary.bookings / PAGE_SIZE) || 1,
+            total: result.summary.bookings });
+    } catch (error) {
+        console.error("Trip support worklist failed:", error.message);
+        return res.status(500).json({ message: "Failed to load the trip support worklist." });
     }
 };
 
@@ -180,4 +200,5 @@ const assignTripIssue = async (req, res) => {
     }
 };
 
-module.exports = { getTripSupportQueue, getTripSupportAlerts, getTripIssues, addTripIssue, updateTripIssue, assignTripIssue };
+module.exports = { getTripSupportQueue, getTripSupportAlerts, getTripSupportAttention,
+    getTripIssues, addTripIssue, updateTripIssue, assignTripIssue };
