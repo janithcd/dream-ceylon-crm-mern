@@ -10,7 +10,7 @@ const Admin = require("../models/Admin");
 const ActivityLog = require("../models/ActivityLog");
 const CompanySetting = require("../models/CompanySetting");
 const { getBusinessDayBounds } = require("../utils/businessDate");
-const { getPostTripQuery, buildRecoveryAlertsPipeline, buildContactAlertsPipeline,
+const { getPostTripQuery, buildRecoveryAlertsPipeline, buildContactAlertsPipeline, buildFeedbackAlertsPipeline, lastCareDay,
     parseCareAction, summarizeCare } = require("../utils/postTripCare");
 const { buildPostTripMessage } = require("../utils/postTripMessage");
 
@@ -32,6 +32,7 @@ test("post-trip queue starts after the Colombo end day and distinguishes closeou
     assert.equal(due.bookingStatus, "Completed");
     assert.deepEqual(getPostTripQuery("closeout", now).bookingStatus.$in, ["Confirmed", "In Progress"]);
     assert.equal(getPostTripQuery("waiting", now)["postTripCare.status"], "Contacted");
+    assert.equal(getPostTripQuery("feedback-due", now)["postTripCare.nextFeedbackFollowUpDate"].$lte.toISOString(), "2026-10-27T18:29:59.999Z");
     assert.deepEqual(getPostTripQuery("done", now)["postTripCare.status"].$in, ["Feedback received", "Declined"]);
     const recovery = getPostTripQuery("recovery", now);
     assert.equal(recovery.travelEndDate.$gte, undefined, "Open recovery must remain visible after 90 days");
@@ -59,6 +60,26 @@ test("care actions preserve contact history, validate actual feedback and stop a
     assert.ok(parseCareAction({ action: "declined", note: "", expectedRevision: 1 }, declined, "Sales").error);
     assert.ok(parseCareAction({ action: "feedback", note: "Changed mind", expectedRevision: 1 }, declined, "Sales").error);
     assert.ok(parseCareAction({ action: "contacted", channel: "Phone", note: "", expectedRevision: 1 }, declined, "Sales").error);
+});
+
+test("feedback reminders require contact, stay in the care window and clear on an outcome", () => {
+    const now = new Date("2026-10-26T19:00:00Z"); // October 27 in Colombo
+    const tripEnd = new Date("2026-07-29T00:00:00Z"); // Last eligible care day is October 27
+    assert.equal(lastCareDay(tripEnd).toISOString(), "2026-10-26T18:30:00.000Z");
+    assert.ok(parseCareAction({ action: "schedule-feedback", note: "", expectedRevision: 0, nextFeedbackFollowUpDate: "2026-10-27" }, null, "Agent", now, tripEnd).error);
+    const contact = { action: "contacted", channel: "Email", note: "Reached guest", expectedRevision: 0 };
+    assert.ok(parseCareAction({ ...contact, nextFeedbackFollowUpDate: "2026-10-28" }, null, "Agent", now, tripEnd).error);
+    const contacted = parseCareAction({ ...contact, nextFeedbackFollowUpDate: "2026-10-27" }, null, "Agent", now, tripEnd).value;
+    assert.equal(contacted.nextFeedbackFollowUpDate.toISOString(), "2026-10-27T00:00:00.000Z");
+    assert.ok(parseCareAction({ action: "schedule-feedback", note: "", expectedRevision: 1 }, contacted, "Agent", now, tripEnd).error);
+    assert.ok(parseCareAction({ action: "schedule-feedback", note: "", expectedRevision: 1, nextFeedbackFollowUpDate: "2026-10-26" }, contacted, "Agent", now, tripEnd).error);
+    const cleared = parseCareAction({ action: "schedule-feedback", expectedRevision: 1, nextFeedbackFollowUpDate: null }, contacted, "Agent", now, tripEnd).value;
+    assert.equal(cleared.nextFeedbackFollowUpDate, null);
+    assert.equal(cleared.contactCount, 1, "Scheduling must not log guest contact");
+    const received = parseCareAction({ action: "feedback", rating: 5, note: "Lovely guide", expectedRevision: 1 }, contacted, "Agent", now, tripEnd).value;
+    assert.equal(received.nextFeedbackFollowUpDate, null);
+    const declined = parseCareAction({ action: "declined", note: "No further contact", expectedRevision: 1 }, contacted, "Agent", now, tripEnd).value;
+    assert.equal(declined.nextFeedbackFollowUpDate, null);
 });
 
 test("low ratings create recoveries, and recovery actions validate dates and preserve a bounded history", () => {
@@ -124,6 +145,20 @@ test("first-contact alerts use the 90-day Colombo window and expose only safe fi
     }
 });
 
+test("feedback alerts include only due contacted guests and safe identifiers", () => {
+    const pipeline = buildFeedbackAlertsPipeline(new Date("2026-10-26T19:00:00Z"));
+    assert.equal(pipeline[0].$match["postTripCare.status"], "Contacted");
+    assert.equal(pipeline[0].$match.travelEndDate.$gte.toISOString(), "2026-07-28T18:30:00.000Z");
+    assert.equal(pipeline[0].$match["postTripCare.nextFeedbackFollowUpDate"].$type, "date");
+    assert.equal(pipeline[0].$match["postTripCare.nextFeedbackFollowUpDate"].$lte.toISOString(), "2026-10-27T18:29:59.999Z");
+    assert.equal(pipeline[3].$facet.items[1].$limit, 5);
+    assert.deepEqual(Object.keys(pipeline[3].$facet.items[2].$project).sort(),
+        ["_id", "bookingId", "bookingCode", "followUpDate", "overdue"].sort());
+    for (const secret of ["customer", "contactNote", "feedbackNote", "totalPrice", "events"]) {
+        assert.ok(!JSON.stringify(pipeline.slice(1)).includes(secret));
+    }
+});
+
 test("queue summary and message omit financial and internal booking information", () => {
     const booking = makeBooking();
     const before = booking.toObject();
@@ -153,6 +188,9 @@ test("post-trip API separates message drafting from versioned writes and enforce
             return [{ summary: [{ count: 1, overdue: 0, dueToday: 0, unscheduled: 1 }],
                 items: [{ bookingId: booking._id, bookingCode: booking.bookingCode,
                     followUpDate: null, overdue: false, dueToday: false, unscheduled: true }] }];
+        }
+        if (pipeline[0].$match["postTripCare.status"] === "Contacted") {
+            return [{ summary: [], items: [] }];
         }
         assert.deepEqual(pipeline[0].$match["postTripCare.status"].$nin, ["Contacted", "Feedback received", "Declined"]);
         return [{ summary: [{ count: 1 }],
@@ -185,6 +223,7 @@ test("post-trip API separates message drafting from versioned writes and enforce
     assert.equal(alertBody.summary.unscheduled, 1);
     assert.equal(alertBody.contact.count, 1);
     assert.equal(alertBody.contact.items[0].bookingCode, booking.bookingCode);
+    assert.equal(alertBody.feedback.count, 0);
     assert.ok(!JSON.stringify(alertBody).includes("PRIVATE@example.invalid"));
     assert.equal((await request(`${base}/post-trip-message`, viewer)).status, 403);
     assert.equal((await request(`${base}/post-trip-care`, viewer, "PATCH", { action: "contacted", expectedRevision: 0, channel: "Phone", note: "" })).status, 403);

@@ -70,7 +70,8 @@ const RecoveryAlert = () => {
 
     const { count = 0, overdue = 0, dueToday = 0, unscheduled = 0 } = data?.summary || {};
     const contactCount = data?.contact?.count || 0;
-    const total = count + contactCount;
+    const feedbackCount = data?.feedback?.count || 0;
+    const total = count + contactCount + feedbackCount;
     const refreshNow = () => {
         setLoading(true);
         setRefreshKey((key) => key + 1);
@@ -78,7 +79,7 @@ const RecoveryAlert = () => {
 
     return <div className="task-alert" ref={containerRef}>
         <button type="button" className={`btn btn-sm position-relative ${total ? "btn-outline-danger" : "btn-outline-secondary"}`}
-            aria-label={error ? "Guest care alerts unavailable" : `Guest care alerts: ${contactCount} guests to contact, ${count} recoveries needing attention, ${overdue} overdue, ${dueToday} due today, ${unscheduled} without a date`}
+            aria-label={error ? "Guest care alerts unavailable" : `Guest care alerts: ${contactCount} guests to contact, ${feedbackCount} feedback follow-ups due, ${count} recoveries needing attention, ${overdue} recoveries overdue, ${dueToday} due today, ${unscheduled} without a date`}
             aria-expanded={open} aria-controls="recovery-alert-panel" onClick={() => setOpen((value) => !value)}>
             <FaHeart className="me-1" aria-hidden="true" />Guest care
             {total > 0 && <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill text-bg-danger">{total > 99 ? "99+" : total}</span>}
@@ -100,6 +101,15 @@ const RecoveryAlert = () => {
                                     <span className="d-block text-muted small">Trip ended {formatCalendarDate(item.travelEndDate)}</span>
                                 </Link>)}</div>
                         </>}
+                        {feedbackCount > 0 && <>
+                            <p className="small fw-semibold mb-2">{feedbackCount} feedback {feedbackCount === 1 ? "follow-up" : "follow-ups"} due · {data.feedback.overdue} overdue</p>
+                            <div className="list-group list-group-flush mb-2">{(data?.feedback?.items || []).map((item) =>
+                                <Link key={item.bookingId} to={`/post-trip-care?filter=feedback-due&booking=${encodeURIComponent(item.bookingId)}`}
+                                    className="list-group-item list-group-item-action px-0 py-2" onClick={() => setOpen(false)}>
+                                    <span className="d-block fw-semibold small">{item.bookingCode}</span>
+                                    <span className="d-block text-muted small">{item.overdue ? "Overdue" : "Due today"} · {formatCalendarDate(item.followUpDate)}</span>
+                                </Link>)}</div>
+                        </>}
                         {count > 0 && <p className="small fw-semibold mb-1">{count} {count === 1 ? "recovery" : "recoveries"} needing attention</p>}
                         {count > 0 && <p className="small mb-2"><span className="text-danger fw-semibold">{overdue} overdue</span><span className="text-muted mx-2">·</span>
                             <span className="fw-semibold">{dueToday} due today</span><span className="text-muted mx-2">·</span>
@@ -115,6 +125,7 @@ const RecoveryAlert = () => {
                     </>}
                 <div className="d-grid gap-2 mt-2">
                     <Link to="/post-trip-care?filter=due" className="btn btn-sm btn-outline-primary" onClick={() => setOpen(false)}>View guests to contact</Link>
+                    <Link to="/post-trip-care?filter=feedback-due" className="btn btn-sm btn-outline-primary" onClick={() => setOpen(false)}>View feedback due</Link>
                     <Link to="/post-trip-care?filter=recovery" className="btn btn-sm btn-outline-primary" onClick={() => setOpen(false)}>View open recoveries</Link>
                 </div>
             </div>

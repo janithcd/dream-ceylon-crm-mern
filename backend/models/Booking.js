@@ -150,6 +150,7 @@ const postTripCareSchema = new mongoose.Schema({
     lastContactedAt: { type: Date, default: null },
     lastContactChannel: { type: String, enum: ["WhatsApp", "Email", "Phone", "Other"], default: null },
     contactNote: { type: String, trim: true, maxlength: 500, default: "" },
+    nextFeedbackFollowUpDate: { type: Date, default: null },
     feedbackAt: { type: Date, default: null },
     feedbackRating: { type: Number, min: 1, max: 5, default: null },
     feedbackNote: { type: String, trim: true, maxlength: 500, default: "" },

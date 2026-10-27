@@ -3,7 +3,7 @@ const { parseCalendarDate } = require("./paymentDueDate");
 
 const DAY_MS = 86400000;
 const PAGE_SIZE = 20;
-const FILTERS = ["due", "closeout", "waiting", "done", "all", "recovery", "recovery-closed"];
+const FILTERS = ["due", "closeout", "waiting", "feedback-due", "done", "all", "recovery", "recovery-closed"];
 const CHANNELS = ["WhatsApp", "Email", "Phone", "Other"];
 
 const getPostTripQuery = (filter = "due", now = new Date()) => {
@@ -21,6 +21,8 @@ const getPostTripQuery = (filter = "due", now = new Date()) => {
     if (filter === "due") return { ...base, bookingStatus: "Completed",
         "postTripCare.status": { $nin: ["Contacted", "Feedback received", "Declined"] } };
     if (filter === "waiting") return { ...base, bookingStatus: "Completed", "postTripCare.status": "Contacted" };
+    if (filter === "feedback-due") return { ...base, bookingStatus: "Completed", "postTripCare.status": "Contacted",
+        "postTripCare.nextFeedbackFollowUpDate": { $type: "date", $lte: getBusinessDayBounds(now).end } };
     if (filter === "done") return { ...base, bookingStatus: "Completed", "postTripCare.status": { $in: ["Feedback received", "Declined"] } };
     return base;
 };
@@ -62,6 +64,30 @@ const buildContactAlertsPipeline = (now = new Date()) => [
             { $project: { _id: 0, bookingId: "$_id", bookingCode: 1, travelEndDate: 1 } }],
     } },
 ];
+
+// Only scheduled, due feedback requests are actionable. The contact note and guest details stay in the care record.
+const buildFeedbackAlertsPipeline = (now = new Date()) => {
+    const { start } = getBusinessDayBounds(now);
+    return [
+        { $match: getPostTripQuery("feedback-due", now) },
+        { $project: { bookingCode: 1, followUpDate: "$postTripCare.nextFeedbackFollowUpDate" } },
+        { $addFields: { overdue: { $lt: ["$followUpDate", start] } } },
+        { $facet: {
+            summary: [{ $group: { _id: null, count: { $sum: 1 }, overdue: { $sum: { $cond: ["$overdue", 1, 0] } } } }],
+            items: [{ $sort: { followUpDate: 1, bookingCode: 1 } }, { $limit: 5 },
+                { $project: { _id: 0, bookingId: "$_id", bookingCode: 1, followUpDate: 1, overdue: 1 } }],
+        } },
+    ];
+};
+
+// Last Sri Lanka day for which the trip's end instant still falls in the 90-day care query.
+const lastCareDay = (travelEndDate) => {
+    const end = new Date(travelEndDate);
+    if (!Number.isFinite(end.getTime())) return null;
+    const candidate = getBusinessDayBounds(new Date(end.getTime() + 90 * DAY_MS)).start;
+    return candidate.getTime() - 90 * DAY_MS > end.getTime() ?
+        new Date(candidate.getTime() - DAY_MS) : candidate;
+};
 
 const endedBeforeToday = (booking, now = new Date()) => {
     const { start } = getBusinessDayBounds(now);
@@ -108,8 +134,9 @@ const parseRecoveryAction = (body, current, adminName, now) => {
         events }, updatedAt: now, updatedByName: adminName || "" } };
 };
 
-const parseCareAction = (body, current, adminName, now = new Date()) => {
-    const { action, expectedRevision, channel, note, rating } = body || {};
+const parseCareAction = (body, current, adminName, now = new Date(), travelEndDate = null) => {
+    const { action, expectedRevision, channel, rating } = body || {};
+    const note = action === "schedule-feedback" && body.note === undefined ? "" : body?.note;
     if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
         return { error: "Refresh the post-trip record before saving." };
     }
@@ -123,6 +150,7 @@ const parseCareAction = (body, current, adminName, now = new Date()) => {
         lastContactedAt: previous.lastContactedAt || null,
         lastContactChannel: previous.lastContactChannel || null,
         contactNote: previous.contactNote || "",
+        nextFeedbackFollowUpDate: previous.nextFeedbackFollowUpDate || null,
         feedbackAt: previous.feedbackAt || null,
         feedbackRating: previous.feedbackRating ?? null,
         feedbackNote: previous.feedbackNote || "",
@@ -132,6 +160,26 @@ const parseCareAction = (body, current, adminName, now = new Date()) => {
     if (typeof action === "string" && action.startsWith("recovery-")) {
         if (!isLowRating(previous)) return { error: "Recovery is available only for feedback rated 1 to 3." };
         return parseRecoveryAction(body, base, adminName, now);
+    }
+    if (action === "contacted" || action === "schedule-feedback") {
+        if (action === "schedule-feedback" && previous.status !== "Contacted") {
+            return { error: "Schedule feedback only after recording guest contact." };
+        }
+        if (action === "schedule-feedback" && !Object.hasOwn(body, "nextFeedbackFollowUpDate")) {
+            return { error: "Choose a feedback follow-up date or explicitly clear it." };
+        }
+        const parsedDate = parseCalendarDate(body.nextFeedbackFollowUpDate ?? null, "Feedback follow-up date");
+        if (parsedDate.error) return parsedDate;
+        if (parsedDate.value) {
+            const day = getBusinessDayBounds(parsedDate.value).start;
+            const today = getBusinessDayBounds(now).start;
+            const lastDay = travelEndDate ? lastCareDay(travelEndDate) : new Date(today.getTime() + 90 * DAY_MS);
+            if (day < today || !lastDay || day > lastDay) {
+                return { error: "Feedback follow-up must be today or within the remaining 90-day care window." };
+            }
+        }
+        if (action === "schedule-feedback") return { value: { ...base, nextFeedbackFollowUpDate: parsedDate.value } };
+        base.nextFeedbackFollowUpDate = parsedDate.value;
     }
     if (action === "contacted") {
         if (!["Contacted", undefined].includes(previous.status)) return { error: "Feedback is already closed for this trip." };
@@ -149,6 +197,7 @@ const parseCareAction = (body, current, adminName, now = new Date()) => {
             return { error: "Recovery actions are recorded for this rating. Keep the rating and add a recovery note instead." };
         }
         return { value: { ...base, status: "Feedback received", feedbackAt: now,
+            nextFeedbackFollowUpDate: null,
             feedbackRating: rating ?? null, feedbackNote: cleanNote,
             recovery: rating >= 1 && rating <= 3 ? (base.recovery || { status: "Open", nextFollowUpDate: null, resolvedAt: null, events: [] }) : null } };
     }
@@ -157,6 +206,7 @@ const parseCareAction = (body, current, adminName, now = new Date()) => {
             return { error: "The post-trip outcome is already closed." };
         }
         return { value: { ...base, status: "Declined", feedbackAt: now,
+            nextFeedbackFollowUpDate: null,
             feedbackRating: null, feedbackNote: cleanNote } };
     }
     return { error: "Choose a valid post-trip action." };
@@ -169,6 +219,7 @@ const summarizeCare = (booking) => ({
     contactCount: booking.postTripCare?.contactCount || 0,
     lastContactedAt: booking.postTripCare?.lastContactedAt || null,
     lastContactChannel: booking.postTripCare?.lastContactChannel || null,
+    nextFeedbackFollowUpDate: booking.postTripCare?.nextFeedbackFollowUpDate || null,
     feedbackRating: booking.postTripCare?.feedbackRating ?? null,
     feedbackAt: booking.postTripCare?.feedbackAt || null,
     recoveryStatus: isLowRating(booking.postTripCare) ? booking.postTripCare?.recovery?.status || "Open" : null,
@@ -177,4 +228,4 @@ const summarizeCare = (booking) => ({
 });
 
 module.exports = { PAGE_SIZE, FILTERS, getPostTripQuery, buildRecoveryAlertsPipeline, buildContactAlertsPipeline,
-    endedBeforeToday, isLowRating, parseCareAction, summarizeCare };
+    buildFeedbackAlertsPipeline, lastCareDay, endedBeforeToday, isLowRating, parseCareAction, summarizeCare };

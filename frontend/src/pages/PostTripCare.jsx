@@ -8,7 +8,7 @@ import { formatCalendarDate, todayCalendarDate, toCalendarDateInput } from "../u
 
 const filters = [
     ["due", "Contact needed"], ["recovery", "Recovery needed"], ["closeout", "Close out trips"],
-    ["waiting", "Awaiting feedback"], ["done", "Recorded outcomes"], ["all", "All recent trips"],
+    ["feedback-due", "Feedback due"], ["waiting", "Awaiting feedback"], ["done", "Recorded outcomes"], ["all", "All recent trips"],
     ["recovery-closed", "Resolved recoveries"],
 ];
 
@@ -62,7 +62,7 @@ const PostTripCare = () => {
                 <p className="text-muted mb-0">Close out ended tours, thank guests, and record feedback from the last 90 days.</p></div>
             <button type="button" className="btn btn-outline-secondary" onClick={refresh} disabled={loading}><FaSyncAlt className="me-2" />Refresh</button>
         </div>
-        <p className="alert alert-info small">Tours enter this queue the day after their saved end date in Sri Lanka. Drafting a message or opening WhatsApp never sends it or records contact. Record contact only after reaching the guest. No automatic review request is sent.</p>
+        <p className="alert alert-info small">Tours enter this queue the day after their saved end date in Sri Lanka. Drafting a message or opening WhatsApp never sends it or records contact. Set feedback reminders for contacted guests during the 90-day care window; no message is sent automatically.</p>
         {error && <div className="alert alert-danger" role="alert">{error} <button type="button" className="btn btn-sm btn-outline-danger ms-2" onClick={refresh}>Try again</button></div>}
         {visibleData && <div className="row g-3 mb-4">
             {[["Trips to close", visibleData.summary.closeout], ["Guests to contact", visibleData.summary.due],
@@ -73,7 +73,7 @@ const PostTripCare = () => {
             <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Post-trip care filter">
                 {filters.map(([value, label]) => <button type="button" key={value} aria-pressed={filter === value}
                     className={`btn btn-sm ${filter === value ? "btn-primary" : "btn-outline-primary"}`}
-                    onClick={() => selectFilter(value)}>{label}</button>)}
+                    onClick={() => selectFilter(value)}>{label}{value === "feedback-due" && visibleData ? ` (${visibleData.summary.feedbackDue})` : ""}</button>)}
             </div>
             {loading && <p role="status" className="text-muted">Loading recent trips...</p>}
             {!loading && !error && visibleData && <>
@@ -90,6 +90,10 @@ const PostTripCare = () => {
                                     Recovery {item.recoveryStatus.toLowerCase()}
                                     {item.recoveryStatus === "Open" && item.recoveryFollowUpDate && ` · ${toCalendarDateInput(item.recoveryFollowUpDate) < todayCalendarDate() ? "Overdue" : toCalendarDateInput(item.recoveryFollowUpDate) === todayCalendarDate() ? "Due today" : "Follow up"} ${formatCalendarDate(item.recoveryFollowUpDate)}`}
                                     {item.recoveryStatus === "Open" && !item.recoveryFollowUpDate && " · No follow-up date"}
+                                </div>}
+                                {item.status === "Contacted" && item.nextFeedbackFollowUpDate && <div className="small mt-1">
+                                    Feedback {toCalendarDateInput(item.nextFeedbackFollowUpDate) < todayCalendarDate() ? "overdue" :
+                                        toCalendarDateInput(item.nextFeedbackFollowUpDate) === todayCalendarDate() ? "due today" : "follow-up"} · {formatCalendarDate(item.nextFeedbackFollowUpDate)}
                                 </div>}
                             </div>
                             <div className="d-flex flex-wrap gap-2">

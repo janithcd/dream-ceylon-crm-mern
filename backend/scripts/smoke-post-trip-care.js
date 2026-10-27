@@ -70,19 +70,35 @@ const main = async () => {
         assert.match((await draft.json()).message, /thank you for traveling/i);
         assert.equal((await Booking.findById(completed._id)).postTripCare, null, "Drafting must not record contact");
         assert.ok((await recoveryAlerts()).contact.items.some((item) => item.bookingCode === completed.bookingCode));
-        const contact = { action: "contacted", note: "Sent after the tour", channel: "WhatsApp", expectedRevision: 0 };
+        const contact = { action: "contacted", note: "Sent after the tour", channel: "WhatsApp", expectedRevision: 0,
+            nextFeedbackFollowUpDate: dateOnly(new Date()) };
         assert.equal((await request(sales, path, "PATCH", contact)).status, 200);
         assert.ok(!(await recoveryAlerts()).contact.items.some((item) => item.bookingCode === completed.bookingCode));
         assert.equal((await request(sales, path, "PATCH", contact)).status, 409);
+        assert.ok((await recoveryAlerts()).feedback.items.some((item) => item.bookingCode === completed.bookingCode));
+        assert.ok((await queue("feedback-due")).items.some((item) => item.bookingCode === completed.bookingCode));
+        assert.equal((await recoveryAlerts()).feedback.overdue, 0);
+        assert.equal((await request(viewer, path, "PATCH", { action: "schedule-feedback", note: "", expectedRevision: 1, nextFeedbackFollowUpDate: null })).status, 403);
+        assert.equal((await request(sales, path, "PATCH", { action: "schedule-feedback", note: "", expectedRevision: 0, nextFeedbackFollowUpDate: null })).status, 409);
+        assert.equal((await request(sales, path, "PATCH", { action: "schedule-feedback", note: "", expectedRevision: 1,
+            nextFeedbackFollowUpDate: dateOnly(new Date(Date.now() + 100 * dayMs)) })).status, 400);
+        await Booking.updateOne({ _id: completed._id }, { $set: { "postTripCare.nextFeedbackFollowUpDate": new Date(dateOnly(new Date(Date.now() - dayMs))) } });
+        assert.ok((await recoveryAlerts()).feedback.overdue > 0);
+        const schedule = await request(sales, path, "PATCH", { action: "schedule-feedback", note: "", expectedRevision: 1,
+            nextFeedbackFollowUpDate: dateOnly(new Date(Date.now() + dayMs)) });
+        assert.equal(schedule.status, 200, await schedule.clone().text());
+        assert.equal((await schedule.json()).care.contactCount, 1, "Scheduling must not record another contact");
+        assert.ok(!(await recoveryAlerts()).feedback.items.some((item) => item.bookingCode === completed.bookingCode));
         assert.ok((await queue("waiting")).items.some((item) => item.bookingCode === completed.bookingCode));
-        const feedback = await request(sales, path, "PATCH", { action: "feedback", note: "Loved the trip", rating: 5, expectedRevision: 1 });
+        const feedback = await request(sales, path, "PATCH", { action: "feedback", note: "Loved the trip", rating: 5, expectedRevision: 2 });
         assert.equal(feedback.status, 200, await feedback.clone().text());
-        assert.equal((await feedback.json()).care.revision, 2);
+        assert.equal((await feedback.json()).care.revision, 3);
+        assert.equal((await (await request(sales, path)).json()).nextFeedbackFollowUpDate, null);
         assert.ok((await queue("done")).items.some((item) => item.bookingCode === completed.bookingCode));
         assert.equal((await request(sales, draftPath)).status, 409);
         assert.equal((await (await request(sales, path)).json()).feedbackNote, "Loved the trip");
         assert.equal((await request(sales, `/${open._id}/post-trip-care`, "PATCH", contact)).status, 409);
-        const low = await request(sales, path, "PATCH", { action: "feedback", note: "Pickup was late", rating: 2, expectedRevision: 2 });
+        const low = await request(sales, path, "PATCH", { action: "feedback", note: "Pickup was late", rating: 2, expectedRevision: 3 });
         assert.equal(low.status, 200, await low.clone().text());
         const needsRecovery = await queue("recovery");
         assert.ok(needsRecovery.items.some((item) => item.bookingCode === completed.bookingCode));
@@ -90,17 +106,17 @@ const main = async () => {
         assert.equal((await recoveryAlerts()).summary.unscheduled, 1);
         assert.equal((await recoveryAlerts()).items[0].bookingCode, completed.bookingCode);
         const plan = await request(sales, path, "PATCH", { action: "recovery-plan", note: "Call the guest tomorrow",
-            nextFollowUpDate: dateOnly(new Date(Date.now() + dayMs)), expectedRevision: 3 });
+            nextFollowUpDate: dateOnly(new Date(Date.now() + dayMs)), expectedRevision: 4 });
         assert.equal(plan.status, 200, await plan.clone().text());
         assert.equal((await recoveryAlerts()).summary.count, 0);
         await Booking.updateOne({ _id: completed._id }, { $set: { "postTripCare.recovery.nextFollowUpDate": new Date(dateOnly(new Date())) } });
         assert.equal((await recoveryAlerts()).summary.dueToday, 1);
         await Booking.updateOne({ _id: completed._id }, { $set: { "postTripCare.recovery.nextFollowUpDate": new Date(dateOnly(new Date(Date.now() - dayMs))) } });
         assert.equal((await recoveryAlerts()).summary.overdue, 1);
-        assert.equal((await request(viewer, path, "PATCH", { action: "recovery-resolve", note: "Guest accepted our remedy", nextFollowUpDate: null, expectedRevision: 4 })).status, 403);
-        assert.equal((await request(sales, path, "PATCH", { action: "recovery-resolve", note: "Guest accepted our remedy", nextFollowUpDate: null, expectedRevision: 3 })).status, 409);
+        assert.equal((await request(viewer, path, "PATCH", { action: "recovery-resolve", note: "Guest accepted our remedy", nextFollowUpDate: null, expectedRevision: 5 })).status, 403);
+        assert.equal((await request(sales, path, "PATCH", { action: "recovery-resolve", note: "Guest accepted our remedy", nextFollowUpDate: null, expectedRevision: 4 })).status, 409);
         const resolved = await request(sales, path, "PATCH", { action: "recovery-resolve", note: "Guest accepted our remedy",
-            nextFollowUpDate: null, expectedRevision: 4 });
+            nextFollowUpDate: null, expectedRevision: 5 });
         assert.equal(resolved.status, 200, await resolved.clone().text());
         assert.ok(!(await queue("recovery")).items.some((item) => item.bookingCode === completed.bookingCode));
         assert.ok((await queue("recovery-closed")).items.some((item) => item.bookingCode === completed.bookingCode));
@@ -110,7 +126,7 @@ const main = async () => {
         assert.equal(audit.length, 3);
         assert.ok(!JSON.stringify(audit).includes("Loved the trip"));
         assert.ok(!JSON.stringify(await ActivityLog.find({ relatedRecordId: completed._id })).includes("Guest accepted our remedy"));
-        console.log("Post-trip contact, feedback, recovery, permissions and stale-write checks passed.");
+        console.log("Post-trip contact, feedback reminders, recovery, permissions and stale-write checks passed.");
     } finally {
         if (bookings.length) {
             await ActivityLog.deleteMany({ relatedRecordId: { $in: bookings.map((item) => item._id) } });
