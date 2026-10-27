@@ -332,6 +332,7 @@ const getBookings = async (req, res) => {
         const [bookings, totalBookings] = await Promise.all([
             populateBooking(
                 Booking.find(query)
+                    .select("-tripIssues")
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(limit)
@@ -524,6 +525,12 @@ const deleteBooking = async (req, res) => {
         if (!booking) {
             return res.status(404).json({
                 message: "Booking not found",
+            });
+        }
+
+        if (booking.tripIssues?.length) {
+            return res.status(409).json({
+                message: "This booking has a trip issue history. Cancel it instead of deleting the support record.",
             });
         }
 

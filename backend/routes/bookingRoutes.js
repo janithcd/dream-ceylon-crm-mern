@@ -34,6 +34,7 @@ const { getSupplierContacts, logSupplierContact } = require("../controllers/supp
 const { getAirportTransfers } = require("../controllers/airportTransfersController");
 const { getDepartureReadiness } = require("../controllers/departureReadinessController");
 const { getPostTripCareQueue, getPostTripCare, getPostTripMessage, recordPostTripCare } = require("../controllers/postTripCareController");
+const { getTripSupportQueue, getTripIssues, addTripIssue, updateTripIssue } = require("../controllers/tripSupportController");
 const { getGuestTransferMessage } = require("../controllers/guestTransferMessageController");
 const { getHotelConfirmationDraft } = require("../controllers/hotelConfirmationDraftController");
 const { getHotelCancellationDraft } = require("../controllers/hotelCancellationDraftController");
@@ -78,6 +79,10 @@ router.get(
 
 router.get("/departure-readiness", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getDepartureReadiness);
 router.get("/post-trip-care", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getPostTripCareQueue);
+router.get("/trip-support", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getTripSupportQueue);
+router.get("/:id/trip-issues", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getTripIssues);
+router.post("/:id/trip-issues", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), addTripIssue);
+router.patch("/:id/trip-issues/:issueId", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), updateTripIssue);
 router.get("/:id/post-trip-care", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getPostTripCare);
 router.get("/:id/post-trip-message", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), getPostTripMessage);
 router.patch("/:id/post-trip-care", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), recordPostTripCare);

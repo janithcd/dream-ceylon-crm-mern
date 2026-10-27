@@ -10,6 +10,7 @@ import {
     FaFileCsv,
     FaFileInvoiceDollar,
     FaHotel,
+    FaLifeRing,
     FaHistory,
     FaMapMarkedAlt,
     FaPlus,
@@ -32,6 +33,7 @@ import SupplierContactModal from "../components/SupplierContactModal";
 import BookingReadinessModal from "../components/BookingReadinessModal";
 import BookingTravelersModal from "../components/BookingTravelersModal";
 import HotelRoomingModal from "../components/HotelRoomingModal";
+import TripIssuesModal from "../components/TripIssuesModal";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
@@ -92,6 +94,7 @@ const Bookings = () => {
     const [selectedReadinessBooking, setSelectedReadinessBooking] = useState(null);
     const [selectedTravelerBooking, setSelectedTravelerBooking] = useState(null);
     const [selectedRooming, setSelectedRooming] = useState(null);
+    const [selectedTripIssuesBooking, setSelectedTripIssuesBooking] = useState(null);
 
     const [searchInput, setSearchInput] = useState(initialKeyword);
     const [keyword, setKeyword] = useState(initialKeyword);
@@ -1170,6 +1173,11 @@ const Bookings = () => {
                                                 >
                                                     <FaHistory />
                                                 </button>
+                                                <button type="button" className="btn btn-sm btn-outline-primary"
+                                                    onClick={() => setSelectedTripIssuesBooking(booking)}
+                                                    title="Trip support and issue history" aria-label={`Trip issues for ${booking.bookingCode}`}>
+                                                    <FaLifeRing />
+                                                </button>
                                                 <PermissionGuard all={["cost.view", "quotation.view", "booking.view"]}>
                                                     <button
                                                         className="btn btn-sm btn-outline-secondary"
@@ -1395,6 +1403,11 @@ const Bookings = () => {
                     onClose={() => setSelectedActivityBooking(null)}
                 />
             )}
+            {selectedTripIssuesBooking && <TripIssuesModal
+                key={selectedTripIssuesBooking._id}
+                bookingId={selectedTripIssuesBooking._id}
+                onClose={() => setSelectedTripIssuesBooking(null)}
+            />}
             {selectedTransportBooking && (
                 <BookingTransportModal
                     key={selectedTransportBooking._id}

@@ -85,6 +85,7 @@ jobs:
       - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-cancellation-review.js
       - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-traveler-roster.js
       - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-post-trip-care.js
+      - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-trip-support.js
       - name: Show container logs on failure
         if: failure()
         run: docker compose logs --no-color --tail=100

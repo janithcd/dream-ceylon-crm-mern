@@ -20,6 +20,7 @@ import CancellationReview from "./pages/CancellationReview";
 import AirportTransfers from "./pages/AirportTransfers";
 import DepartureReadiness from "./pages/DepartureReadiness";
 import PostTripCare from "./pages/PostTripCare";
+import TripSupport from "./pages/TripSupport";
 import Vehicles from "./pages/Vehicles";
 import Quotations from "./pages/Quotations";
 import QuotationHistory from "./pages/QuotationHistory";
@@ -191,6 +192,11 @@ const App = () => {
                         <Route path="post-trip-care" element={
                             <PermissionRoute permission={ROUTE_PERMISSIONS.bookings}>
                                 <PostTripCare />
+                            </PermissionRoute>
+                        } />
+                        <Route path="trip-support" element={
+                            <PermissionRoute permission={ROUTE_PERMISSIONS.bookings}>
+                                <TripSupport />
                             </PermissionRoute>
                         } />
                         <Route

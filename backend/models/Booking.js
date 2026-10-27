@@ -122,6 +122,26 @@ const recoverySchema = new mongoose.Schema({
     events: { type: [recoveryEventSchema], default: [] },
 }, { _id: false });
 
+const tripIssueEventSchema = new mongoose.Schema({
+    action: { type: String, enum: ["opened", "updated", "resolved", "reopened"], required: true },
+    note: { type: String, required: true, trim: true, maxlength: 500 },
+    at: { type: Date, required: true },
+    byName: { type: String, trim: true, maxlength: 120, default: "" },
+    nextFollowUpDate: { type: Date, default: null },
+}, { _id: false });
+
+const tripIssueSchema = new mongoose.Schema({
+    title: { type: String, required: true, trim: true, maxlength: 120 },
+    category: { type: String, enum: ["Accommodation", "Transport", "Guide", "Itinerary", "Health & Safety", "Other"], required: true },
+    priority: { type: String, enum: ["Urgent", "Normal"], required: true },
+    status: { type: String, enum: ["Open", "Resolved"], default: "Open" },
+    nextFollowUpDate: { type: Date, default: null },
+    openedAt: { type: Date, required: true },
+    resolvedAt: { type: Date, default: null },
+    revision: { type: Number, default: 0, min: 0 },
+    events: { type: [tripIssueEventSchema], default: [] },
+});
+
 const postTripCareSchema = new mongoose.Schema({
     status: { type: String, enum: ["Contacted", "Feedback received", "Declined"], required: true },
     contactCount: { type: Number, min: 0, default: 0 },
@@ -245,6 +265,8 @@ const bookingSchema = new mongoose.Schema(
 
         postTripCare: { type: postTripCareSchema, default: null },
         postTripCareRevision: { type: Number, default: 0, min: 0 },
+        tripIssues: { type: [tripIssueSchema], default: [],
+            validate: { validator: (issues) => issues.length <= 30, message: "A booking can have at most 30 trip issues" } },
 
         vehicleType: {
             type: String,
