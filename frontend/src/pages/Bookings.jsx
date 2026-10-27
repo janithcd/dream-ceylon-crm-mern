@@ -1,5 +1,5 @@
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
     FaBell,
@@ -70,6 +70,7 @@ const Bookings = () => {
     const { hasPermission } = usePermissions();
     const [searchParams] = useSearchParams();
     const initialKeyword = searchParams.get("keyword") || "";
+    const openReadinessOnce = useRef(searchParams.get("open") === "readiness");
 
     const [bookings, setBookings] = useState([]);
     const [inquiries, setInquiries] = useState([]);
@@ -184,7 +185,15 @@ const Bookings = () => {
 
             const response = await api.get("/bookings", { params });
 
-            setBookings(response.data.bookings || []);
+            const results = response.data.bookings || [];
+            setBookings(results);
+            if (openReadinessOnce.current && initialKeyword) {
+                const match = results.find((booking) => booking.bookingCode === initialKeyword);
+                if (match) {
+                    openReadinessOnce.current = false;
+                    setSelectedReadinessBooking(match);
+                }
+            }
             setTotalPages(response.data.totalPages || 1);
             setTotalBookings(response.data.totalBookings || 0);
         } catch (err) {

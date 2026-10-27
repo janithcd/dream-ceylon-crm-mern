@@ -18,6 +18,7 @@ import SupplierConfirmations from "./pages/SupplierConfirmations";
 import HotelCancellationDeadlines from "./pages/HotelCancellationDeadlines";
 import CancellationReview from "./pages/CancellationReview";
 import AirportTransfers from "./pages/AirportTransfers";
+import DepartureReadiness from "./pages/DepartureReadiness";
 import Vehicles from "./pages/Vehicles";
 import Quotations from "./pages/Quotations";
 import QuotationHistory from "./pages/QuotationHistory";
@@ -181,6 +182,11 @@ const App = () => {
                                 </PermissionRoute>
                             }
                         />
+                        <Route path="departure-readiness" element={
+                            <PermissionRoute permission={ROUTE_PERMISSIONS.bookings}>
+                                <DepartureReadiness />
+                            </PermissionRoute>
+                        } />
                         <Route
                             path="supplier-confirmations"
                             element={

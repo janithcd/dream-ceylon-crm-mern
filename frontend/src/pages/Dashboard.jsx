@@ -620,6 +620,7 @@ const Dashboard = () => {
                                 <FaCalendarCheck className="me-2" />
                                 Open calendar
                             </button>
+                            <button className="btn btn-outline-primary btn-sm" onClick={() => navigate("/departure-readiness")}>Departure readiness</button>
                         </div>
 
                         {!stats?.upcomingDepartures?.length ? (

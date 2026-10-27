@@ -137,6 +137,13 @@ const AdminLayout = () => {
                         </NavLink>
                     </PermissionGuard>
 
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.bookings}>
+                        <NavLink to="/departure-readiness">
+                            <FaClipboardCheck />
+                            Departure Readiness
+                        </NavLink>
+                    </PermissionGuard>
+
                     <PermissionGuard permission={ROUTE_PERMISSIONS.myTasks}>
                         <NavLink to="/my-tasks">
                             <FaTasks />

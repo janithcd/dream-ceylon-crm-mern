@@ -58,6 +58,16 @@ const main = async () => {
             headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
             body: body === undefined ? undefined : JSON.stringify(body),
         });
+        const departureUrl = "http://127.0.0.1:5000/api/bookings/departure-readiness";
+        assert.equal((await request(`${departureUrl}?page=0`, "GET")).status, 400);
+        const departureResponse = await request(departureUrl, "GET");
+        assert.equal(departureResponse.status, 200, await departureResponse.clone().text());
+        assert.equal(departureResponse.headers.get("cache-control"), "no-store");
+        const departureData = await departureResponse.json();
+        const departureItem = departureData.items.find((item) => item.bookingCode === booking.bookingCode);
+        assert.equal(departureItem.missingTravelerCount, 2);
+        assert.equal(departureItem.status, "attention");
+        assert.ok(!JSON.stringify(departureData).includes("guest@example.invalid"));
         financeAdmin = await Admin.create({
             name: "CI Finance Test", email: `ci-finance-${Date.now()}@example.invalid`,
             password: "disposable-ci-only-password", role: "Finance",

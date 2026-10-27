@@ -11,7 +11,8 @@ const completeBooking = () => ({
     numberOfTravelers: 2,
     travelerNames: ["First Traveler", "Second Traveler"],
     itineraryDays: [2, 3, 4].map((day) => ({ date: `2027-03-0${day}`, title: "Day plan" })),
-    hotelStays: [{ hotelName: "Test Hotel", checkInDate: "2027-03-02", checkOutDate: "2027-03-04", status: "Confirmed" }],
+    hotelStays: [{ hotelName: "Test Hotel", checkInDate: "2027-03-02", checkOutDate: "2027-03-04", status: "Confirmed", rooms: 1,
+        roomingPlan: { assignments: ["1", "1"], rosterVersion: 0, roomCount: 1 } }],
     transportAssignments: [{
         route: "Hotel to airport", startDate: "2027-03-03", endDate: "2027-03-03", status: "Confirmed",
         chauffeurName: "Test Chauffeur", chauffeurPhone: "0771234567", registration: "CAB-1234",
@@ -77,6 +78,18 @@ test("hotel review finds gaps, requested stays, overlaps and out-of-trip reserva
     assert.match(hotels.issues.join("\n"), /1 night with overlapping hotel stays/);
     assert.match(hotels.issues.join("\n"), /1 hotel stay extending outside/);
     assert.match(hotels.summary, /1 of 2 trip nights/);
+});
+
+test("hotel review flags unsaved and stale rooming plans without exposing room assignments", () => {
+    const booking = completeBooking();
+    booking.hotelStays.push({ status: "Confirmed", checkInDate: "2027-03-02", checkOutDate: "2027-03-03", rooms: 1 });
+    booking.hotelStays[0].roomingPlan.assignments = ["1", "not-staying"];
+    booking.travelerRosterVersion = 1;
+    const review = getBookingReadiness(booking, now);
+    const issues = findSection(review, "hotels").issues.join(" ");
+    assert.match(issues, /1 confirmed hotel stay without a saved rooming plan/);
+    assert.match(issues, /1 saved rooming plan needing review/);
+    assert.ok(!JSON.stringify(review).includes("not-staying"));
 });
 
 test("Sri Lanka day boundaries govern itinerary coverage and overdue tasks", () => {

@@ -19,6 +19,22 @@ const section = (id, title, summary, issues = [], assessed = true) => ({
     id, title, summary, issues,
     status: issues.length ? "attention" : assessed ? "clear" : "unassessed",
 });
+const isCurrentRoomingPlan = (booking, stay) => {
+    const plan = stay.roomingPlan;
+    const assignments = plan?.assignments;
+    const rooms = stay.rooms;
+    if (!Array.isArray(assignments) || assignments.length !== booking.travelerNames?.length ||
+        !Number.isInteger(rooms) || rooms < 1 || rooms > 20 ||
+        plan.rosterVersion !== (booking.travelerRosterVersion ?? 0) || plan.roomCount !== rooms) return false;
+    const used = new Set();
+    for (const assignment of assignments) {
+        if (assignment === "not-staying") continue;
+        if (typeof assignment !== "string" || !/^[1-9]\d*$/.test(assignment) ||
+            String(Number(assignment)) !== assignment || Number(assignment) > rooms) return false;
+        used.add(assignment);
+    }
+    return used.size === rooms;
+};
 
 // This reviews recorded operations data, not whether every service is in scope.
 // Financial records, private notes and guest contact values never enter the result.
@@ -91,6 +107,11 @@ export const getBookingReadiness = (booking, now = new Date()) => {
         return trip && range && (range.from < trip.from || range.to > trip.to);
     }).length;
     if (outsideStays) hotelIssues.push(`${count(outsideStays, "hotel stay")} extending outside the trip dates.`);
+    const confirmedStays = stays.filter((stay) => stay.status === "Confirmed");
+    const missingRooming = confirmedStays.filter((stay) => !stay.roomingPlan).length;
+    const staleRooming = confirmedStays.filter((stay) => stay.roomingPlan && !isCurrentRoomingPlan(booking, stay)).length;
+    if (missingRooming) hotelIssues.push(`${count(missingRooming, "confirmed hotel stay")} without a saved rooming plan. Check whether hotel rooming is needed.`);
+    if (staleRooming) hotelIssues.push(`${count(staleRooming, "saved rooming plan")} needing review after a roster or room change.`);
     sections.push(section("hotels", "Hotels", !stays.length
         ? "No active hotel stays are recorded. Hotels may be guest-arranged or outside this booking's scope."
         : !trip ? "Save valid travel dates to check hotel night coverage."
