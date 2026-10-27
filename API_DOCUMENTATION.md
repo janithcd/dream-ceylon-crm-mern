@@ -88,6 +88,10 @@ GET    /bookings/:id
 GET    /bookings/:id/travelers
 PUT    /bookings/:id/travelers
 GET    /bookings/departure-readiness?page=1
+GET    /bookings/post-trip-care?filter=due&page=1
+GET    /bookings/:id/post-trip-care
+GET    /bookings/:id/post-trip-message
+PATCH  /bookings/:id/post-trip-care
 GET    /bookings/cancellation-review?filter=open&page=1
 PUT    /bookings/:id
 DELETE /bookings/:id
@@ -98,6 +102,8 @@ POST   /booking-pdf/receipt/:id
 The traveler roster `GET` requires `booking.view` and returns the saved names, booking headcount, status and roster version. `PUT` requires `booking.view` and `booking.update` and accepts `travelerNames` (an array of single-line names, each 1–120 characters, at most the booked headcount and 60 total), `expectedVersion` and `expectedHeadcount` as integers from the last read. A stale version or changed headcount returns HTTP 409; invalid names return HTTP 400. Both responses use `Cache-Control: no-store`. Booking history records only counts. Reduce the roster before reducing the booking headcount.
 
 Departure readiness requires `booking.view`. It returns the next 30 Sri Lanka calendar days of active departures, ordered by date in pages of 20 (`page` 1–10000). Each item has roster, supplier confirmation, rooming plan and open task counts with an `attention`, `review` or `recorded-clear` status. `review` includes bookings with missing recorded services or a missing optional rooming plan. These labels do not certify the trip. Responses disable caching and exclude traveler names, room assignments, contact details, notes and financial data.
+
+Post-trip care covers the previous 90 days, beginning the day after the saved trip end in Sri Lanka time. The queue accepts `filter=due|closeout|waiting|done|all` and pages 1–1000 of 20 bookings. `closeout` includes ended Confirmed/In Progress trips; contact and feedback changes require Completed status. The queue requires `booking.view` and returns counts/status without guest contact values, private notes or prices. `GET /bookings/:id/post-trip-care` returns the saved private record for booking viewers. `GET /bookings/:id/post-trip-message` additionally requires `booking.update` and returns an editable WhatsApp draft with the guest's saved number; drafting never sends or records contact. `PATCH /bookings/:id/post-trip-care` additionally requires `booking.update` and accepts `{ "action": "contacted", "expectedRevision": 0, "channel": "WhatsApp", "note": "" }`, `{ "action": "feedback", "expectedRevision": 1, "rating": 5, "note": "Guest's comments" }`, or `{ "action": "declined", "expectedRevision": 1, "note": "" }`. A feedback note or rating is required; ratings are optional integers 1–5 and notes are at most 500 characters. Stale revisions return HTTP 409. A declined guest cannot be drafted or contacted again. Responses disable caching; booking history records action/channel without private notes.
 
 The cancellation review requires `booking.view`. `filter=open` (default) lists cancelled trips with requested or confirmed hotel/transport arrangements, while `filter=all` includes every cancelled trip. Pages are 1–1000, 20 bookings each. The response gives `summary.total`, `summary.withActiveServices`, and sanitized active arrangement details. Staff with **both** `payment.view` and `cost.view` additionally receive `bookedPaidAmount`, `currency`, `guestLedger` grouped by payment currency/status (excluding cancelled records), and `supplierCosts` grouped by supplier currency. Lookups run only for the selected page. The response is not cached; amounts are recorded history and do not establish a cancellation fee or refund obligation.
 

@@ -14,6 +14,7 @@ import {
     FaFileInvoiceDollar,
     FaGlobeAsia,
     FaHotel,
+    FaHeart,
     FaHistory,
     FaMapMarkedAlt,
     FaMoneyBillWave,
@@ -141,6 +142,13 @@ const AdminLayout = () => {
                         <NavLink to="/departure-readiness">
                             <FaClipboardCheck />
                             Departure Readiness
+                        </NavLink>
+                    </PermissionGuard>
+
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.bookings}>
+                        <NavLink to="/post-trip-care">
+                            <FaHeart />
+                            Post-trip Care
                         </NavLink>
                     </PermissionGuard>
 

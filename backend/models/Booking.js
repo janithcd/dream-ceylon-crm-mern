@@ -106,6 +106,19 @@ const roomingPlanSchema = new mongoose.Schema({
     savedByName: { type: String, trim: true, maxlength: 120, default: "" },
 }, { _id: false });
 
+const postTripCareSchema = new mongoose.Schema({
+    status: { type: String, enum: ["Contacted", "Feedback received", "Declined"], required: true },
+    contactCount: { type: Number, min: 0, default: 0 },
+    lastContactedAt: { type: Date, default: null },
+    lastContactChannel: { type: String, enum: ["WhatsApp", "Email", "Phone", "Other"], default: null },
+    contactNote: { type: String, trim: true, maxlength: 500, default: "" },
+    feedbackAt: { type: Date, default: null },
+    feedbackRating: { type: Number, min: 1, max: 5, default: null },
+    feedbackNote: { type: String, trim: true, maxlength: 500, default: "" },
+    updatedAt: { type: Date, required: true },
+    updatedByName: { type: String, trim: true, maxlength: 120, default: "" },
+}, { _id: false });
+
 const hotelStaySchema = new mongoose.Schema({
     hotelName: { type: String, required: true, trim: true, maxlength: 120 },
     location: { type: String, trim: true, maxlength: 120, default: "" },
@@ -212,6 +225,9 @@ const bookingSchema = new mongoose.Schema(
             ],
         },
         travelerRosterVersion: { type: Number, default: 0, min: 0 },
+
+        postTripCare: { type: postTripCareSchema, default: null },
+        postTripCareRevision: { type: Number, default: 0, min: 0 },
 
         vehicleType: {
             type: String,
@@ -344,6 +360,7 @@ bookingSchema.index({ bookingStatus: 1, "preparationTasks.completedAt": 1 });
 bookingSchema.index({ "transportAssignments.registrationKey": 1, "transportAssignments.startDate": 1, "transportAssignments.endDate": 1 });
 bookingSchema.index({ inquiry: 1 });
 bookingSchema.index({ bookingStatus: 1, updatedAt: -1 });
+bookingSchema.index({ bookingStatus: 1, travelEndDate: -1 });
 
 const Booking = mongoose.model("Booking", bookingSchema);
 
