@@ -123,7 +123,7 @@ const recoverySchema = new mongoose.Schema({
 }, { _id: false });
 
 const tripIssueEventSchema = new mongoose.Schema({
-    action: { type: String, enum: ["opened", "updated", "resolved", "reopened"], required: true },
+    action: { type: String, enum: ["opened", "updated", "resolved", "reopened", "assigned"], required: true },
     note: { type: String, required: true, trim: true, maxlength: 500 },
     at: { type: Date, required: true },
     byName: { type: String, trim: true, maxlength: 120, default: "" },
@@ -134,6 +134,8 @@ const tripIssueSchema = new mongoose.Schema({
     title: { type: String, required: true, trim: true, maxlength: 120 },
     category: { type: String, enum: ["Accommodation", "Transport", "Guide", "Itinerary", "Health & Safety", "Other"], required: true },
     priority: { type: String, enum: ["Urgent", "Normal"], required: true },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+    assignedToName: { type: String, trim: true, maxlength: 120, default: "" },
     status: { type: String, enum: ["Open", "Resolved"], default: "Open" },
     nextFollowUpDate: { type: Date, default: null },
     openedAt: { type: Date, required: true },

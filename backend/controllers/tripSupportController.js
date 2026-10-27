@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 const Booking = require("../models/Booking");
+const Admin = require("../models/Admin");
+const { PERMISSIONS, resolveAdminPermissions } = require("../config/permissions");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { PAGE_SIZE, FILTERS, activeTripQuery, buildTripSupportQuery, isActiveTrip,
     summarizeTripSupport, parseNewIssue, parseIssueAction } = require("../utils/tripSupport");
@@ -10,8 +12,21 @@ const logIssue = (req, booking, description, issue) => createActivityLog({ req, 
     description: `${description} for booking ${booking.bookingCode}`,
     relatedRecordId: booking._id, relatedModel: "Booking", referenceNo: booking.bookingCode,
     customerName: booking.customer?.fullName,
-    metadata: { category: issue.category, priority: issue.priority, status: issue.status },
+    metadata: { category: issue.category, priority: issue.priority, status: issue.status,
+        assignedTo: issue.assignedTo || null, assignedToName: issue.assignedToName || "" },
 });
+const resolveAssignee = async (value, req) => {
+    if (value === undefined || String(value) === String(req.admin._id)) {
+        return { value: { assignedTo: req.admin._id, assignedToName: (req.admin.name || "").slice(0, 120) } };
+    }
+    if (value === null || value === "") return { value: { assignedTo: null, assignedToName: "" } };
+    if (typeof value !== "string" || !validId(value)) return { error: "Choose a valid issue owner." };
+    const admin = await Admin.findById(value).select("_id name role status customPermissions");
+    if (!admin || admin.status !== "Active" || !resolveAdminPermissions(admin).includes(PERMISSIONS.BOOKING_UPDATE)) {
+        return { error: "Issue owner must be an active staff member who can update bookings." };
+    }
+    return { value: { assignedTo: admin._id, assignedToName: admin.name.slice(0, 120) } };
+};
 
 const getTripSupportQueue = async (req, res) => {
     noStore(res);
@@ -22,16 +37,19 @@ const getTripSupportQueue = async (req, res) => {
     }
     try {
         const now = new Date();
-        const [bookings, total, active, open] = await Promise.all([
-            Booking.find(buildTripSupportQuery(filter, now))
-                .select("bookingCode customer.fullName bookingStatus travelStartDate travelEndDate tripIssues.status tripIssues.priority tripIssues.nextFollowUpDate")
+        const adminId = req.admin._id;
+        const [bookings, total, active, open, mine, unassigned] = await Promise.all([
+            Booking.find(buildTripSupportQuery(filter, now, adminId))
+                .select("bookingCode customer.fullName bookingStatus travelStartDate travelEndDate tripIssues.status tripIssues.priority tripIssues.nextFollowUpDate tripIssues.assignedTo tripIssues.assignedToName")
                 .sort({ travelEndDate: 1, _id: 1 }).skip((page - 1) * PAGE_SIZE).limit(PAGE_SIZE).lean(),
-            Booking.countDocuments(buildTripSupportQuery(filter, now)),
+            Booking.countDocuments(buildTripSupportQuery(filter, now, adminId)),
             Booking.countDocuments(activeTripQuery(now)),
             Booking.countDocuments(buildTripSupportQuery("open", now)),
+            Booking.countDocuments(buildTripSupportQuery("mine", now, adminId)),
+            Booking.countDocuments(buildTripSupportQuery("unassigned", now)),
         ]);
-        return res.json({ items: bookings.map((booking) => summarizeTripSupport(booking, now)),
-            total, page, pages: Math.ceil(total / PAGE_SIZE) || 1, filter, summary: { active, open } });
+        return res.json({ items: bookings.map((booking) => summarizeTripSupport(booking, now, adminId)),
+            total, page, pages: Math.ceil(total / PAGE_SIZE) || 1, filter, summary: { active, open, mine, unassigned } });
     } catch (error) {
         console.error("Trip support queue failed:", error.message);
         return res.status(500).json({ message: "Failed to load trip support." });
@@ -61,9 +79,11 @@ const addTripIssue = async (req, res) => {
     if (parsed.error) return res.status(400).json({ message: parsed.error });
     const issueId = new mongoose.Types.ObjectId();
     try {
+        const owner = await resolveAssignee(req.body?.assignedTo, req);
+        if (owner.error) return res.status(400).json({ message: owner.error });
         const booking = await Booking.findOneAndUpdate({ _id: req.params.id, ...activeTripQuery(),
             "tripIssues.29": { $exists: false } },
-        { $push: { tripIssues: { ...parsed.value, _id: issueId } } }, { returnDocument: "after", runValidators: true });
+        { $push: { tripIssues: { ...parsed.value, ...owner.value, _id: issueId } } }, { returnDocument: "after", runValidators: true });
         if (!booking) {
             return res.status((await Booking.exists({ _id: req.params.id })) ? 409 : 404)
                 .json({ message: "Only active trips can add issues, with a maximum of 30 per booking. Refresh and review the trip." });
@@ -110,4 +130,41 @@ const updateTripIssue = async (req, res) => {
     }
 };
 
-module.exports = { getTripSupportQueue, getTripIssues, addTripIssue, updateTripIssue };
+const assignTripIssue = async (req, res) => {
+    noStore(res);
+    if (!validId(req.params.id) || !validId(req.params.issueId)) return res.status(400).json({ message: "Invalid booking or issue ID" });
+    if (!Number.isSafeInteger(req.body?.expectedRevision) || req.body.expectedRevision < 0 ||
+        !Object.hasOwn(req.body, "assignedTo")) return res.status(400).json({ message: "Refresh the issue and choose an owner or unassigned." });
+    try {
+        const current = await Booking.findById(req.params.id).select("tripIssues");
+        if (!current) return res.status(404).json({ message: "Booking not found" });
+        const issue = current.tripIssues.id(req.params.issueId);
+        if (!issue) return res.status(404).json({ message: "Trip issue not found" });
+        if (issue.revision !== req.body.expectedRevision) return res.status(409).json({ message: "Trip issue changed. Refresh and try again." });
+        if (issue.status !== "Open") return res.status(409).json({ message: "Reopen the resolved issue before changing its owner." });
+        const owner = await resolveAssignee(req.body.assignedTo, req);
+        if (owner.error) return res.status(400).json({ message: owner.error });
+        if (String(issue.assignedTo || "") === String(owner.value.assignedTo || "")) {
+            return res.status(400).json({ message: "Choose a different owner to record a change." });
+        }
+        const event = { action: "assigned", note: owner.value.assignedTo ? `Assigned to ${owner.value.assignedToName}` : "Owner cleared",
+            at: new Date(), byName: req.admin?.name || "", nextFollowUpDate: issue.nextFollowUpDate || null };
+        const updated = await Booking.findOneAndUpdate({ _id: req.params.id,
+            tripIssues: { $elemMatch: { _id: issue._id, status: "Open", revision: issue.revision } } },
+        { $set: { "tripIssues.$.assignedTo": owner.value.assignedTo,
+            "tripIssues.$.assignedToName": owner.value.assignedToName },
+        $inc: { "tripIssues.$.revision": 1 },
+        $push: { "tripIssues.$.events": { $each: [event], $slice: -20 } } },
+        { returnDocument: "after", runValidators: true });
+        if (!updated) return res.status(409).json({ message: "Trip issue changed. Refresh and try again." });
+        const changed = updated.tripIssues.id(issue._id);
+        await logIssue(req, updated, "Trip issue owner changed", changed);
+        return res.json({ issue: changed });
+    } catch (error) {
+        if (error.name === "ValidationError") return res.status(400).json({ message: "Issue owner is invalid." });
+        console.error("Assign trip issue failed:", error.message);
+        return res.status(500).json({ message: "Failed to assign trip issue." });
+    }
+};
+
+module.exports = { getTripSupportQueue, getTripIssues, addTripIssue, updateTripIssue, assignTripIssue };

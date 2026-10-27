@@ -5,7 +5,8 @@ import api from "../api/axios";
 import TripIssuesModal from "../components/TripIssuesModal";
 import { formatCalendarDate } from "../utils/calendarDate";
 
-const filters = [["open", "Unresolved issues"], ["active", "On tour today"], ["all", "All active and unresolved"]];
+const filters = [["open", "Unresolved issues"], ["mine", "My issues"], ["unassigned", "Unassigned"],
+    ["active", "On tour today"], ["all", "All active and unresolved"]];
 
 const TripSupport = () => {
     const [filter, setFilter] = useState("open");
@@ -40,8 +41,9 @@ const TripSupport = () => {
         <p className="alert alert-info small">A trip is active from its saved start through end date in Sri Lanka time. Issues are private operational records; opening or updating one does not message the guest. Unresolved issues remain here after a trip ends or its booking status changes.</p>
         {error && <div className="alert alert-danger" role="alert">{error} <button type="button" className="btn btn-sm btn-outline-danger ms-2" onClick={refresh}>Try again</button></div>}
         {data && <div className="row g-3 mb-4">
-            {[["Trips underway today", data.summary.active], ["Bookings with open issues", data.summary.open]].map(([label, count]) =>
-                <div className="col-md-6" key={label}><div className="card border-0 shadow-sm"><div className="card-body"><small className="text-muted">{label}</small><h3 className="mb-0">{count}</h3></div></div></div>)}
+            {[["Trips underway today", data.summary.active], ["Bookings with open issues", data.summary.open],
+                ["With issues assigned to me", data.summary.mine], ["With unassigned issues", data.summary.unassigned]].map(([label, count]) =>
+                <div className="col-6 col-xl-3" key={label}><div className="card border-0 shadow-sm h-100"><div className="card-body"><small className="text-muted">{label}</small><h3 className="mb-0">{count}</h3></div></div></div>)}
         </div>}
         <div className="card border-0 shadow-sm"><div className="card-body">
             <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Trip support filter">
@@ -62,6 +64,11 @@ const TripSupport = () => {
                                 {item.overdueIssueCount > 0 && <strong className="text-danger me-2">{item.overdueIssueCount} overdue</strong>}
                                 {item.dueTodayIssueCount > 0 && <strong className="text-warning-emphasis me-2">{item.dueTodayIssueCount} due today</strong>}
                                 {item.unscheduledIssueCount > 0 && <span>{item.unscheduledIssueCount} without a follow-up date</span>}
+                            </div>}
+                            {item.openIssueCount > 0 && <div className="small mt-1">
+                                {item.ownerNames.length > 0 && <span>Owners: {item.ownerNames.join(", ")}</span>}
+                                {item.unassignedIssueCount > 0 && <span className="text-warning-emphasis">{item.ownerNames.length > 0 ? " · " : ""}{item.unassignedIssueCount} unassigned</span>}
+                                {item.myIssueCount > 0 && <span className="text-primary"> · {item.myIssueCount} mine</span>}
                             </div>}
                         </div>
                         <div className="d-flex gap-2 flex-wrap">

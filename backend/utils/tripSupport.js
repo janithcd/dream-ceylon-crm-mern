@@ -3,7 +3,7 @@ const { parseCalendarDate } = require("./paymentDueDate");
 
 const DAY_MS = 86400000;
 const PAGE_SIZE = 20;
-const FILTERS = ["open", "active", "all"];
+const FILTERS = ["open", "mine", "unassigned", "active", "all"];
 const CATEGORIES = ["Accommodation", "Transport", "Guide", "Itinerary", "Health & Safety", "Other"];
 const PRIORITIES = ["Urgent", "Normal"];
 
@@ -12,11 +12,13 @@ const activeTripQuery = (now = new Date()) => {
     return { bookingStatus: { $in: ["Confirmed", "In Progress"] },
         travelStartDate: { $lte: end }, travelEndDate: { $gte: start } };
 };
-const buildTripSupportQuery = (filter = "open", now = new Date()) => {
+const buildTripSupportQuery = (filter = "open", now = new Date(), adminId = null) => {
     const active = activeTripQuery(now);
     const open = { "tripIssues.status": "Open" };
     if (filter === "active") return active;
     if (filter === "all") return { $or: [active, open] };
+    if (filter === "mine") return { tripIssues: { $elemMatch: { status: "Open", assignedTo: adminId } } };
+    if (filter === "unassigned") return { tripIssues: { $elemMatch: { status: "Open", assignedTo: null } } };
     return open;
 };
 const isActiveTrip = (booking, now = new Date()) => {
@@ -26,13 +28,19 @@ const isActiveTrip = (booking, now = new Date()) => {
     return ["Confirmed", "In Progress"].includes(booking.bookingStatus) &&
         Number.isFinite(from.getTime()) && Number.isFinite(to.getTime()) && from <= end && to >= start;
 };
-const summarizeTripSupport = (booking, now = new Date()) => {
+const summarizeTripSupport = (booking, now = new Date(), adminId = null) => {
     const open = (booking.tripIssues || []).filter((issue) => issue.status === "Open");
+    const ownerId = (issue) => String(issue.assignedTo?._id || issue.assignedTo || "");
+    const ownerNames = [...new Set(open.filter((issue) => issue.assignedTo)
+        .map((issue) => issue.assignedToName || "Staff member"))];
     const { start, end } = getBusinessDayBounds(now);
     return { _id: booking._id, bookingCode: booking.bookingCode,
         customerName: booking.customer?.fullName || "", bookingStatus: booking.bookingStatus,
         travelStartDate: booking.travelStartDate, travelEndDate: booking.travelEndDate,
         activeToday: isActiveTrip(booking, now), openIssueCount: open.length,
+        myIssueCount: open.filter((issue) => adminId && ownerId(issue) === String(adminId)).length,
+        unassignedIssueCount: open.filter((issue) => !issue.assignedTo).length,
+        ownerNames,
         urgentIssueCount: open.filter((issue) => issue.priority === "Urgent").length,
         overdueIssueCount: open.filter((issue) => issue.nextFollowUpDate && new Date(issue.nextFollowUpDate) < start).length,
         dueTodayIssueCount: open.filter((issue) => issue.nextFollowUpDate &&

@@ -28,6 +28,9 @@ test("the active trip window follows Sri Lanka days and open issues remain visib
     assert.equal(active.travelEndDate.$gte.toISOString(), "2026-10-26T18:30:00.000Z");
     assert.equal(buildTripSupportQuery("open", now)["tripIssues.status"], "Open");
     assert.equal(buildTripSupportQuery("all", now).$or.length, 2);
+    assert.deepEqual(buildTripSupportQuery("mine", now, "507f1f77bcf86cd799439322").tripIssues.$elemMatch,
+        { status: "Open", assignedTo: "507f1f77bcf86cd799439322" });
+    assert.deepEqual(buildTripSupportQuery("unassigned", now).tripIssues.$elemMatch, { status: "Open", assignedTo: null });
     const booking = makeBooking();
     assert.equal(isActiveTrip(booking), true);
     booking.bookingStatus = "Completed";
@@ -37,6 +40,10 @@ test("the active trip window follows Sri Lanka days and open issues remain visib
     const summary = summarizeTripSupport(booking);
     assert.equal(summary.urgentIssueCount, 1);
     assert.equal(summary.unscheduledIssueCount, 1);
+    assert.equal(summary.unassignedIssueCount, 1);
+    booking.tripIssues[0].assignedTo = "507f1f77bcf86cd799439322";
+    booking.tripIssues[0].assignedToName = "Agent";
+    assert.equal(summarizeTripSupport(booking, now, "507f1f77bcf86cd799439322").myIssueCount, 1);
     booking.tripIssues[0].nextFollowUpDate = new Date("2026-10-26T00:00:00Z");
     assert.equal(summarizeTripSupport(booking, now).overdueIssueCount, 1);
     for (const privateValue of ["Vehicle arrived late", "Pickup was delayed", "PRIVATE-BOOKING-NOTES", "PRIVATE@example.invalid", "2100"]) {
@@ -69,9 +76,13 @@ test("trip issue API enforces permissions, atomic revisions and separate read-on
     const sales = "507f1f77bcf86cd799439322";
     const viewer = "507f1f77bcf86cd799439323";
     const superAdmin = "507f1f77bcf86cd799439324";
+    const teammate = "507f1f77bcf86cd799439325";
+    const inactive = "507f1f77bcf86cd799439326";
     const logs = [];
     t.mock.method(Admin, "findById", (id) => ({ select: async () => ({
-        _id: id, name: "Agent", role: String(id) === viewer ? "Viewer" : String(id) === superAdmin ? "Super Admin" : "Sales", status: "Active", tokenVersion: 0,
+        _id: id, name: String(id) === teammate ? "Teammate" : "Agent",
+        role: String(id) === viewer ? "Viewer" : String(id) === superAdmin ? "Super Admin" : "Sales",
+        status: String(id) === inactive ? "Inactive" : "Active", tokenVersion: 0,
     }) }));
     t.mock.method(Booking, "findById", (id) => {
         const result = String(id) === String(booking._id) ? booking : null;
@@ -91,9 +102,14 @@ test("trip issue API enforces permissions, atomic revisions and separate read-on
         const { _id, revision, status } = query.tripIssues.$elemMatch;
         const issue = booking.tripIssues.id(_id);
         if (!issue || issue.revision !== revision || issue.status !== status) return null;
-        issue.status = update.$set["tripIssues.$.status"];
-        issue.resolvedAt = update.$set["tripIssues.$.resolvedAt"];
-        issue.nextFollowUpDate = update.$set["tripIssues.$.nextFollowUpDate"];
+        if (Object.hasOwn(update.$set, "tripIssues.$.assignedTo")) {
+            issue.assignedTo = update.$set["tripIssues.$.assignedTo"];
+            issue.assignedToName = update.$set["tripIssues.$.assignedToName"];
+        } else {
+            issue.status = update.$set["tripIssues.$.status"];
+            issue.resolvedAt = update.$set["tripIssues.$.resolvedAt"];
+            issue.nextFollowUpDate = update.$set["tripIssues.$.nextFollowUpDate"];
+        }
         issue.revision += 1;
         issue.events.push(update.$push["tripIssues.$.events"].$each[0]);
         return booking;
@@ -121,20 +137,33 @@ test("trip issue API enforces permissions, atomic revisions and separate read-on
     const added = await request(path, sales, "POST", body);
     assert.equal(added.status, 201, await added.clone().text());
     const issueId = (await added.json()).issue._id;
+    assert.equal(String(booking.tripIssues[0].assignedTo), sales);
     assert.equal((await request(`/${booking._id}`, superAdmin, "DELETE")).status, 409);
     const read = await request(path, viewer);
     assert.equal(read.status, 200);
     assert.equal((await read.json()).issues[0].events[0].note, "Pickup was delayed");
+    const ownerPath = `${path}/${issueId}/assignee`;
+    assert.equal((await request(ownerPath, viewer, "PATCH", { assignedTo: null, expectedRevision: 0 })).status, 403);
+    assert.equal((await request(ownerPath, sales, "PATCH", { assignedTo: viewer, expectedRevision: 0 })).status, 400);
+    assert.equal((await request(ownerPath, sales, "PATCH", { assignedTo: inactive, expectedRevision: 0 })).status, 400);
+    const unassign = await request(ownerPath, sales, "PATCH", { assignedTo: null, expectedRevision: 0 });
+    assert.equal(unassign.status, 200, await unassign.clone().text());
+    assert.equal(booking.tripIssues[0].assignedTo, null);
+    assert.equal((await request(ownerPath, sales, "PATCH", { assignedTo: teammate, expectedRevision: 0 })).status, 409);
+    const assigned = await request(ownerPath, sales, "PATCH", { assignedTo: teammate, expectedRevision: 1 });
+    assert.equal(assigned.status, 200, await assigned.clone().text());
+    assert.equal(booking.tripIssues[0].assignedToName, "Teammate");
     assert.equal((await request(`${path}/${issueId}`, viewer, "PATCH", { action: "resolved", note: "Driver apologized to guest", nextFollowUpDate: null, expectedRevision: 0 })).status, 403);
-    const updated = await request(`${path}/${issueId}`, sales, "PATCH", { action: "updated", note: "Driver is on the way", nextFollowUpDate: null, expectedRevision: 0 });
+    const updated = await request(`${path}/${issueId}`, sales, "PATCH", { action: "updated", note: "Driver is on the way", nextFollowUpDate: null, expectedRevision: 2 });
     assert.equal(updated.status, 200, await updated.clone().text());
     assert.equal((await request(`${path}/${issueId}`, sales, "PATCH", { action: "resolved", note: "Driver apologized to guest", nextFollowUpDate: null, expectedRevision: 0 })).status, 409);
     booking.bookingStatus = "Completed";
     assert.equal((await request(path, sales, "POST", body)).status, 409);
-    const resolved = await request(`${path}/${issueId}`, sales, "PATCH", { action: "resolved", note: "Driver apologized to guest", nextFollowUpDate: null, expectedRevision: 1 });
+    const resolved = await request(`${path}/${issueId}`, sales, "PATCH", { action: "resolved", note: "Driver apologized to guest", nextFollowUpDate: null, expectedRevision: 3 });
     assert.equal(resolved.status, 200, await resolved.clone().text());
     assert.equal((await resolved.json()).issue.status, "Resolved");
-    assert.equal(logs.length, 3);
+    assert.equal((await request(ownerPath, sales, "PATCH", { assignedTo: sales, expectedRevision: 4 })).status, 409);
+    assert.equal(logs.length, 5);
     assert.ok(!JSON.stringify(logs).includes("Pickup was delayed"));
     assert.ok(!JSON.stringify(logs).includes("Driver apologized"));
     assert.ok(!JSON.stringify(logs).includes("Vehicle arrived late"));

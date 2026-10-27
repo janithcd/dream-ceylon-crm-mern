@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
+import { useAuth } from "../context/AuthContext";
 import { formatCalendarDate, todayCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
 
 const categories = ["Accommodation", "Transport", "Guide", "Itinerary", "Health & Safety", "Other"];
-const initial = { title: "", category: "Accommodation", priority: "Normal", note: "", nextFollowUpDate: "" };
+const initial = { title: "", category: "Accommodation", priority: "Normal", note: "", nextFollowUpDate: "", assignedTo: "__me__" };
 
 const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
     const { hasPermission } = usePermissions();
+    const { admin } = useAuth();
     const canUpdate = hasPermission("booking.update");
     const [record, setRecord] = useState(null);
     const [reloadKey, setReloadKey] = useState(0);
@@ -19,6 +21,10 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
     const [action, setAction] = useState("updated");
     const [actionNote, setActionNote] = useState("");
     const [followUpDate, setFollowUpDate] = useState("");
+    const [assignees, setAssignees] = useState([]);
+    const [assigneeError, setAssigneeError] = useState("");
+    const [assignId, setAssignId] = useState(null);
+    const [assignTo, setAssignTo] = useState("");
     const dialogRef = useRef(null);
     const closeRef = useRef(onClose);
     const close = () => { if (!busy) onClose(); };
@@ -32,6 +38,15 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
     }, [bookingId, reloadKey]);
+
+    useEffect(() => {
+        if (!canUpdate) return undefined;
+        let active = true;
+        api.get("/bookings/preparation-assignees")
+            .then(({ data }) => { if (active) { setAssignees(data.admins || []); setAssigneeError(""); } })
+            .catch(() => { if (active) setAssigneeError("Could not load staff choices. Reopen the issue window to try again."); });
+        return () => { active = false; };
+    }, [canUpdate]);
 
     useEffect(() => {
         const previousFocus = document.activeElement;
@@ -59,13 +74,15 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
         };
     }, []);
 
-    const reload = () => { setSelectedId(null); setRecord(null); setLoading(true); setReloadKey((value) => value + 1); };
+    const reload = () => { setSelectedId(null); setAssignId(null); setRecord(null); setLoading(true); setReloadKey((value) => value + 1); };
     const create = async (event) => {
         event.preventDefault();
         if (busy || !record?.canOpenIssue || !canUpdate) return;
         setBusy(true); setError("");
         try {
-            await api.post(`/bookings/${bookingId}/trip-issues`, { ...newIssue, nextFollowUpDate: newIssue.nextFollowUpDate || null });
+            await api.post(`/bookings/${bookingId}/trip-issues`, { ...newIssue,
+                assignedTo: newIssue.assignedTo === "__me__" ? undefined : newIssue.assignedTo || null,
+                nextFollowUpDate: newIssue.nextFollowUpDate || null });
             setNewIssue(initial); onChanged?.(); reload();
         } catch (err) { setError(err.response?.data?.message || "Could not open the issue. Refresh and try again."); }
         finally { setBusy(false); }
@@ -85,8 +102,25 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
         finally { setBusy(false); }
     };
     const choose = (issue) => {
-        setSelectedId(issue._id); setAction(issue.status === "Resolved" ? "reopened" : "updated");
+        setAssignId(null); setSelectedId(issue._id); setAction(issue.status === "Resolved" ? "reopened" : "updated");
         setActionNote(""); setFollowUpDate(toCalendarDateInput(issue.nextFollowUpDate));
+    };
+    const chooseOwner = (issue) => {
+        setSelectedId(null); setAssignId(issue._id);
+        setAssignTo(issue.assignedTo || "");
+    };
+    const saveOwner = async (event) => {
+        event.preventDefault();
+        const issue = record?.issues.find((item) => item._id === assignId);
+        if (!issue || busy || !canUpdate) return;
+        setBusy(true); setError("");
+        try {
+            await api.patch(`/bookings/${bookingId}/trip-issues/${assignId}/assignee`, {
+                assignedTo: assignTo || null, expectedRevision: issue.revision,
+            });
+            setAssignId(null); onChanged?.(); reload();
+        } catch (err) { setError(err.response?.data?.message || "Could not assign the issue. Refresh and try again."); }
+        finally { setBusy(false); }
     };
 
     return <>
@@ -97,6 +131,7 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
                 <div className="modal-body">
                     {loading && <p role="status">Loading trip issues...</p>}
                     {error && <div className="alert alert-danger" role="alert">{error} <button type="button" className="btn btn-sm btn-outline-danger ms-2" onClick={reload} disabled={busy}>Refresh</button></div>}
+                    {assigneeError && <div className="alert alert-warning small" role="alert">{assigneeError}</div>}
                     {!loading && record && <>
                         <p className="small text-muted">{record.customerName || "Guest"} · {formatCalendarDate(record.travelStartDate)} – {formatCalendarDate(record.travelEndDate)} · {record.bookingStatus}</p>
                         <p className="alert alert-info small">Log operational problems and actions taken. A note records work in the CRM; it does not contact the guest or supplier. Resolve each issue explicitly, even if the booking later ends.</p>
@@ -115,6 +150,11 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
                                 <div className="col-md-6"><label className="form-label" htmlFor="issue-follow-up">Next follow-up (optional)</label>
                                     <input id="issue-follow-up" type="date" className="form-control" min={todayCalendarDate()} value={newIssue.nextFollowUpDate}
                                         onChange={(event) => setNewIssue({ ...newIssue, nextFollowUpDate: event.target.value })} disabled={busy} /></div>
+                                <div className="col-md-6"><label className="form-label" htmlFor="issue-owner">Issue owner</label>
+                                    <select id="issue-owner" className="form-select" value={newIssue.assignedTo} onChange={(event) => setNewIssue({ ...newIssue, assignedTo: event.target.value })} disabled={busy}>
+                                        <option value="__me__">Assign to me</option><option value="">Unassigned</option>
+                                        {assignees.filter((person) => String(person._id) !== String(admin?.id)).map((person) => <option key={person._id} value={person._id}>{person.name} · {person.role}</option>)}
+                                    </select></div>
                                 <div className="col-12"><label className="form-label" htmlFor="issue-note">Private description</label>
                                     <textarea id="issue-note" className="form-control" rows="2" minLength={5} maxLength={500} required value={newIssue.note}
                                         onChange={(event) => setNewIssue({ ...newIssue, note: event.target.value })} disabled={busy} /></div>
@@ -128,6 +168,7 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
                             <div className="d-flex flex-wrap justify-content-between gap-2"><div><strong className="text-break">{issue.title}</strong>
                                 <div className="small text-muted">{issue.category} · {issue.priority} priority · Opened {new Date(issue.openedAt).toLocaleString("en-GB", { timeZone: "Asia/Colombo" })}</div></div>
                                 <span className={`badge align-self-start ${issue.status === "Open" ? "text-bg-warning" : "text-bg-success"}`}>{issue.status}</span></div>
+                            <p className="small mt-2 mb-1">Owner: <strong>{issue.assignedToName || "Unassigned"}</strong></p>
                             {issue.status === "Open" && <p className="small mt-2 mb-1">Next follow-up: <strong>{issue.nextFollowUpDate ? `${toCalendarDateInput(issue.nextFollowUpDate) < todayCalendarDate() ? "Overdue · " : ""}${formatCalendarDate(issue.nextFollowUpDate)}` : "Not set"}</strong></p>}
                             <ol className="small ps-3 my-2">{[...issue.events].reverse().map((entry, index) => <li className="mb-2 text-break" key={`${entry.at}-${index}`}>
                                 <strong>{entry.action}</strong> · {new Date(entry.at).toLocaleString("en-GB", { timeZone: "Asia/Colombo" })} · {entry.byName || "Staff"}
@@ -135,6 +176,17 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
                             </li>)}</ol>
                             {canUpdate && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => choose(issue)} disabled={busy}>
                                 {issue.status === "Resolved" ? "Reopen issue" : "Update or resolve"}</button>}
+                            {canUpdate && issue.status === "Open" && <button type="button" className="btn btn-sm btn-outline-secondary ms-2" onClick={() => chooseOwner(issue)} disabled={busy}>Change owner</button>}
+                            {assignId === issue._id && canUpdate && <form className="border-top mt-3 pt-3" onSubmit={saveOwner}>
+                                <label className="form-label" htmlFor="issue-assign">Assign issue to</label>
+                                <select id="issue-assign" className="form-select" value={assignTo} onChange={(event) => setAssignTo(event.target.value)} disabled={busy}>
+                                    <option value="">Unassigned</option>
+                                    {issue.assignedTo && !assignees.some((person) => person._id === issue.assignedTo) && <option value={issue.assignedTo} disabled>{issue.assignedToName || "Current owner"} (no longer available)</option>}
+                                    {assignees.map((person) => <option key={person._id} value={person._id}>{person.name} · {person.role}</option>)}
+                                </select>
+                                <div className="d-flex gap-2 mt-3"><button type="submit" className="btn btn-primary btn-sm" disabled={busy || assignTo === (issue.assignedTo || "")}>Save owner</button>
+                                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => setAssignId(null)} disabled={busy}>Cancel</button></div>
+                            </form>}
                             {selectedId === issue._id && canUpdate && <form className="border-top mt-3 pt-3" onSubmit={saveAction}>
                                 <label className="form-label" htmlFor="issue-action">Action</label>
                                 <select id="issue-action" className="form-select mb-3" value={action} onChange={(event) => setAction(event.target.value)} disabled={busy}>
