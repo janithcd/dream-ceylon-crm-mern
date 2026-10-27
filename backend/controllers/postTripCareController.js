@@ -3,7 +3,7 @@ const Booking = require("../models/Booking");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { getDocumentBrandConfig } = require("../utils/documentSettings");
 const { buildPostTripMessage } = require("../utils/postTripMessage");
-const { PAGE_SIZE, FILTERS, getPostTripQuery, endedBeforeToday, parseCareAction, summarizeCare } = require("../utils/postTripCare");
+const { PAGE_SIZE, FILTERS, getPostTripQuery, endedBeforeToday, isLowRating, parseCareAction, summarizeCare } = require("../utils/postTripCare");
 
 const validId = (id) => mongoose.Types.ObjectId.isValid(id);
 const revisionMatch = (revision) => revision === 0 ? { $in: [null, 0] } : revision;
@@ -12,6 +12,7 @@ const available = (booking) => {
     return booking.bookingStatus === "Completed" && endedBeforeToday(booking) &&
         new Date(booking.travelEndDate) >= $gte;
 };
+const recoveryAvailable = (booking) => booking.bookingStatus === "Completed" && endedBeforeToday(booking) && isLowRating(booking.postTripCare);
 
 const getPostTripCareQueue = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -23,15 +24,16 @@ const getPostTripCareQueue = async (req, res) => {
     try {
         const now = new Date();
         const query = getPostTripQuery(filter, now);
-        const [bookings, total, closeout, due, waiting, done] = await Promise.all([
+        const [bookings, total, closeout, due, waiting, done, recovery] = await Promise.all([
             Booking.find(query)
-                .select("bookingCode customer.fullName travelEndDate bookingStatus postTripCare.status postTripCare.contactCount postTripCare.lastContactedAt postTripCare.lastContactChannel postTripCare.feedbackRating postTripCare.feedbackAt postTripCareRevision")
-                .sort({ travelEndDate: -1, _id: -1 }).skip((page - 1) * PAGE_SIZE).limit(PAGE_SIZE).lean(),
+                .select("bookingCode customer.fullName travelEndDate bookingStatus postTripCare.status postTripCare.contactCount postTripCare.lastContactedAt postTripCare.lastContactChannel postTripCare.feedbackRating postTripCare.feedbackAt postTripCare.recovery.status postTripCare.recovery.nextFollowUpDate postTripCareRevision")
+                .sort(filter === "recovery" ? { "postTripCare.recovery.nextFollowUpDate": 1, travelEndDate: -1, _id: -1 } : { travelEndDate: -1, _id: -1 })
+                .skip((page - 1) * PAGE_SIZE).limit(PAGE_SIZE).lean(),
             Booking.countDocuments(query),
-            ...["closeout", "due", "waiting", "done"].map((key) => Booking.countDocuments(getPostTripQuery(key, now))),
+            ...["closeout", "due", "waiting", "done", "recovery"].map((key) => Booking.countDocuments(getPostTripQuery(key, now))),
         ]);
         return res.json({ items: bookings.map(summarizeCare), total, page, pages: Math.ceil(total / PAGE_SIZE) || 1,
-            filter, summary: { closeout, due, waiting, done } });
+            filter, summary: { closeout, due, waiting, done, recovery } });
     } catch (error) {
         console.error("Post-trip care queue failed:", error.message);
         return res.status(500).json({ message: "Failed to load post-trip care." });
@@ -44,8 +46,8 @@ const getPostTripCare = async (req, res) => {
     try {
         const booking = await Booking.findById(req.params.id).select("bookingStatus travelEndDate postTripCare postTripCareRevision");
         if (!booking) return res.status(404).json({ message: "Booking not found" });
-        if (!available(booking)) return res.status(409).json({ message: "Complete the trip before recording post-trip care." });
-        return res.json({ status: booking.postTripCare?.status || "Not contacted",
+        if (!available(booking) && !recoveryAvailable(booking)) return res.status(409).json({ message: "This trip is outside the post-trip care window." });
+        return res.json({ status: booking.postTripCare?.status || "Not contacted", careWindowOpen: available(booking),
             revision: booking.postTripCareRevision ?? 0,
             contactCount: booking.postTripCare?.contactCount || 0,
             lastContactedAt: booking.postTripCare?.lastContactedAt || null,
@@ -54,7 +56,16 @@ const getPostTripCare = async (req, res) => {
             feedbackAt: booking.postTripCare?.feedbackAt || null,
             feedbackRating: booking.postTripCare?.feedbackRating ?? null,
             feedbackNote: booking.postTripCare?.feedbackNote || "",
-            updatedByName: booking.postTripCare?.updatedByName || "" });
+            updatedByName: booking.postTripCare?.updatedByName || "",
+            recovery: isLowRating(booking.postTripCare) ? {
+                status: booking.postTripCare?.recovery?.status || "Open",
+                nextFollowUpDate: booking.postTripCare?.recovery?.nextFollowUpDate || null,
+                resolvedAt: booking.postTripCare?.recovery?.resolvedAt || null,
+                events: [...(booking.postTripCare?.recovery?.events || [])].reverse().map((event) => ({
+                    action: event.action, at: event.at, byName: event.byName, channel: event.channel,
+                    note: event.note, nextFollowUpDate: event.nextFollowUpDate,
+                })),
+            } : null });
     } catch (error) {
         return res.status(500).json({ message: "Failed to load post-trip record." });
     }
@@ -83,26 +94,33 @@ const recordPostTripCare = async (req, res) => {
         const current = await Booking.findById(req.params.id)
             .select("bookingCode bookingStatus travelEndDate customer.fullName postTripCare postTripCareRevision");
         if (!current) return res.status(404).json({ message: "Booking not found" });
-        if (!available(current)) return res.status(409).json({ message: "Complete the trip before recording post-trip care." });
+        const isRecovery = typeof req.body?.action === "string" && req.body.action.startsWith("recovery-");
+        if (isRecovery ? !recoveryAvailable(current) : !available(current)) {
+            return res.status(409).json({ message: "This trip is outside the post-trip care window or recovery is unavailable." });
+        }
         const parsed = parseCareAction(req.body, current.postTripCare, req.admin?.name);
         if (parsed.error) return res.status(400).json({ message: parsed.error });
         const expected = req.body.expectedRevision;
         if ((current.postTripCareRevision ?? 0) !== expected) {
             return res.status(409).json({ message: "Post-trip care changed. Refresh and try again." });
         }
-        const dateWindow = getPostTripQuery("all").travelEndDate;
         const updated = await Booking.findOneAndUpdate({
-            _id: current._id, bookingStatus: "Completed", travelEndDate: { ...dateWindow, $eq: current.travelEndDate },
+            _id: current._id, bookingStatus: "Completed",
+            travelEndDate: isRecovery ? { $lt: getPostTripQuery("recovery").travelEndDate.$lt, $eq: current.travelEndDate }
+                : { ...getPostTripQuery("all").travelEndDate, $eq: current.travelEndDate },
             postTripCareRevision: revisionMatch(expected),
         }, { $set: { postTripCare: parsed.value }, $inc: { postTripCareRevision: 1 } },
         { returnDocument: "after", runValidators: true });
         if (!updated) return res.status(409).json({ message: "The trip or post-trip record changed. Refresh and try again." });
-        const descriptions = { contacted: "Guest contact recorded", feedback: "Guest feedback recorded", declined: "Guest declined post-trip contact" };
+        const descriptions = { contacted: "Guest contact recorded", feedback: "Guest feedback recorded", declined: "Guest declined post-trip contact",
+            "recovery-plan": "Guest recovery follow-up planned", "recovery-contact": "Guest recovery contact recorded",
+            "recovery-resolve": "Guest recovery resolved", "recovery-reopen": "Guest recovery reopened" };
         await createActivityLog({ req, action: "UPDATE", module: "Booking",
             description: `${descriptions[req.body.action]} for booking ${updated.bookingCode}`,
             relatedRecordId: updated._id, relatedModel: "Booking", referenceNo: updated.bookingCode,
             customerName: updated.customer?.fullName,
-            metadata: { status: parsed.value.status, channel: req.body.action === "contacted" ? parsed.value.lastContactChannel : undefined },
+            metadata: { status: parsed.value.status, channel: ["contacted", "recovery-contact"].includes(req.body.action) ? req.body.channel : undefined,
+                recoveryStatus: isRecovery ? parsed.value.recovery.status : undefined },
         });
         return res.json({ care: summarizeCare(updated) });
     } catch (error) {

@@ -67,10 +67,27 @@ const main = async () => {
         assert.equal((await request(sales, draftPath)).status, 409);
         assert.equal((await (await request(sales, path)).json()).feedbackNote, "Loved the trip");
         assert.equal((await request(sales, `/${open._id}/post-trip-care`, "PATCH", contact)).status, 409);
+        const low = await request(sales, path, "PATCH", { action: "feedback", note: "Pickup was late", rating: 2, expectedRevision: 2 });
+        assert.equal(low.status, 200, await low.clone().text());
+        const needsRecovery = await queue("recovery");
+        assert.ok(needsRecovery.items.some((item) => item.bookingCode === completed.bookingCode));
+        assert.ok(!JSON.stringify(needsRecovery).includes("Pickup was late"), "Queue must not expose feedback notes");
+        const plan = await request(sales, path, "PATCH", { action: "recovery-plan", note: "Call the guest tomorrow",
+            nextFollowUpDate: dateOnly(new Date(Date.now() + dayMs)), expectedRevision: 3 });
+        assert.equal(plan.status, 200, await plan.clone().text());
+        assert.equal((await request(viewer, path, "PATCH", { action: "recovery-resolve", note: "Guest accepted our remedy", nextFollowUpDate: null, expectedRevision: 4 })).status, 403);
+        assert.equal((await request(sales, path, "PATCH", { action: "recovery-resolve", note: "Guest accepted our remedy", nextFollowUpDate: null, expectedRevision: 3 })).status, 409);
+        const resolved = await request(sales, path, "PATCH", { action: "recovery-resolve", note: "Guest accepted our remedy",
+            nextFollowUpDate: null, expectedRevision: 4 });
+        assert.equal(resolved.status, 200, await resolved.clone().text());
+        assert.ok(!(await queue("recovery")).items.some((item) => item.bookingCode === completed.bookingCode));
+        assert.ok((await queue("recovery-closed")).items.some((item) => item.bookingCode === completed.bookingCode));
+        assert.equal((await (await request(viewer, path)).json()).recovery.events[0].action, "resolve");
         const audit = await ActivityLog.find({ relatedRecordId: completed._id, description: /Guest (contact|feedback) recorded/ });
-        assert.equal(audit.length, 2);
+        assert.equal(audit.length, 3);
         assert.ok(!JSON.stringify(audit).includes("Loved the trip"));
-        console.log("Post-trip queue, message drafting, explicit contact, feedback and stale-write checks passed.");
+        assert.ok(!JSON.stringify(await ActivityLog.find({ relatedRecordId: completed._id })).includes("Guest accepted our remedy"));
+        console.log("Post-trip contact, feedback, recovery, permissions and stale-write checks passed.");
     } finally {
         if (bookings.length) {
             await ActivityLog.deleteMany({ relatedRecordId: { $in: bookings.map((item) => item._id) } });

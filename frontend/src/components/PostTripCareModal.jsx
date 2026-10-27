@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import api from "../api/axios";
 import { buildWhatsAppUrl } from "../utils/whatsappFollowUp";
 import { usePermissions } from "../context/PermissionContext";
+import { formatCalendarDate, todayCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
 
 const PostTripCareModal = ({ booking, onClose, onChanged }) => {
     const { hasPermission } = usePermissions();
@@ -12,6 +13,10 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
     const [channel, setChannel] = useState("WhatsApp");
     const [note, setNote] = useState("");
     const [rating, setRating] = useState("");
+    const [recoveryAction, setRecoveryAction] = useState("recovery-plan");
+    const [recoveryNote, setRecoveryNote] = useState("");
+    const [recoveryChannel, setRecoveryChannel] = useState("Phone");
+    const [recoveryDueDate, setRecoveryDueDate] = useState("");
     const [loading, setLoading] = useState(true);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
@@ -30,6 +35,8 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
                 setNote(data.status === "Feedback received" ? data.feedbackNote : "");
                 setRating(data.feedbackRating == null ? "" : String(data.feedbackRating));
                 setChannel(data.lastContactChannel || "WhatsApp");
+                setRecoveryAction(data.recovery?.status === "Resolved" ? "recovery-reopen" : "recovery-plan");
+                setRecoveryDueDate(toCalendarDateInput(data.recovery?.nextFollowUpDate));
             })
             .catch((err) => { if (active) setError(err.response?.data?.message || "Could not load post-trip care."); })
             .finally(() => { if (active) setLoading(false); });
@@ -108,6 +115,22 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
             setError(err.response?.data?.message || "Could not save the post-trip record. Reload and try again.");
         } finally { setBusy(false); }
     };
+    const saveRecovery = async (event) => {
+        event.preventDefault();
+        if (busy || !canUpdate || !care?.recovery) return;
+        if (recoveryAction === "recovery-contact" && !window.confirm("Record that you actually contacted this guest about their feedback?")) return;
+        setBusy(true); setError(""); setStatus("");
+        try {
+            await api.patch(`/bookings/${booking._id}/post-trip-care`, {
+                action: recoveryAction, expectedRevision: care.revision,
+                note: recoveryNote, nextFollowUpDate: recoveryAction === "recovery-resolve" ? null : recoveryDueDate || null,
+                channel: recoveryAction === "recovery-contact" ? recoveryChannel : undefined,
+            });
+            onChanged(); onClose();
+        } catch (err) {
+            setError(err.response?.data?.message || "Could not save recovery. Reload and try again.");
+        } finally { setBusy(false); }
+    };
     const messageUrl = draft ? buildWhatsAppUrl(draft.number, draft.message) : "";
 
     return <>
@@ -124,6 +147,44 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
                         {care.contactNote && <p className="small"><strong>Last contact note:</strong> {care.contactNote}</p>}
                         {care.feedbackNote && <p className="small"><strong>Feedback note:</strong> {care.feedbackNote}</p>}
                         {care.feedbackRating != null && <p className="small"><strong>Recorded rating:</strong> {care.feedbackRating} / 5</p>}
+                        {care.recovery && <section className="border border-warning rounded p-3 mb-4" aria-labelledby="recovery-title">
+                            <h6 id="recovery-title">Service recovery · {care.recovery.status}</h6>
+                            <p className="small text-muted">Ratings of 1–3 need an explicit follow-up and resolution. Staff contact the guest themselves; recording a plan does not send a message.</p>
+                            {care.recovery.nextFollowUpDate && <p className="small">Next follow-up: <strong>{formatCalendarDate(care.recovery.nextFollowUpDate)}</strong></p>}
+                            {care.recovery.resolvedAt && <p className="small">Resolved {formatCalendarDate(care.recovery.resolvedAt)}</p>}
+                            {care.recovery.events.length > 0 && <div className="mb-3"><strong className="small">Recovery history</strong>
+                                <ul className="small mt-2 ps-3 mb-0">{care.recovery.events.map((entry, index) => <li key={`${entry.at}-${index}`} className="mb-2 text-break">
+                                    <strong>{entry.action === "contact" ? `Contacted by ${entry.channel}` : entry.action === "plan" ? "Follow-up planned" : entry.action === "resolve" ? "Resolved" : "Reopened"}</strong>
+                                    {` · ${new Date(entry.at).toLocaleString("en-GB", { timeZone: "Asia/Colombo" })} · ${entry.byName || "Staff"}`}
+                                    <div>{entry.note}</div>
+                                    {entry.nextFollowUpDate && <div>Next follow-up: {formatCalendarDate(entry.nextFollowUpDate)}</div>}
+                                </li>)}</ul>
+                            </div>}
+                            {canUpdate && <form onSubmit={saveRecovery}>
+                                <label className="form-label" htmlFor="recovery-action">Recovery action</label>
+                                <select id="recovery-action" className="form-select mb-3" value={recoveryAction} disabled={busy}
+                                    onChange={(event) => { setRecoveryAction(event.target.value); setRecoveryNote(""); }}>
+                                    {care.recovery.status === "Resolved" ? <option value="recovery-reopen">Reopen recovery</option> : <>
+                                        <option value="recovery-plan">Plan follow-up</option>
+                                        <option value="recovery-contact">Record actual guest contact</option>
+                                        <option value="recovery-resolve">Record resolution</option>
+                                    </>}
+                                </select>
+                                {recoveryAction === "recovery-contact" && <><label className="form-label" htmlFor="recovery-channel">Contact channel</label>
+                                    <select id="recovery-channel" className="form-select mb-3" value={recoveryChannel} onChange={(event) => setRecoveryChannel(event.target.value)} disabled={busy}>
+                                        {["Phone", "WhatsApp", "Email", "Other"].map((item) => <option key={item}>{item}</option>)}
+                                    </select></>}
+                                {recoveryAction !== "recovery-resolve" && <><label className="form-label" htmlFor="recovery-date">Next follow-up date{recoveryAction === "recovery-plan" ? " (required)" : " (blank clears reminder)"}</label>
+                                    <input id="recovery-date" type="date" className="form-control mb-3" value={recoveryDueDate} min={todayCalendarDate()}
+                                        onChange={(event) => setRecoveryDueDate(event.target.value)} required={recoveryAction === "recovery-plan"} disabled={busy} /></>}
+                                <label className="form-label" htmlFor="recovery-note">Private {recoveryAction === "recovery-resolve" ? "resolution" : "follow-up"} note</label>
+                                <textarea id="recovery-note" className="form-control" rows="3" maxLength={500} minLength={recoveryAction === "recovery-resolve" ? 10 : 5}
+                                    value={recoveryNote} onChange={(event) => setRecoveryNote(event.target.value)} required disabled={busy}
+                                    placeholder={recoveryAction === "recovery-resolve" ? "What was resolved and how?" : "What happened or what should be done next?"} />
+                                <button type="submit" className="btn btn-outline-primary mt-3" disabled={busy || !recoveryNote.trim() || (recoveryAction === "recovery-plan" && !recoveryDueDate)}>
+                                    {busy ? "Saving..." : "Save recovery action"}</button>
+                            </form>}
+                        </section>}
                         {canUpdate && !["Feedback received", "Declined"].includes(care.status) && <>
                             <button type="button" className="btn btn-sm btn-outline-primary mb-3" onClick={prepare} disabled={busy}>Prepare thank-you message</button>
                             {draft && <div className="border rounded p-3 mb-4">
@@ -139,7 +200,7 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
                                 {status && <p className="small text-success mt-2 mb-0" role="status">{status}</p>}
                             </div>}
                         </>}
-                        {canUpdate && care.status !== "Declined" && <form onSubmit={save}>
+                        {canUpdate && care.careWindowOpen && care.status !== "Declined" && <form onSubmit={save}>
                             <h6>Record an actual action</h6>
                             <label className="form-label" htmlFor="post-trip-action">Action</label>
                             <select id="post-trip-action" className="form-select mb-3" value={action} onChange={(event) => {
@@ -155,9 +216,9 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
                                     {["WhatsApp", "Email", "Phone", "Other"].map((item) => <option key={item}>{item}</option>)}
                                 </select></>}
                             {action === "feedback" && <><label className="form-label" htmlFor="post-trip-rating">Guest rating, if provided</label>
-                                <select id="post-trip-rating" className="form-select mb-3" value={rating} onChange={(event) => setRating(event.target.value)} disabled={busy}>
+                                <select id="post-trip-rating" className="form-select mb-3" value={rating} onChange={(event) => setRating(event.target.value)} disabled={busy || Boolean(care.recovery?.events.length)}>
                                     <option value="">Not given</option>{[1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}
-                                </select></>}
+                                </select>{care.recovery?.events.length > 0 && <p className="small text-muted">The rating is locked after a recovery action. Add corrections in the recovery history.</p>}</>}
                             <label className="form-label" htmlFor="post-trip-note">Private {action === "feedback" ? "feedback" : action === "declined" ? "outcome" : "contact"} note</label>
                             <textarea id="post-trip-note" className="form-control" rows="3" maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} disabled={busy} placeholder={action === "feedback" ? "What did the guest say? A note or rating is required." : "Optional internal note"} />
                             <button type="submit" className="btn btn-primary mt-3" disabled={busy || (action === "feedback" && !note.trim() && !rating)}>{busy ? "Saving..." : "Save post-trip record"}</button>

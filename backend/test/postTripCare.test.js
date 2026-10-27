@@ -32,6 +32,11 @@ test("post-trip queue starts after the Colombo end day and distinguishes closeou
     assert.deepEqual(getPostTripQuery("closeout", now).bookingStatus.$in, ["Confirmed", "In Progress"]);
     assert.equal(getPostTripQuery("waiting", now)["postTripCare.status"], "Contacted");
     assert.deepEqual(getPostTripQuery("done", now)["postTripCare.status"].$in, ["Feedback received", "Declined"]);
+    const recovery = getPostTripQuery("recovery", now);
+    assert.equal(recovery.travelEndDate.$gte, undefined, "Open recovery must remain visible after 90 days");
+    assert.deepEqual(recovery["postTripCare.feedbackRating"], { $gte: 1, $lte: 3 });
+    assert.deepEqual(recovery["postTripCare.recovery.status"], { $ne: "Resolved" });
+    assert.equal(getPostTripQuery("recovery-closed", now)["postTripCare.recovery.status"], "Resolved");
 });
 
 test("care actions preserve contact history, validate actual feedback and stop after a decline", () => {
@@ -53,6 +58,39 @@ test("care actions preserve contact history, validate actual feedback and stop a
     assert.ok(parseCareAction({ action: "declined", note: "", expectedRevision: 1 }, declined, "Sales").error);
     assert.ok(parseCareAction({ action: "feedback", note: "Changed mind", expectedRevision: 1 }, declined, "Sales").error);
     assert.ok(parseCareAction({ action: "contacted", channel: "Phone", note: "", expectedRevision: 1 }, declined, "Sales").error);
+});
+
+test("low ratings create recoveries, and recovery actions validate dates and preserve a bounded history", () => {
+    const now = new Date("2026-10-26T19:00:00Z"); // October 27 in Colombo
+    const low = parseCareAction({ action: "feedback", note: "No pickup", rating: 2, expectedRevision: 0 }, null, "Agent", now).value;
+    assert.equal(low.recovery.status, "Open");
+    const plan = { action: "recovery-plan", expectedRevision: 1, note: "Call tomorrow", nextFollowUpDate: "2026-10-28" };
+    assert.ok(parseCareAction({ ...plan, nextFollowUpDate: "2026-10-26" }, low, "Agent", now).error);
+    assert.ok(parseCareAction({ ...plan, nextFollowUpDate: "2026-02-29" }, low, "Agent", now).error);
+    assert.ok(parseCareAction({ ...plan, nextFollowUpDate: null }, low, "Agent", now).error);
+    const planned = parseCareAction(plan, low, "Agent", now).value;
+    assert.equal(planned.recovery.events[0].note, "Call tomorrow");
+    assert.equal(planned.recovery.nextFollowUpDate.toISOString(), "2026-10-28T00:00:00.000Z");
+    assert.ok(parseCareAction({ action: "feedback", expectedRevision: 2, note: "", rating: 5 }, planned, "Agent", now).error);
+    assert.ok(parseCareAction({ action: "recovery-contact", expectedRevision: 2, note: "Reached guest", nextFollowUpDate: null, channel: "SMS" }, planned, "Agent", now).error);
+    const contacted = parseCareAction({ action: "recovery-contact", expectedRevision: 2, note: "Reached guest by phone", nextFollowUpDate: null, channel: "Phone" }, planned, "Agent", now).value;
+    assert.equal(contacted.recovery.events.length, 2);
+    assert.equal(contacted.recovery.nextFollowUpDate, null);
+    assert.equal(contacted.contactCount, 1);
+    assert.equal(contacted.lastContactChannel, "Phone");
+    assert.ok(parseCareAction({ action: "recovery-resolve", expectedRevision: 3, note: "Done", nextFollowUpDate: null }, contacted, "Agent", now).error);
+    const resolved = parseCareAction({ action: "recovery-resolve", expectedRevision: 3, note: "Refund discussed and accepted", nextFollowUpDate: null }, contacted, "Agent", now).value;
+    assert.equal(resolved.recovery.status, "Resolved");
+    assert.ok(parseCareAction(plan, resolved, "Agent", now).error);
+    const reopened = parseCareAction({ action: "recovery-reopen", expectedRevision: 4, note: "Guest called again", nextFollowUpDate: "2026-10-29" }, resolved, "Agent", now).value;
+    assert.equal(reopened.recovery.status, "Open");
+    assert.equal(reopened.recovery.events.length, 4);
+    assert.equal(reopened.recovery.resolvedAt, null);
+    const high = parseCareAction({ action: "feedback", expectedRevision: 1, note: "Corrected", rating: 4 }, low, "Agent", now).value;
+    assert.equal(high.recovery, null, "A rating correction before any action removes the pending recovery");
+    assert.ok(parseCareAction({ action: "recovery-plan", expectedRevision: 1, note: "Call guest", nextFollowUpDate: "2026-10-28" }, high, "Agent", now).error);
+    const many = { ...planned, recovery: { ...planned.recovery, events: Array(30).fill(planned.recovery.events[0]) } };
+    assert.equal(parseCareAction({ ...plan, expectedRevision: 2 }, many, "Agent", now).value.recovery.events.length, 30);
 });
 
 test("queue summary and message omit financial and internal booking information", () => {
@@ -114,6 +152,38 @@ test("post-trip API separates message drafting from versioned writes and enforce
     const feedback = await request(`${base}/post-trip-care`, sales, "PATCH", { action: "feedback", expectedRevision: 1, rating: 4, note: "Nice trip" });
     assert.equal(feedback.status, 200, await feedback.clone().text());
     assert.equal((await request(`${base}/post-trip-message`, sales)).status, 409);
-    assert.equal(logs.length, 2);
+    const low = await request(`${base}/post-trip-care`, sales, "PATCH", { action: "feedback", expectedRevision: 2, rating: 2, note: "Pickup was late" });
+    assert.equal(low.status, 200, await low.clone().text());
+    assert.equal((await low.json()).care.recoveryStatus, "Open");
+    const followUp = new Date(getBusinessDayBounds().start.getTime() + 2 * 86400000).toISOString().slice(0, 10);
+    assert.equal((await request(`${base}/post-trip-care`, viewer, "PATCH", {
+        action: "recovery-plan", expectedRevision: 3, note: "Call tomorrow", nextFollowUpDate: followUp,
+    })).status, 403);
+    assert.equal((await request(`${base}/post-trip-care`, sales, "PATCH", {
+        action: "recovery-plan", expectedRevision: 2, note: "Call tomorrow", nextFollowUpDate: followUp,
+    })).status, 409);
+    const planned = await request(`${base}/post-trip-care`, sales, "PATCH", {
+        action: "recovery-plan", expectedRevision: 3, note: "Call tomorrow", nextFollowUpDate: followUp,
+    });
+    assert.equal(planned.status, 200, await planned.clone().text());
+    assert.equal((await planned.json()).care.revision, 4);
+    const detail = await request(`${base}/post-trip-care`, viewer);
+    assert.equal(detail.status, 200);
+    assert.equal((await detail.json()).recovery.events[0].note, "Call tomorrow");
+    booking.travelEndDate = new Date(getBusinessDayBounds().start.getTime() - 100 * 86400000);
+    const historical = await request(`${base}/post-trip-care`, viewer);
+    assert.equal(historical.status, 200);
+    assert.equal((await historical.json()).careWindowOpen, false);
+    assert.equal((await request(`${base}/post-trip-care`, sales, "PATCH", {
+        action: "feedback", expectedRevision: 4, rating: 2, note: "Edited old feedback",
+    })).status, 409);
+    const resolved = await request(`${base}/post-trip-care`, sales, "PATCH", {
+        action: "recovery-resolve", expectedRevision: 4, note: "Guest accepted a new itinerary", nextFollowUpDate: null,
+    });
+    assert.equal(resolved.status, 200, await resolved.clone().text());
+    assert.equal((await resolved.json()).care.recoveryStatus, "Resolved");
+    assert.equal(logs.length, 5);
     assert.ok(!JSON.stringify(logs).includes("Nice trip"));
+    assert.ok(!JSON.stringify(logs).includes("Call tomorrow"));
+    assert.ok(!JSON.stringify(logs).includes("new itinerary"));
 });

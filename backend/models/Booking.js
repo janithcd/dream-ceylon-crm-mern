@@ -106,6 +106,22 @@ const roomingPlanSchema = new mongoose.Schema({
     savedByName: { type: String, trim: true, maxlength: 120, default: "" },
 }, { _id: false });
 
+const recoveryEventSchema = new mongoose.Schema({
+    action: { type: String, enum: ["plan", "contact", "resolve", "reopen"], required: true },
+    at: { type: Date, required: true },
+    byName: { type: String, trim: true, maxlength: 120, default: "" },
+    channel: { type: String, enum: ["WhatsApp", "Email", "Phone", "Other"], default: null },
+    note: { type: String, trim: true, maxlength: 500, required: true },
+    nextFollowUpDate: { type: Date, default: null },
+}, { _id: false });
+
+const recoverySchema = new mongoose.Schema({
+    status: { type: String, enum: ["Open", "Resolved"], required: true },
+    nextFollowUpDate: { type: Date, default: null },
+    resolvedAt: { type: Date, default: null },
+    events: { type: [recoveryEventSchema], default: [] },
+}, { _id: false });
+
 const postTripCareSchema = new mongoose.Schema({
     status: { type: String, enum: ["Contacted", "Feedback received", "Declined"], required: true },
     contactCount: { type: Number, min: 0, default: 0 },
@@ -115,6 +131,7 @@ const postTripCareSchema = new mongoose.Schema({
     feedbackAt: { type: Date, default: null },
     feedbackRating: { type: Number, min: 1, max: 5, default: null },
     feedbackNote: { type: String, trim: true, maxlength: 500, default: "" },
+    recovery: { type: recoverySchema, default: null },
     updatedAt: { type: Date, required: true },
     updatedByName: { type: String, trim: true, maxlength: 120, default: "" },
 }, { _id: false });
