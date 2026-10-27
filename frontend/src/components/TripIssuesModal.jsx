@@ -3,6 +3,7 @@ import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { useAuth } from "../context/AuthContext";
 import { formatCalendarDate, todayCalendarDate, toCalendarDateInput } from "../utils/calendarDate";
+import { notifyTripSupportChanged } from "../utils/tripSupportEvents";
 
 const categories = ["Accommodation", "Transport", "Guide", "Itinerary", "Health & Safety", "Other"];
 const initial = { title: "", category: "Accommodation", priority: "Normal", note: "", nextFollowUpDate: "", assignedTo: "__me__" };
@@ -83,7 +84,7 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
             await api.post(`/bookings/${bookingId}/trip-issues`, { ...newIssue,
                 assignedTo: newIssue.assignedTo === "__me__" ? undefined : newIssue.assignedTo || null,
                 nextFollowUpDate: newIssue.nextFollowUpDate || null });
-            setNewIssue(initial); onChanged?.(); reload();
+            setNewIssue(initial); notifyTripSupportChanged(); onChanged?.(); reload();
         } catch (err) { setError(err.response?.data?.message || "Could not open the issue. Refresh and try again."); }
         finally { setBusy(false); }
     };
@@ -97,7 +98,7 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
                 action, note: actionNote, nextFollowUpDate: action === "resolved" ? null : followUpDate || null,
                 expectedRevision: issue.revision,
             });
-            setSelectedId(null); setActionNote(""); onChanged?.(); reload();
+            setSelectedId(null); setActionNote(""); notifyTripSupportChanged(); onChanged?.(); reload();
         } catch (err) { setError(err.response?.data?.message || "Could not update the issue. Refresh and try again."); }
         finally { setBusy(false); }
     };
@@ -118,7 +119,7 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
             await api.patch(`/bookings/${bookingId}/trip-issues/${assignId}/assignee`, {
                 assignedTo: assignTo || null, expectedRevision: issue.revision,
             });
-            setAssignId(null); onChanged?.(); reload();
+            setAssignId(null); notifyTripSupportChanged(); onChanged?.(); reload();
         } catch (err) { setError(err.response?.data?.message || "Could not assign the issue. Refresh and try again."); }
         finally { setBusy(false); }
     };

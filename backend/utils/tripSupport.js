@@ -47,6 +47,42 @@ const summarizeTripSupport = (booking, now = new Date(), adminId = null) => {
             new Date(issue.nextFollowUpDate) >= start && new Date(issue.nextFollowUpDate) <= end).length,
         unscheduledIssueCount: open.filter((issue) => !issue.nextFollowUpDate).length };
 };
+// Count individual issues so a booking with several problems appears only once in the alert list.
+// Keep private titles, notes, guest details and issue history out of this response.
+const buildTripSupportAlertsPipeline = (adminId, now = new Date()) => {
+    const { start } = getBusinessDayBounds(now);
+    return [
+        { $match: { "tripIssues.status": "Open" } },
+        { $project: { bookingCode: 1, "tripIssues.status": 1, "tripIssues.assignedTo": 1,
+            "tripIssues.priority": 1, "tripIssues.nextFollowUpDate": 1 } },
+        { $unwind: "$tripIssues" },
+        { $match: { "tripIssues.status": "Open", $or: [
+            { "tripIssues.assignedTo": adminId }, { "tripIssues.assignedTo": null },
+        ] } },
+        { $project: { bookingCode: 1, owner: { $ifNull: ["$tripIssues.assignedTo", null] },
+            urgent: { $eq: ["$tripIssues.priority", "Urgent"] },
+            overdue: { $and: [
+                { $ne: [{ $ifNull: ["$tripIssues.nextFollowUpDate", null] }, null] },
+                { $lt: ["$tripIssues.nextFollowUpDate", start] },
+            ] } } },
+        { $match: { $or: [{ urgent: true }, { overdue: true }, { owner: null }] } },
+        { $group: { _id: "$_id", bookingCode: { $first: "$bookingCode" }, count: { $sum: 1 },
+            urgent: { $sum: { $cond: ["$urgent", 1, 0] } },
+            overdue: { $sum: { $cond: ["$overdue", 1, 0] } },
+            unassigned: { $sum: { $cond: [{ $eq: ["$owner", null] }, 1, 0] } },
+        } },
+        { $facet: {
+            summary: [{ $group: { _id: null, count: { $sum: "$count" },
+                bookings: { $sum: 1 }, urgent: { $sum: "$urgent" }, overdue: { $sum: "$overdue" },
+                unassigned: { $sum: "$unassigned" },
+            } }],
+            items: [{ $sort: { overdue: -1, urgent: -1, unassigned: -1, bookingCode: 1 } },
+                { $limit: 5 },
+                { $project: { _id: 0, bookingId: "$_id", bookingCode: 1,
+                    count: 1, urgent: 1, overdue: 1, unassigned: 1 } }],
+        } },
+    ];
+};
 const cleanNote = (value, min = 5) => typeof value === "string" && value.trim().length >= min &&
     value.trim().length <= 500 && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(value)
     ? value.trim() : null;
@@ -98,4 +134,4 @@ const parseIssueAction = (body, issue, adminName, now = new Date()) => {
 };
 
 module.exports = { PAGE_SIZE, FILTERS, activeTripQuery, buildTripSupportQuery, isActiveTrip,
-    summarizeTripSupport, parseNewIssue, parseIssueAction };
+    summarizeTripSupport, buildTripSupportAlertsPipeline, parseNewIssue, parseIssueAction };

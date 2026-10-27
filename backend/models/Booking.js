@@ -402,6 +402,7 @@ bookingSchema.index({ "transportAssignments.registrationKey": 1, "transportAssig
 bookingSchema.index({ inquiry: 1 });
 bookingSchema.index({ bookingStatus: 1, updatedAt: -1 });
 bookingSchema.index({ bookingStatus: 1, travelEndDate: -1 });
+bookingSchema.index({ "tripIssues.status": 1 });
 
 const Booking = mongoose.model("Booking", bookingSchema);
 

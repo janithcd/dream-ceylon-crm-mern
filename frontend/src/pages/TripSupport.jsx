@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { FaLifeRing, FaSyncAlt } from "react-icons/fa";
 import api from "../api/axios";
 import TripIssuesModal from "../components/TripIssuesModal";
@@ -13,7 +13,14 @@ const TripSupport = () => {
     const [page, setPage] = useState(1);
     const [reloadKey, setReloadKey] = useState(0);
     const [data, setData] = useState(null);
-    const [selectedId, setSelectedId] = useState(null);
+    const [searchParams, setSearchParams] = useSearchParams();
+    const selectedId = searchParams.get("booking");
+    const setSelectedId = (id) => setSearchParams((current) => {
+        const params = new URLSearchParams(current);
+        if (id) params.set("booking", id);
+        else params.delete("booking");
+        return params;
+    }, { replace: true });
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 

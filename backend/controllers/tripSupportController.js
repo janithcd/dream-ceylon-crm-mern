@@ -4,7 +4,7 @@ const Admin = require("../models/Admin");
 const { PERMISSIONS, resolveAdminPermissions } = require("../config/permissions");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { PAGE_SIZE, FILTERS, activeTripQuery, buildTripSupportQuery, isActiveTrip,
-    summarizeTripSupport, parseNewIssue, parseIssueAction } = require("../utils/tripSupport");
+    summarizeTripSupport, buildTripSupportAlertsPipeline, parseNewIssue, parseIssueAction } = require("../utils/tripSupport");
 
 const validId = (id) => mongoose.Types.ObjectId.isValid(id);
 const noStore = (res) => res.setHeader("Cache-Control", "no-store");
@@ -53,6 +53,19 @@ const getTripSupportQueue = async (req, res) => {
     } catch (error) {
         console.error("Trip support queue failed:", error.message);
         return res.status(500).json({ message: "Failed to load trip support." });
+    }
+};
+
+const getTripSupportAlerts = async (req, res) => {
+    noStore(res);
+    try {
+        const [result] = await Booking.aggregate(buildTripSupportAlertsPipeline(req.admin._id));
+        return res.json({ summary: result?.summary?.[0] || {
+            count: 0, bookings: 0, urgent: 0, overdue: 0, unassigned: 0,
+        }, items: result?.items || [] });
+    } catch (error) {
+        console.error("Trip support alerts failed:", error.message);
+        return res.status(500).json({ message: "Failed to load trip support alerts." });
     }
 };
 
@@ -167,4 +180,4 @@ const assignTripIssue = async (req, res) => {
     }
 };
 
-module.exports = { getTripSupportQueue, getTripIssues, addTripIssue, updateTripIssue, assignTripIssue };
+module.exports = { getTripSupportQueue, getTripSupportAlerts, getTripIssues, addTripIssue, updateTripIssue, assignTripIssue };

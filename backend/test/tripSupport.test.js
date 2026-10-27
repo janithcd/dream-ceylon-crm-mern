@@ -9,7 +9,8 @@ const Booking = require("../models/Booking");
 const Admin = require("../models/Admin");
 const ActivityLog = require("../models/ActivityLog");
 const { getBusinessDayBounds } = require("../utils/businessDate");
-const { activeTripQuery, buildTripSupportQuery, isActiveTrip, summarizeTripSupport, parseNewIssue, parseIssueAction } = require("../utils/tripSupport");
+const { activeTripQuery, buildTripSupportQuery, isActiveTrip, summarizeTripSupport,
+    buildTripSupportAlertsPipeline, parseNewIssue, parseIssueAction } = require("../utils/tripSupport");
 
 const DAY_MS = 86400000;
 const todayInput = () => new Date(getBusinessDayBounds().start.getTime() + 330 * 60000).toISOString().slice(0, 10);
@@ -71,6 +72,20 @@ test("issue input requires an actual description and checks follow-up dates; sta
     assert.equal(parseIssueAction({ action: "reopened", note: "Guest requested more help", expectedRevision: 1, nextFollowUpDate: null }, { status: "Resolved" }, "Agent", now).value.status, "Open");
 });
 
+test("trip alert aggregation applies Sri Lanka overdue bounds and projects only operational counts", () => {
+    const pipeline = buildTripSupportAlertsPipeline("507f1f77bcf86cd799439322", new Date("2026-10-26T19:00:00Z"));
+    assert.equal(pipeline[3].$match.$or[0]["tripIssues.assignedTo"], "507f1f77bcf86cd799439322");
+    assert.equal(pipeline[3].$match.$or[1]["tripIssues.assignedTo"], null);
+    assert.equal(pipeline[4].$project.overdue.$and[1].$lt[1].toISOString(), "2026-10-26T18:30:00.000Z");
+    assert.deepEqual(pipeline[5].$match.$or, [{ urgent: true }, { overdue: true }, { owner: null }]);
+    assert.equal(pipeline[7].$facet.items[1].$limit, 5);
+    assert.deepEqual(Object.keys(pipeline[7].$facet.items[2].$project).sort(),
+        ["_id", "bookingId", "bookingCode", "count", "urgent", "overdue", "unassigned"].sort());
+    for (const field of ["title", "note", "customer", "events", "email"]) {
+        assert.ok(!JSON.stringify(pipeline[7]).includes(field));
+    }
+});
+
 test("trip issue API enforces permissions, atomic revisions and separate read-only queue details", async (t) => {
     const booking = makeBooking();
     const sales = "507f1f77bcf86cd799439322";
@@ -90,6 +105,12 @@ test("trip issue API enforces permissions, atomic revisions and separate read-on
     });
     t.mock.method(Booking, "exists", async ({ _id }) => String(_id) === String(booking._id));
     t.mock.method(Booking, "countDocuments", async () => 1);
+    t.mock.method(Booking, "aggregate", async (pipeline) => {
+        assert.equal(pipeline[3].$match.$or[0]["tripIssues.assignedTo"].toString(), sales);
+        return [{ summary: [{ count: 1, bookings: 1, urgent: 1, overdue: 0, unassigned: 0 }],
+            items: [{ bookingId: booking._id, bookingCode: booking.bookingCode,
+                count: 1, urgent: 1, overdue: 0, unassigned: 0 }] }];
+    });
     t.mock.method(Booking, "find", () => ({ select() { return this; }, sort() { return this; }, skip() { return this; },
         limit() { return this; }, lean: async () => [booking.toObject()] }));
     t.mock.method(Booking, "findOneAndUpdate", async (query, update) => {
@@ -124,11 +145,16 @@ test("trip issue API enforces permissions, atomic revisions and separate read-on
         "Content-Type": "application/json",
     } : {}, body: body === undefined ? undefined : JSON.stringify(body) });
     assert.equal((await request("/trip-support", null)).status, 401);
+    assert.equal((await request("/trip-support/alerts", null)).status, 401);
     assert.equal((await request("/trip-support?filter=nope", sales)).status, 400);
     const queue = await request("/trip-support?filter=active", viewer);
     assert.equal(queue.status, 200);
     assert.equal(queue.headers.get("cache-control"), "no-store");
     assert.ok(!JSON.stringify(await queue.json()).includes("PRIVATE@example.invalid"));
+    const alert = await request("/trip-support/alerts", sales);
+    assert.equal(alert.status, 200);
+    assert.equal(alert.headers.get("cache-control"), "no-store");
+    assert.equal((await alert.json()).summary.count, 1);
     const path = `/${booking._id}/trip-issues`;
     const body = { title: "Vehicle arrived late", category: "Transport", priority: "Urgent",
         note: "Pickup was delayed", nextFollowUpDate: nextInput() };
