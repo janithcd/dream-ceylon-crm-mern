@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const Admin = require("../models/Admin");
 const Booking = require("../models/Booking");
+const BookingHandoverRead = require("../models/BookingHandoverRead");
 const ActivityLog = require("../models/ActivityLog");
 
 const main = async () => {
@@ -45,10 +46,37 @@ const main = async () => {
         assert.equal(worklist.status, 200, await worklist.clone().text());
         assert.equal(worklist.headers.get("cache-control"), "no-store");
         const worklistData = await worklist.json();
-        assert.ok(worklistData.items.some((item) => String(item.bookingId) === String(booking._id)));
+        const worklistItem = worklistData.items.find((item) => String(item.bookingId) === String(booking._id));
+        assert.ok(worklistItem);
+        assert.equal(worklistItem.unreadCount, 1);
+        const unreadBefore = await (await request(viewer, "/handover-worklist?filter=unread")).json();
+        assert.ok(unreadBefore.items.some((item) => String(item.bookingId) === String(booking._id)));
         assert.equal(JSON.stringify(worklistData).includes(privateText), false);
         assert.equal(JSON.stringify(worklistData).includes("private-handover@example.invalid"), false);
         assert.equal(JSON.stringify(worklistData).includes("PRIVATE EXISTING ADMIN NOTES"), false);
+        const seenPath = `${path}/seen`;
+        assert.equal((await request(viewer, seenPath, "PATCH", { latestNoteId: "invalid" })).status, 400);
+        assert.equal((await request(viewer, seenPath, "PATCH", { latestNoteId: new mongoose.Types.ObjectId() })).status, 409);
+        const acknowledged = await request(viewer, seenPath, "PATCH", { latestNoteId: notes.notes[0].id });
+        assert.equal(acknowledged.status, 200, await acknowledged.clone().text());
+        assert.equal((await BookingHandoverRead.findOne({ booking: booking._id, admin: viewer._id })).seenCount, 1);
+        const unreadAfter = await (await request(viewer, "/handover-worklist?filter=unread")).json();
+        assert.ok(!unreadAfter.items.some((item) => String(item.bookingId) === String(booking._id)));
+        const secondText = "PRIVATE: The guide has a new pickup time.";
+        const second = await request(sales, path, "POST", { text: secondText });
+        assert.equal(second.status, 201, await second.clone().text());
+        const secondId = (await second.json()).note.id;
+        const afterNewNote = await (await request(viewer, "/handover-worklist?filter=unread")).json();
+        assert.equal(afterNewNote.items.find((item) => String(item.bookingId) === String(booking._id)).unreadCount, 1);
+        assert.equal(JSON.stringify(afterNewNote).includes(secondText), false);
+        assert.equal((await request(viewer, seenPath, "PATCH", { latestNoteId: notes.notes[0].id })).status, 200);
+        assert.equal((await BookingHandoverRead.findOne({ booking: booking._id, admin: viewer._id })).seenCount, 1,
+            "An older acknowledgement must leave a newer note unread");
+        assert.equal((await request(viewer, seenPath, "PATCH", { latestNoteId: secondId })).status, 200);
+        assert.equal((await BookingHandoverRead.findOne({ booking: booking._id, admin: viewer._id })).seenCount, 2);
+        const salesUnread = await (await request(sales, "/handover-worklist?filter=unread")).json();
+        assert.equal(salesUnread.items.find((item) => String(item.bookingId) === String(booking._id)).unreadCount, 2,
+            "Read markers belong to each staff member");
         await Booking.updateOne({ _id: booking._id }, { $set: { bookingStatus: "Completed" } });
         const activeWorklist = await (await request(viewer, "/handover-worklist")).json();
         assert.ok(!activeWorklist.items.some((item) => String(item.bookingId) === String(booking._id)));
@@ -74,6 +102,7 @@ const main = async () => {
     } finally {
         if (booking) {
             await ActivityLog.deleteMany({ relatedRecordId: booking._id });
+            await BookingHandoverRead.deleteMany({ booking: booking._id });
             await Booking.deleteOne({ _id: booking._id });
         }
         if (admins.length) await Admin.deleteMany({ _id: { $in: admins.map((admin) => admin._id) } });

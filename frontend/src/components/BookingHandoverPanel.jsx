@@ -15,6 +15,7 @@ const BookingHandoverPanel = ({ bookingId }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
+    const [readError, setReadError] = useState("");
     const [success, setSuccess] = useState("");
     const [reloadKey, setReloadKey] = useState(0);
 
@@ -27,6 +28,11 @@ const BookingHandoverPanel = ({ bookingId }) => {
                     ...data.notes.filter((note) => !current.some((item) => item.id === note.id))]);
                 setTotalPages(data.totalPages);
                 setError("");
+                if (page === 1 && data.notes[0]?.id) {
+                    api.patch(`/bookings/${bookingId}/handover-notes/seen`, { latestNoteId: data.notes[0].id })
+                        .then(() => { if (active) setReadError(""); })
+                        .catch(() => { if (active) setReadError("These notes may still appear as unread. Reopen them to retry."); });
+                }
             })
             .catch((err) => { if (active) setError(err.response?.data?.message || "Could not load handover notes."); })
             .finally(() => { if (active) setLoading(false); });
@@ -54,7 +60,7 @@ const BookingHandoverPanel = ({ bookingId }) => {
     };
 
     return <div id="booking-handover-panel" role="region" aria-label="Internal handover notes">
-        <p className="small text-muted">Private team notes appear newest first. They are kept separate from the editable Admin Notes field and guest messages.</p>
+        <p className="small text-muted">Private team notes appear newest first. Opening this view marks the notes currently saved as read for you. They are kept separate from the editable Admin Notes field and guest messages.</p>
         {canWrite && <form onSubmit={saveNote} className="mb-3">
             <label className="form-label fw-semibold" htmlFor="handover-note-text">Add a handover note</label>
             <textarea id="handover-note-text" className="form-control" rows="3" maxLength="1000" value={text}
@@ -66,6 +72,7 @@ const BookingHandoverPanel = ({ bookingId }) => {
         </form>}
         {success && <div className="alert alert-success small" role="status">{success}</div>}
         {error && <div className="alert alert-danger small" role="alert">{error}</div>}
+        {readError && <div className="alert alert-warning small" role="status">{readError}</div>}
         {!loading && !error && notes.length === 0 && <p className="text-muted">No handover notes have been added yet.</p>}
         <div className="list-group list-group-flush">{notes.map((note) => <div className="list-group-item px-0 py-3" key={note.id}>
             <p className="mb-2" style={{ whiteSpace: "pre-wrap" }}>{note.text}</p>

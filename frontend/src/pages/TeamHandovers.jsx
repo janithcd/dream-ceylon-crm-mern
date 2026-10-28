@@ -10,7 +10,7 @@ const formatTime = (value) => new Date(value).toLocaleString("en-GB", { timeZone
 
 const TeamHandovers = () => {
     const [searchParams, setSearchParams] = useSearchParams();
-    const filter = searchParams.get("filter") === "all" ? "all" : "active";
+    const filter = ["active", "all", "unread"].includes(searchParams.get("filter")) ? searchParams.get("filter") : "active";
     const requestedPage = Number(searchParams.get("page"));
     const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
     const [data, setData] = useState(null);
@@ -47,9 +47,9 @@ const TeamHandovers = () => {
                 <p className="text-muted mb-0">Find bookings with handover notes, ordered by the latest update.</p></div>
             <button type="button" className="btn btn-outline-secondary" onClick={refresh} disabled={loading}><FaSyncAlt className="me-2" />Refresh</button>
         </div>
-        <p className="alert alert-info small">This list shows dates and note counts only. Open a booking to read its private team notes. The list includes saved notes from any date; it does not track which notes you have read.</p>
+        <p className="alert alert-info small">This list shows dates and note counts only. Open a booking to read its private team notes; the notes currently saved will be marked as read for your account. New notes added afterward remain unread. The worklist includes saved notes from any date.</p>
         <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Handover booking filter">
-            {[["active", "Open bookings"], ["all", "All bookings"]].map(([value, label]) => <button type="button" key={value}
+            {[["unread", "Unread for me"], ["active", "Open bookings"], ["all", "All bookings"]].map(([value, label]) => <button type="button" key={value}
                 aria-pressed={filter === value} className={`btn btn-sm ${filter === value ? "btn-primary" : "btn-outline-primary"}`}
                 onClick={() => setSearchParams(value === "active" ? {} : { filter: value })}>{label}</button>)}
         </div>
@@ -58,7 +58,7 @@ const TeamHandovers = () => {
         {!loading && !error && visibleData && <>
             <p className="small text-muted">{visibleData.total} {visibleData.total === 1 ? "booking" : "bookings"} with notes · newest update first.</p>
             {!visibleData.items.length && <div className="card border-0 shadow-sm"><div className="card-body">
-                <p className="text-muted mb-2">No handover notes in this view yet.</p>
+                <p className="text-muted mb-2">{filter === "unread" ? "No unread handover notes on open bookings." : "No handover notes in this view yet."}</p>
                 <Link to="/bookings" className="btn btn-outline-primary btn-sm">Open bookings</Link>
             </div></div>}
             <div className="d-grid gap-3">{visibleData.items.map((item) => <article className="card border-0 shadow-sm" key={item.bookingId}>
@@ -66,6 +66,7 @@ const TeamHandovers = () => {
                     <div><h5 className="mb-1">{item.bookingCode}</h5>
                         <div className="small text-muted">{item.bookingStatus} · Departs {formatCalendarDate(item.travelStartDate)}</div>
                         <div className="small mt-1">{item.noteCount} {item.noteCount === 1 ? "note" : "notes"} · Latest by {item.lastAuthor} on {formatTime(item.lastNoteAt)} (Sri Lanka time)</div>
+                        {item.unreadCount > 0 && <span className="badge text-bg-primary mt-2">{item.unreadCount} unread for you</span>}
                     </div>
                     <div className="d-flex flex-wrap gap-2">
                         <Link to={`/bookings?keyword=${encodeURIComponent(item.bookingCode)}`} className="btn btn-sm btn-outline-secondary">Open booking</Link>

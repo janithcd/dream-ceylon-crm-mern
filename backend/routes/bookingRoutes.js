@@ -18,7 +18,7 @@ const {
 const { getMyTasks } = require("../controllers/myTasksController");
 const { getPreparationStarter, applyPreparationStarter } = require("../controllers/bookingPreparationStarterController");
 const { getBookingActivity } = require("../controllers/bookingActivityController");
-const { getHandoverWorklist, getHandoverNotes, addHandoverNote } = require("../controllers/bookingHandoverController");
+const { getHandoverWorklist, getHandoverNotes, addHandoverNote, markHandoverSeen } = require("../controllers/bookingHandoverController");
 const { getItinerary, addItineraryDay, updateItineraryDay, deleteItineraryDay } = require("../controllers/bookingItineraryController");
 const { previewPackageItinerary, importPackageItinerary } = require("../controllers/bookingPackageImportController");
 const {
@@ -166,6 +166,7 @@ router.get(
 );
 router.get("/:id/handover-notes", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getHandoverNotes);
 router.post("/:id/handover-notes", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), addHandoverNote);
+router.patch("/:id/handover-notes/seen", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), markHandoverSeen);
 
 router.get("/:id/itinerary", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getItinerary);
 router.get("/:id/travelers", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getTravelerRoster);
