@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
+import { notifyHandoverChanged } from "../utils/handoverEvents";
 
 const formatTime = (value) => new Date(value).toLocaleString("en-GB", { timeZone: "Asia/Colombo",
     year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -30,7 +31,7 @@ const BookingHandoverPanel = ({ bookingId }) => {
                 setError("");
                 if (page === 1 && data.notes[0]?.id) {
                     api.patch(`/bookings/${bookingId}/handover-notes/seen`, { latestNoteId: data.notes[0].id })
-                        .then(() => { if (active) setReadError(""); })
+                        .then(() => { if (active) setReadError(""); notifyHandoverChanged(); })
                         .catch(() => { if (active) setReadError("These notes may still appear as unread. Reopen them to retry."); });
                 }
             })
@@ -47,6 +48,7 @@ const BookingHandoverPanel = ({ bookingId }) => {
         setSuccess("");
         try {
             await api.post(`/bookings/${bookingId}/handover-notes`, { text: text.trim() });
+            notifyHandoverChanged();
             setText("");
             setSuccess("Handover note saved for the team.");
             setLoading(true);

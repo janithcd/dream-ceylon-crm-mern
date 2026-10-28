@@ -39,6 +39,7 @@ import PermissionGuard from "../components/PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
 import { notifySupplierConfirmationsChanged } from "../utils/supplierEvents";
 import { notifyPaymentAttentionChanged } from "../utils/paymentEvents";
+import { notifyHandoverChanged } from "../utils/handoverEvents";
 import { getGuestPaymentMilestones } from "../utils/guestPaymentMilestones";
 
 const initialFormState = {
@@ -319,6 +320,7 @@ const Bookings = () => {
             resetForm();
             notifySupplierConfirmationsChanged();
             notifyPaymentAttentionChanged();
+            notifyHandoverChanged();
             fetchBookings();
             if (hasPermission("inquiry.view")) fetchInquiries();
         } catch (err) {
@@ -380,6 +382,7 @@ const Bookings = () => {
 
             setSuccess("Booking deleted successfully");
             notifySupplierConfirmationsChanged();
+            notifyHandoverChanged();
             fetchBookings();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to delete booking");

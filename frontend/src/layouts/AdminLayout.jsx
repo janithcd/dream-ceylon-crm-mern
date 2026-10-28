@@ -40,6 +40,7 @@ import SupplierPayableAlert from "../components/SupplierPayableAlert";
 import TripSupportAlert from "../components/TripSupportAlert";
 import RecoveryAlert from "../components/RecoveryAlert";
 import DepartureReminderLink from "../components/DepartureReminderLink";
+import TeamHandoverLink from "../components/TeamHandoverLink";
 import { ROUTE_PERMISSIONS } from "../config/routePermissions";
 
 const AdminLayout = () => {
@@ -147,10 +148,7 @@ const AdminLayout = () => {
                     </PermissionGuard>
 
                     <PermissionGuard permission={ROUTE_PERMISSIONS.bookings}>
-                        <NavLink to="/team-handovers">
-                            <FaHistory />
-                            Team Handovers
-                        </NavLink>
+                        <TeamHandoverLink />
                     </PermissionGuard>
 
                     <PermissionGuard permission={ROUTE_PERMISSIONS.bookings}>
