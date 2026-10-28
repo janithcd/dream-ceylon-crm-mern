@@ -6,6 +6,42 @@ const PAGE_SIZE = 20;
 const noteSummary = (note) => ({ id: note._id, text: note.text,
     createdAt: note.createdAt, createdByName: note.createdByName || "Staff" });
 
+const getHandoverWorklist = async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const page = req.query.page === undefined ? 1 : Number(req.query.page);
+    const filter = req.query.filter || "active";
+    if (!Number.isSafeInteger(page) || page < 1 || page > 10000 || !["active", "all"].includes(filter)) {
+        return res.status(400).json({ message: "Invalid handover page or filter" });
+    }
+    const match = { "handoverNotes.0": { $exists: true } };
+    if (filter === "active") match.bookingStatus = { $in: ["Pending", "Confirmed", "In Progress"] };
+    try {
+        const [result] = await Booking.aggregate([
+            { $match: match },
+            { $project: { bookingCode: 1, bookingStatus: 1, travelStartDate: 1,
+                noteCount: { $size: "$handoverNotes" }, lastNote: { $arrayElemAt: ["$handoverNotes", -1] } } },
+            { $sort: { "lastNote.createdAt": -1, _id: -1 } },
+            { $facet: {
+                items: [{ $skip: (page - 1) * PAGE_SIZE }, { $limit: PAGE_SIZE },
+                    { $project: { _id: 0, bookingId: "$_id", bookingCode: 1, bookingStatus: 1,
+                        travelStartDate: 1, noteCount: 1, lastNoteAt: "$lastNote.createdAt",
+                        lastAuthor: "$lastNote.createdByName" } }],
+                total: [{ $count: "value" }],
+            } },
+        ]);
+        const total = result?.total?.[0]?.value || 0;
+        return res.json({ items: (result?.items || []).map((item) => ({
+            bookingId: item.bookingId, bookingCode: item.bookingCode,
+            bookingStatus: item.bookingStatus, travelStartDate: item.travelStartDate,
+            noteCount: item.noteCount, lastNoteAt: item.lastNoteAt,
+            lastAuthor: item.lastAuthor || "Staff",
+        })), total, page, filter, totalPages: Math.ceil(total / PAGE_SIZE) || 1 });
+    } catch (error) {
+        console.error("Booking handover worklist failed:", error.message);
+        return res.status(500).json({ message: "Failed to load handover worklist" });
+    }
+};
+
 const getHandoverNotes = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).json({ message: "Invalid booking ID" });
@@ -56,4 +92,4 @@ const addHandoverNote = async (req, res) => {
     }
 };
 
-module.exports = { getHandoverNotes, addHandoverNote };
+module.exports = { getHandoverWorklist, getHandoverNotes, addHandoverNote };

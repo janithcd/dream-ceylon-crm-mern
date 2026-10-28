@@ -147,6 +147,13 @@ const AdminLayout = () => {
                     </PermissionGuard>
 
                     <PermissionGuard permission={ROUTE_PERMISSIONS.bookings}>
+                        <NavLink to="/team-handovers">
+                            <FaHistory />
+                            Team Handovers
+                        </NavLink>
+                    </PermissionGuard>
+
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.bookings}>
                         <NavLink to="/post-trip-care">
                             <FaHeart />
                             Post-trip Care

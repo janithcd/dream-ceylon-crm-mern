@@ -41,6 +41,19 @@ const main = async () => {
         assert.equal(notes.total, 1);
         assert.equal(notes.notes[0].text, privateText);
         assert.equal(notes.notes[0].createdByName, "CI Handover Sales");
+        const worklist = await request(viewer, "/handover-worklist");
+        assert.equal(worklist.status, 200, await worklist.clone().text());
+        assert.equal(worklist.headers.get("cache-control"), "no-store");
+        const worklistData = await worklist.json();
+        assert.ok(worklistData.items.some((item) => String(item.bookingId) === String(booking._id)));
+        assert.equal(JSON.stringify(worklistData).includes(privateText), false);
+        assert.equal(JSON.stringify(worklistData).includes("private-handover@example.invalid"), false);
+        assert.equal(JSON.stringify(worklistData).includes("PRIVATE EXISTING ADMIN NOTES"), false);
+        await Booking.updateOne({ _id: booking._id }, { $set: { bookingStatus: "Completed" } });
+        const activeWorklist = await (await request(viewer, "/handover-worklist")).json();
+        assert.ok(!activeWorklist.items.some((item) => String(item.bookingId) === String(booking._id)));
+        const allWorklist = await (await request(viewer, "/handover-worklist?filter=all")).json();
+        assert.ok(allWorklist.items.some((item) => String(item.bookingId) === String(booking._id)));
         assert.equal((await Booking.findById(booking._id)).handoverNotes, undefined,
             "Private notes stay out of ordinary booking reads");
         const broad = await request(viewer, `?keyword=${encodeURIComponent(booking.bookingCode)}`);

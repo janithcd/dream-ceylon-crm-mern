@@ -16,8 +16,8 @@ const formatDateTime = (value) => {
     }).format(date);
 };
 
-const BookingActivityModal = ({ booking, onClose }) => {
-    const [tab, setTab] = useState("history");
+const BookingActivityModal = ({ booking, onClose, initialTab = "history" }) => {
+    const [tab, setTab] = useState(initialTab);
     const [events, setEvents] = useState([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -26,6 +26,7 @@ const BookingActivityModal = ({ booking, onClose }) => {
     const [reload, setReload] = useState(0);
 
     useEffect(() => {
+        if (tab !== "history") return undefined;
         let active = true;
         api.get(`/bookings/${booking._id}/activity`, { params: { page } })
             .then(({ data }) => {
@@ -44,7 +45,7 @@ const BookingActivityModal = ({ booking, onClose }) => {
             });
 
         return () => { active = false; };
-    }, [booking._id, page, reload]);
+    }, [booking._id, page, reload, tab]);
 
     return (
         <>

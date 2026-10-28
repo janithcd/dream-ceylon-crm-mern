@@ -18,7 +18,7 @@ const {
 const { getMyTasks } = require("../controllers/myTasksController");
 const { getPreparationStarter, applyPreparationStarter } = require("../controllers/bookingPreparationStarterController");
 const { getBookingActivity } = require("../controllers/bookingActivityController");
-const { getHandoverNotes, addHandoverNote } = require("../controllers/bookingHandoverController");
+const { getHandoverWorklist, getHandoverNotes, addHandoverNote } = require("../controllers/bookingHandoverController");
 const { getItinerary, addItineraryDay, updateItineraryDay, deleteItineraryDay } = require("../controllers/bookingItineraryController");
 const { previewPackageItinerary, importPackageItinerary } = require("../controllers/bookingPackageImportController");
 const {
@@ -82,6 +82,7 @@ router.get(
 );
 
 router.get("/departure-readiness", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getDepartureReadiness);
+router.get("/handover-worklist", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getHandoverWorklist);
 router.get("/departure-readiness/alerts", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), getPreArrivalAlerts);
 router.get("/:id/pre-arrival-message", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), getPreArrivalMessage);
 router.patch("/:id/pre-arrival-message/contact", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), recordPreArrivalContact);
