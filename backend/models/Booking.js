@@ -122,6 +122,16 @@ const recoverySchema = new mongoose.Schema({
     events: { type: [recoveryEventSchema], default: [] },
 }, { _id: false });
 
+const careEventSchema = new mongoose.Schema({
+    action: { type: String, enum: ["contacted", "schedule-feedback", "feedback", "declined"], required: true },
+    at: { type: Date, required: true },
+    byName: { type: String, trim: true, maxlength: 120, default: "" },
+    channel: { type: String, enum: ["WhatsApp", "Email", "Phone", "Other"], default: null },
+    note: { type: String, trim: true, maxlength: 500, default: "" },
+    nextFeedbackFollowUpDate: { type: Date, default: null },
+    rating: { type: Number, min: 1, max: 5, default: null },
+}, { _id: false });
+
 const tripIssueEventSchema = new mongoose.Schema({
     action: { type: String, enum: ["opened", "updated", "resolved", "reopened", "assigned"], required: true },
     note: { type: String, required: true, trim: true, maxlength: 500 },
@@ -154,6 +164,7 @@ const postTripCareSchema = new mongoose.Schema({
     feedbackAt: { type: Date, default: null },
     feedbackRating: { type: Number, min: 1, max: 5, default: null },
     feedbackNote: { type: String, trim: true, maxlength: 500, default: "" },
+    events: { type: [careEventSchema], default: [] },
     recovery: { type: recoverySchema, default: null },
     updatedAt: { type: Date, required: true },
     updatedByName: { type: String, trim: true, maxlength: 120, default: "" },

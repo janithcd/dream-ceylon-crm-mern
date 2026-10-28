@@ -84,16 +84,28 @@ const main = async () => {
             nextFeedbackFollowUpDate: dateOnly(new Date(Date.now() + 100 * dayMs)) })).status, 400);
         await Booking.updateOne({ _id: completed._id }, { $set: { "postTripCare.nextFeedbackFollowUpDate": new Date(dateOnly(new Date(Date.now() - dayMs))) } });
         assert.ok((await recoveryAlerts()).feedback.overdue > 0);
-        const schedule = await request(sales, path, "PATCH", { action: "schedule-feedback", note: "", expectedRevision: 1,
+        const schedule = await request(sales, path, "PATCH", { action: "schedule-feedback", note: "Guest asked for a later call", expectedRevision: 1,
             nextFeedbackFollowUpDate: dateOnly(new Date(Date.now() + dayMs)) });
         assert.equal(schedule.status, 200, await schedule.clone().text());
         assert.equal((await schedule.json()).care.contactCount, 1, "Scheduling must not record another contact");
+        const history = (await (await request(viewer, path)).json()).events;
+        assert.deepEqual(history.map((event) => event.action), ["schedule-feedback", "contacted"]);
+        assert.equal(history[0].note, "Guest asked for a later call");
+        assert.equal(history[1].note, "Sent after the tour");
+        assert.equal(history[1].channel, "WhatsApp");
+        const broadBookings = await request(sales, `?keyword=${encodeURIComponent(completed.bookingCode)}`);
+        assert.equal(broadBookings.status, 200, await broadBookings.clone().text());
+        assert.ok(!JSON.stringify(await broadBookings.json()).includes("Guest asked for a later call"),
+            "Broad booking lists must not expose care history notes");
         assert.ok(!(await recoveryAlerts()).feedback.items.some((item) => item.bookingCode === completed.bookingCode));
         assert.ok((await queue("waiting")).items.some((item) => item.bookingCode === completed.bookingCode));
+        assert.ok(!JSON.stringify(await queue("waiting")).includes("Guest asked for a later call"));
         const feedback = await request(sales, path, "PATCH", { action: "feedback", note: "Loved the trip", rating: 5, expectedRevision: 2 });
         assert.equal(feedback.status, 200, await feedback.clone().text());
         assert.equal((await feedback.json()).care.revision, 3);
         assert.equal((await (await request(sales, path)).json()).nextFeedbackFollowUpDate, null);
+        assert.deepEqual((await (await request(viewer, path)).json()).events.map((event) => event.action),
+            ["feedback", "schedule-feedback", "contacted"]);
         assert.ok((await queue("done")).items.some((item) => item.bookingCode === completed.bookingCode));
         assert.equal((await request(sales, draftPath)).status, 409);
         assert.equal((await (await request(sales, path)).json()).feedbackNote, "Loved the trip");
@@ -122,11 +134,13 @@ const main = async () => {
         assert.ok((await queue("recovery-closed")).items.some((item) => item.bookingCode === completed.bookingCode));
         assert.equal((await recoveryAlerts()).summary.count, 0);
         assert.equal((await (await request(viewer, path)).json()).recovery.events[0].action, "resolve");
+        assert.deepEqual((await (await request(viewer, path)).json()).events.map((event) => event.action),
+            ["feedback", "feedback", "schedule-feedback", "contacted"], "Recovery actions have a separate history");
         const audit = await ActivityLog.find({ relatedRecordId: completed._id, description: /Guest (contact|feedback) recorded/ });
         assert.equal(audit.length, 3);
         assert.ok(!JSON.stringify(audit).includes("Loved the trip"));
         assert.ok(!JSON.stringify(await ActivityLog.find({ relatedRecordId: completed._id })).includes("Guest accepted our remedy"));
-        console.log("Post-trip contact, feedback reminders, recovery, permissions and stale-write checks passed.");
+        console.log("Post-trip private care history, feedback reminders, recovery, permissions and stale-write checks passed.");
     } finally {
         if (bookings.length) {
             await ActivityLog.deleteMany({ relatedRecordId: { $in: bookings.map((item) => item._id) } });

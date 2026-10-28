@@ -49,14 +49,27 @@ test("care actions preserve contact history, validate actual feedback and stop a
     assert.equal(contacted.status, "Contacted");
     assert.equal(contacted.contactCount, 1);
     assert.equal(contacted.contactNote, "Asked for photos");
+    assert.equal(contacted.events.length, 1);
+    assert.deepEqual({ action: contacted.events[0].action, byName: contacted.events[0].byName,
+        channel: contacted.events[0].channel, note: contacted.events[0].note },
+    { action: "contacted", byName: "Sales", channel: "Email", note: "Asked for photos" });
+    const contactedAgain = parseCareAction({ action: "contacted", channel: "Phone", note: "Spoke about photos", expectedRevision: 1 }, contacted, "Agent", now).value;
+    assert.equal(contactedAgain.contactCount, 2);
+    assert.equal(contactedAgain.contactNote, "Spoke about photos");
+    assert.equal(contactedAgain.events[0].note, "Asked for photos", "Earlier private contact notes remain available");
+    assert.equal(contactedAgain.events[1].note, "Spoke about photos");
     assert.ok(parseCareAction({ action: "feedback", note: "", rating: null, expectedRevision: 1 }, contacted, "Sales").error);
     assert.ok(parseCareAction({ action: "feedback", note: "Great", rating: 6, expectedRevision: 1 }, contacted, "Sales").error);
     const received = parseCareAction({ action: "feedback", note: " Loved the guide ", rating: 5, expectedRevision: 1 }, contacted, "Sales", now).value;
     assert.equal(received.contactCount, 1);
     assert.equal(received.feedbackNote, "Loved the guide");
     assert.equal(received.feedbackRating, 5);
+    assert.equal(received.events.length, 2);
+    assert.equal(received.events[1].note, "Loved the guide");
+    assert.equal(received.events[1].rating, 5);
     assert.ok(parseCareAction({ action: "contacted", channel: "Phone", note: "", expectedRevision: 2 }, received, "Sales").error);
     const declined = parseCareAction({ action: "declined", note: "No more messages", expectedRevision: 0 }, null, "Sales", now).value;
+    assert.equal(declined.events[0].action, "declined");
     assert.ok(parseCareAction({ action: "declined", note: "", expectedRevision: 1 }, declined, "Sales").error);
     assert.ok(parseCareAction({ action: "feedback", note: "Changed mind", expectedRevision: 1 }, declined, "Sales").error);
     assert.ok(parseCareAction({ action: "contacted", channel: "Phone", note: "", expectedRevision: 1 }, declined, "Sales").error);
@@ -72,10 +85,26 @@ test("feedback reminders require contact, stay in the care window and clear on a
     const contacted = parseCareAction({ ...contact, nextFeedbackFollowUpDate: "2026-10-27" }, null, "Agent", now, tripEnd).value;
     assert.equal(contacted.nextFeedbackFollowUpDate.toISOString(), "2026-10-27T00:00:00.000Z");
     assert.ok(parseCareAction({ action: "schedule-feedback", note: "", expectedRevision: 1 }, contacted, "Agent", now, tripEnd).error);
+    assert.ok(parseCareAction({ action: "schedule-feedback", expectedRevision: 1, nextFeedbackFollowUpDate: "2026-10-27" }, contacted, "Agent", now, tripEnd).error);
     assert.ok(parseCareAction({ action: "schedule-feedback", note: "", expectedRevision: 1, nextFeedbackFollowUpDate: "2026-10-26" }, contacted, "Agent", now, tripEnd).error);
     const cleared = parseCareAction({ action: "schedule-feedback", expectedRevision: 1, nextFeedbackFollowUpDate: null }, contacted, "Agent", now, tripEnd).value;
     assert.equal(cleared.nextFeedbackFollowUpDate, null);
     assert.equal(cleared.contactCount, 1, "Scheduling must not log guest contact");
+    assert.equal(cleared.events.length, 2);
+    assert.equal(cleared.events[1].action, "schedule-feedback");
+    assert.equal(cleared.events[1].nextFeedbackFollowUpDate, null);
+    assert.ok(parseCareAction({ action: "schedule-feedback", expectedRevision: 2, nextFeedbackFollowUpDate: null }, cleared, "Agent", now, tripEnd).error);
+    const legacy = { status: "Contacted", contactCount: 2, contactNote: "Older saved note" };
+    const updatedLegacy = parseCareAction({ action: "schedule-feedback", expectedRevision: 0,
+        nextFeedbackFollowUpDate: "2026-10-27" }, legacy, "Agent", now, tripEnd).value;
+    assert.equal(updatedLegacy.events.length, 1, "Older care records start history with their next action");
+    assert.equal(updatedLegacy.contactCount, 2);
+    assert.equal(updatedLegacy.contactNote, "Older saved note");
+    const many = { ...contacted, events: Array(30).fill(contacted.events[0]) };
+    const bounded = parseCareAction({ action: "schedule-feedback", note: "Change planned call", expectedRevision: 2,
+        nextFeedbackFollowUpDate: null }, many, "Agent", now, tripEnd).value;
+    assert.equal(bounded.events.length, 30);
+    assert.equal(bounded.events.at(-1).note, "Change planned call");
     const received = parseCareAction({ action: "feedback", rating: 5, note: "Lovely guide", expectedRevision: 1 }, contacted, "Agent", now, tripEnd).value;
     assert.equal(received.nextFeedbackFollowUpDate, null);
     const declined = parseCareAction({ action: "declined", note: "No further contact", expectedRevision: 1 }, contacted, "Agent", now, tripEnd).value;
@@ -97,6 +126,7 @@ test("low ratings create recoveries, and recovery actions validate dates and pre
     assert.ok(parseCareAction({ action: "recovery-contact", expectedRevision: 2, note: "Reached guest", nextFollowUpDate: null, channel: "SMS" }, planned, "Agent", now).error);
     const contacted = parseCareAction({ action: "recovery-contact", expectedRevision: 2, note: "Reached guest by phone", nextFollowUpDate: null, channel: "Phone" }, planned, "Agent", now).value;
     assert.equal(contacted.recovery.events.length, 2);
+    assert.equal(contacted.events.length, 1, "Recovery actions keep the separate care history intact");
     assert.equal(contacted.recovery.nextFollowUpDate, null);
     assert.equal(contacted.contactCount, 1);
     assert.equal(contacted.lastContactChannel, "Phone");
@@ -165,6 +195,7 @@ test("queue summary and message omit financial and internal booking information"
     const summary = summarizeCare(booking);
     const draft = buildPostTripMessage(booking, { companyName: "Dream Ceylon Journeys", bankDetails: "PRIVATE-BANK" });
     assert.equal(summary.status, "Not contacted");
+    assert.equal("events" in summary, false);
     assert.match(draft.message, /thank you for traveling/);
     assert.equal(draft.number, "+447700900123");
     for (const secret of ["1800", "PRIVATE-INTERNAL", "PRIVATE@example.invalid", "PRIVATE-BANK"]) {
@@ -261,6 +292,8 @@ test("post-trip API separates message drafting from versioned writes and enforce
     assert.equal(detail.status, 200);
     const detailBody = await detail.json();
     assert.equal(detailBody.recovery.events[0].note, "Call tomorrow");
+    assert.deepEqual(detailBody.events.map((entry) => entry.note), ["Pickup was late", "Nice trip", ""]);
+    assert.ok(!JSON.stringify(alertBody).includes("Pickup was late"));
     assert.equal(detailBody.bookingCode, booking.bookingCode);
     assert.equal(detailBody.customerName, booking.customer.fullName);
     booking.travelEndDate = new Date(getBusinessDayBounds().start.getTime() - 100 * 86400000);

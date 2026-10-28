@@ -98,6 +98,14 @@ const endedBeforeToday = (booking, now = new Date()) => {
 const isLowRating = (care) => care?.status === "Feedback received" &&
     Number.isInteger(care.feedbackRating) && care.feedbackRating >= 1 && care.feedbackRating <= 3;
 
+const withCareEvent = (care, action, now, byName, note, channel = null, rating = null) => ({
+    ...care,
+    events: [...(care.events || []).slice(-29), {
+        action, at: now, byName: byName || "", channel, note,
+        nextFeedbackFollowUpDate: care.nextFeedbackFollowUpDate, rating,
+    }],
+});
+
 const parseRecoveryAction = (body, current, adminName, now) => {
     const recovery = current.recovery || { status: "Open", events: [], nextFollowUpDate: null, resolvedAt: null };
     const action = body.action.slice("recovery-".length);
@@ -154,6 +162,7 @@ const parseCareAction = (body, current, adminName, now = new Date(), travelEndDa
         feedbackAt: previous.feedbackAt || null,
         feedbackRating: previous.feedbackRating ?? null,
         feedbackNote: previous.feedbackNote || "",
+        events: previous.events || [],
         recovery: previous.recovery || null,
         updatedAt: now, updatedByName: adminName || "",
     };
@@ -178,14 +187,19 @@ const parseCareAction = (body, current, adminName, now = new Date(), travelEndDa
                 return { error: "Feedback follow-up must be today or within the remaining 90-day care window." };
             }
         }
-        if (action === "schedule-feedback") return { value: { ...base, nextFeedbackFollowUpDate: parsedDate.value } };
+        if (action === "schedule-feedback") {
+            if ((previous.nextFeedbackFollowUpDate ? new Date(previous.nextFeedbackFollowUpDate).getTime() : null) ===
+                (parsedDate.value?.getTime() ?? null)) return { error: "Change the feedback follow-up date before saving." };
+            return { value: withCareEvent({ ...base,
+                nextFeedbackFollowUpDate: parsedDate.value }, action, now, adminName, cleanNote) };
+        }
         base.nextFeedbackFollowUpDate = parsedDate.value;
     }
     if (action === "contacted") {
         if (!["Contacted", undefined].includes(previous.status)) return { error: "Feedback is already closed for this trip." };
         if (!CHANNELS.includes(channel)) return { error: "Choose how the guest was contacted." };
-        return { value: { ...base, status: "Contacted", contactCount: base.contactCount + 1,
-            lastContactedAt: now, lastContactChannel: channel, contactNote: cleanNote } };
+        return { value: withCareEvent({ ...base, status: "Contacted", contactCount: base.contactCount + 1,
+            lastContactedAt: now, lastContactChannel: channel, contactNote: cleanNote }, action, now, adminName, cleanNote, channel) };
     }
     if (action === "feedback") {
         if (previous.status === "Declined") return { error: "The guest declined follow-up. Do not record a new request without reviewing the booking." };
@@ -196,18 +210,19 @@ const parseCareAction = (body, current, adminName, now = new Date(), travelEndDa
         if (previous.recovery?.events?.length && rating !== previous.feedbackRating) {
             return { error: "Recovery actions are recorded for this rating. Keep the rating and add a recovery note instead." };
         }
-        return { value: { ...base, status: "Feedback received", feedbackAt: now,
+        return { value: withCareEvent({ ...base, status: "Feedback received", feedbackAt: now,
             nextFeedbackFollowUpDate: null,
             feedbackRating: rating ?? null, feedbackNote: cleanNote,
-            recovery: rating >= 1 && rating <= 3 ? (base.recovery || { status: "Open", nextFollowUpDate: null, resolvedAt: null, events: [] }) : null } };
+            recovery: rating >= 1 && rating <= 3 ? (base.recovery || { status: "Open", nextFollowUpDate: null, resolvedAt: null, events: [] }) : null },
+        action, now, adminName, cleanNote, null, rating ?? null) };
     }
     if (action === "declined") {
         if (previous.status === "Feedback received" || previous.status === "Declined") {
             return { error: "The post-trip outcome is already closed." };
         }
-        return { value: { ...base, status: "Declined", feedbackAt: now,
+        return { value: withCareEvent({ ...base, status: "Declined", feedbackAt: now,
             nextFeedbackFollowUpDate: null,
-            feedbackRating: null, feedbackNote: cleanNote } };
+            feedbackRating: null, feedbackNote: cleanNote }, action, now, adminName, cleanNote) };
     }
     return { error: "Choose a valid post-trip action." };
 };

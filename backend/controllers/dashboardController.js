@@ -233,6 +233,7 @@ const getDashboardStats = async (req, res) => {
             .limit(5);
 
         const recentBookings = await Booking.find()
+            .select("-postTripCare.events")
             .populate("selectedPackage", "title durationDays category")
             .sort({ createdAt: -1 })
             .limit(5);

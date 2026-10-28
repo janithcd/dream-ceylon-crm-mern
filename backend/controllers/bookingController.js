@@ -332,7 +332,7 @@ const getBookings = async (req, res) => {
         const [bookings, totalBookings] = await Promise.all([
             populateBooking(
                 Booking.find(query)
-                    .select("-tripIssues")
+                    .select("-tripIssues -postTripCare.events")
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(limit)

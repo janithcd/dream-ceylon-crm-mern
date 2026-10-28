@@ -280,6 +280,7 @@ const searchCustomers = async (req, res) => {
                 .limit(100),
 
             Booking.find(buildQueryFromConditions(bookingConditions))
+                .select("-postTripCare.events")
                 .populate("selectedPackage", "title durationDays")
                 .sort({ createdAt: -1 })
                 .limit(100),
@@ -454,6 +455,7 @@ const getCustomerProfile = async (req, res) => {
         }
 
         const bookings = await Booking.find(buildQueryFromConditions(bookingConditions))
+            .select("-postTripCare.events")
             .populate("inquiry", "fullName email whatsappNumber country")
             .populate("selectedPackage", "title durationDays category priceFrom")
             .sort({ createdAt: -1 });

@@ -152,6 +152,20 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
                         {care.status === "Contacted" && <p className="small"><strong>Feedback follow-up:</strong> {care.nextFeedbackFollowUpDate ? formatCalendarDate(care.nextFeedbackFollowUpDate) : "None scheduled"}</p>}
                         {care.feedbackNote && <p className="small"><strong>Feedback note:</strong> {care.feedbackNote}</p>}
                         {care.feedbackRating != null && <p className="small"><strong>Recorded rating:</strong> {care.feedbackRating} / 5</p>}
+                        {care.events.length > 0 ? <details className="border rounded p-3 mb-4">
+                            <summary className="fw-semibold">Guest care history ({care.events.length})</summary>
+                            <p className="small text-muted mt-2 mb-2">The latest 30 actions are kept here. Earlier actions on existing bookings may not have a detailed entry.</p>
+                            <ol className="small ps-3 mb-0">{care.events.map((entry, index) => <li key={`${entry.at}-${index}`} className="mb-2 text-break">
+                                <strong>{entry.action === "contacted" ? `Guest contacted by ${entry.channel}` :
+                                    entry.action === "schedule-feedback" ? "Feedback reminder changed" :
+                                        entry.action === "feedback" ? "Feedback saved" : "Guest declined contact"}</strong>
+                                {` · ${new Date(entry.at).toLocaleString("en-GB", { timeZone: "Asia/Colombo" })} · ${entry.byName || "Staff"}`}
+                                {entry.rating != null && <div>Rating: {entry.rating} / 5</div>}
+                                {entry.nextFeedbackFollowUpDate && <div>Next feedback follow-up: {formatCalendarDate(entry.nextFeedbackFollowUpDate)}</div>}
+                                {entry.action === "schedule-feedback" && !entry.nextFeedbackFollowUpDate && <div>Reminder cleared</div>}
+                                {entry.note && <div>{entry.note}</div>}
+                            </li>)}</ol>
+                        </details> : care.contactCount > 0 && <p className="small text-muted">Detailed history is available for newly recorded actions.</p>}
                         {care.recovery && <section className="border border-warning rounded p-3 mb-4" aria-labelledby="recovery-title">
                             <h6 id="recovery-title">Service recovery · {care.recovery.status}</h6>
                             <p className="small text-muted">Ratings of 1–3 need an explicit follow-up and resolution. Staff contact the guest themselves; recording a plan does not send a message.</p>
@@ -232,9 +246,10 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
                                 <select id="post-trip-rating" className="form-select mb-3" value={rating} onChange={(event) => setRating(event.target.value)} disabled={busy || Boolean(care.recovery?.events.length)}>
                                     <option value="">Not given</option>{[1, 2, 3, 4, 5].map((value) => <option value={value} key={value}>{value} / 5</option>)}
                                 </select>{care.recovery?.events.length > 0 && <p className="small text-muted">The rating is locked after a recovery action. Add corrections in the recovery history.</p>}</>}
-                            {action !== "schedule-feedback" && <><label className="form-label" htmlFor="post-trip-note">Private {action === "feedback" ? "feedback" : action === "declined" ? "outcome" : "contact"} note</label>
-                                <textarea id="post-trip-note" className="form-control" rows="3" maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} disabled={busy} placeholder={action === "feedback" ? "What did the guest say? A note or rating is required." : "Optional internal note"} /></>}
-                            <button type="submit" className="btn btn-primary mt-3" disabled={busy || (action === "feedback" && !note.trim() && !rating)}>{busy ? "Saving..." : "Save post-trip record"}</button>
+                            <label className="form-label" htmlFor="post-trip-note">Private {action === "feedback" ? "feedback" : action === "declined" ? "outcome" : action === "schedule-feedback" ? "reminder" : "contact"} note</label>
+                            <textarea id="post-trip-note" className="form-control" rows="3" maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} disabled={busy} placeholder={action === "feedback" ? "What did the guest say? A note or rating is required." : "Optional internal note for the care history"} />
+                            <button type="submit" className="btn btn-primary mt-3" disabled={busy || (action === "feedback" && !note.trim() && !rating) ||
+                                (action === "schedule-feedback" && feedbackDueDate === toCalendarDateInput(care.nextFeedbackFollowUpDate))}>{busy ? "Saving..." : "Save post-trip record"}</button>
                         </form>}
                     </>}
                 </div>

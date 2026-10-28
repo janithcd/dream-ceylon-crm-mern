@@ -81,6 +81,11 @@ const getPostTripCare = async (req, res) => {
             feedbackRating: booking.postTripCare?.feedbackRating ?? null,
             feedbackNote: booking.postTripCare?.feedbackNote || "",
             updatedByName: booking.postTripCare?.updatedByName || "",
+            events: [...(booking.postTripCare?.events || [])].reverse().map((event) => ({
+                action: event.action, at: event.at, byName: event.byName, channel: event.channel,
+                note: event.note, nextFeedbackFollowUpDate: event.nextFeedbackFollowUpDate,
+                rating: event.rating,
+            })),
             recovery: isLowRating(booking.postTripCare) ? {
                 status: booking.postTripCare?.recovery?.status || "Open",
                 nextFollowUpDate: booking.postTripCare?.recovery?.nextFollowUpDate || null,
