@@ -10,7 +10,7 @@ const Admin = require("../models/Admin");
 const ActivityLog = require("../models/ActivityLog");
 const CompanySetting = require("../models/CompanySetting");
 const { getBusinessDayBounds } = require("../utils/businessDate");
-const { getPostTripQuery, buildRecoveryAlertsPipeline, buildContactAlertsPipeline, buildFeedbackAlertsPipeline, lastCareDay,
+const { getCareOwnerQuery, getPostTripQuery, buildRecoveryAlertsPipeline, buildContactAlertsPipeline, buildFeedbackAlertsPipeline, lastCareDay,
     parseCareAction, summarizeCare } = require("../utils/postTripCare");
 const { buildPostTripMessage } = require("../utils/postTripMessage");
 
@@ -39,6 +39,20 @@ test("post-trip queue starts after the Colombo end day and distinguishes closeou
     assert.deepEqual(recovery["postTripCare.feedbackRating"], { $gte: 1, $lte: 3 });
     assert.deepEqual(recovery["postTripCare.recovery.status"], { $ne: "Resolved" });
     assert.equal(getPostTripQuery("recovery-closed", now)["postTripCare.recovery.status"], "Resolved");
+});
+
+test("owner scopes include older unassigned bookings and keep alerts assigned to the right staff", () => {
+    const adminId = "507f1f77bcf86cd799439252";
+    const now = new Date("2026-10-26T19:00:00Z");
+    assert.deepEqual(getCareOwnerQuery("mine", adminId), { postTripCareOwner: adminId });
+    assert.deepEqual(getCareOwnerQuery("unassigned", adminId), { postTripCareOwner: null });
+    assert.deepEqual(getCareOwnerQuery("attention", adminId), { postTripCareOwner: { $in: [adminId, null] } });
+    assert.deepEqual(getCareOwnerQuery("all", adminId), {});
+    for (const pipeline of [buildContactAlertsPipeline(now, adminId), buildFeedbackAlertsPipeline(now, adminId),
+        buildRecoveryAlertsPipeline(now, adminId)]) {
+        assert.deepEqual(pipeline[0].$match.postTripCareOwner, { $in: [adminId, null] });
+        assert.ok(!JSON.stringify(pipeline.slice(1)).includes("postTripCareOwnerName"));
+    }
 });
 
 test("care actions preserve contact history, validate actual feedback and stop after a decline", () => {
@@ -196,6 +210,7 @@ test("queue summary and message omit financial and internal booking information"
     const draft = buildPostTripMessage(booking, { companyName: "Dream Ceylon Journeys", bankDetails: "PRIVATE-BANK" });
     assert.equal(summary.status, "Not contacted");
     assert.equal("events" in summary, false);
+    assert.equal(summary.owner, null);
     assert.match(draft.message, /thank you for traveling/);
     assert.equal(draft.number, "+447700900123");
     for (const secret of ["1800", "PRIVATE-INTERNAL", "PRIVATE@example.invalid", "PRIVATE-BANK"]) {

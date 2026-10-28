@@ -11,6 +11,8 @@ const filters = [
     ["feedback-due", "Feedback due"], ["waiting", "Awaiting feedback"], ["done", "Recorded outcomes"], ["all", "All recent trips"],
     ["recovery-closed", "Resolved recoveries"],
 ];
+const ownerOptions = [["attention", "Mine + unassigned"], ["mine", "My care"],
+    ["unassigned", "Unassigned"], ["all", "All staff"]];
 
 const PostTripCare = () => {
     const { hasPermission } = usePermissions();
@@ -19,6 +21,7 @@ const PostTripCare = () => {
     const [data, setData] = useState(null);
     const [searchParams, setSearchParams] = useSearchParams();
     const filter = filters.some(([value]) => value === searchParams.get("filter")) ? searchParams.get("filter") : "due";
+    const owner = ownerOptions.some(([value]) => value === searchParams.get("owner")) ? searchParams.get("owner") : "attention";
     const selectedId = searchParams.get("booking");
     const setSelectedId = (id) => setSearchParams((current) => {
         const params = new URLSearchParams(current);
@@ -36,13 +39,23 @@ const PostTripCare = () => {
             return params;
         }, { replace: true });
     };
+    const selectOwner = (value) => {
+        setPage(1);
+        setSearchParams((current) => {
+            const params = new URLSearchParams(current);
+            if (value === "attention") params.delete("owner");
+            else params.set("owner", value);
+            params.delete("booking");
+            return params;
+        }, { replace: true });
+    };
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
     useEffect(() => {
         let active = true;
         setLoading(true);
-        api.get("/bookings/post-trip-care", { params: { filter, page } })
+        api.get("/bookings/post-trip-care", { params: { filter, owner, page } })
             .then(({ data: result }) => {
                 if (!active) return;
                 if (page > result.pages) { setPage(result.pages); return; }
@@ -51,10 +64,10 @@ const PostTripCare = () => {
             .catch((err) => { if (active) { setData(null); setError(err.response?.data?.message || "Could not load post-trip care."); } })
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
-    }, [filter, page, reloadKey]);
+    }, [filter, owner, page, reloadKey]);
 
     const refresh = () => setReloadKey((value) => value + 1);
-    const visibleData = data?.filter === filter ? data : null;
+    const visibleData = data?.filter === filter && data?.owner === owner ? data : null;
     const selected = selectedId ? visibleData?.items.find((item) => item._id === selectedId) || { _id: selectedId } : null;
     return <div>
         <div className="d-flex flex-wrap justify-content-between gap-3 align-items-start mb-4">
@@ -62,7 +75,7 @@ const PostTripCare = () => {
                 <p className="text-muted mb-0">Close out ended tours, thank guests, and record feedback from the last 90 days.</p></div>
             <button type="button" className="btn btn-outline-secondary" onClick={refresh} disabled={loading}><FaSyncAlt className="me-2" />Refresh</button>
         </div>
-        <p className="alert alert-info small">Tours enter this queue the day after their saved end date in Sri Lanka. Drafting a message or opening WhatsApp never sends it or records contact. Set feedback reminders for contacted guests during the 90-day care window; no message is sent automatically.</p>
+        <p className="alert alert-info small">Tours enter this queue the day after their saved end date in Sri Lanka. Assign an owner to coordinate guest care; older records are unassigned until claimed. Drafting or opening a message never sends it or records contact. No message is sent automatically.</p>
         {error && <div className="alert alert-danger" role="alert">{error} <button type="button" className="btn btn-sm btn-outline-danger ms-2" onClick={refresh}>Try again</button></div>}
         {visibleData && <div className="row g-3 mb-4">
             {[["Trips to close", visibleData.summary.closeout], ["Guests to contact", visibleData.summary.due],
@@ -70,6 +83,11 @@ const PostTripCare = () => {
                 <div className="col-6 col-xl-3" key={label}><div className="card border-0 shadow-sm h-100"><div className="card-body"><small className="text-muted">{label}</small><h3 className="mb-0">{count}</h3></div></div></div>)}
         </div>}
         <div className="card border-0 shadow-sm"><div className="card-body">
+            <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Guest care owner filter">
+                {ownerOptions.map(([value, label]) => <button type="button" key={value} aria-pressed={owner === value}
+                    className={`btn btn-sm ${owner === value ? "btn-secondary" : "btn-outline-secondary"}`}
+                    onClick={() => selectOwner(value)}>{label}</button>)}
+            </div>
             <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Post-trip care filter">
                 {filters.map(([value, label]) => <button type="button" key={value} aria-pressed={filter === value}
                     className={`btn btn-sm ${filter === value ? "btn-primary" : "btn-outline-primary"}`}
@@ -86,6 +104,7 @@ const PostTripCare = () => {
                                 <div className="small mt-1">{item.bookingStatus !== "Completed" ? "Needs booking closeout" : item.status}
                                     {item.contactCount ? ` · ${item.contactCount} ${item.contactCount === 1 ? "contact" : "contacts"}` : ""}
                                     {item.feedbackRating != null ? ` · Rating ${item.feedbackRating} / 5` : ""}</div>
+                                {item.bookingStatus === "Completed" && <div className="small mt-1">Owner: <strong>{item.ownerName || "Unassigned"}</strong></div>}
                                 {item.recoveryStatus && <div className={`small mt-1 ${item.recoveryStatus === "Open" ? "text-danger" : "text-success"}`}>
                                     Recovery {item.recoveryStatus.toLowerCase()}
                                     {item.recoveryStatus === "Open" && item.recoveryFollowUpDate && ` · ${toCalendarDateInput(item.recoveryFollowUpDate) < todayCalendarDate() ? "Overdue" : toCalendarDateInput(item.recoveryFollowUpDate) === todayCalendarDate() ? "Due today" : "Follow up"} ${formatCalendarDate(item.recoveryFollowUpDate)}`}

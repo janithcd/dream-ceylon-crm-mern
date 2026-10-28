@@ -6,7 +6,7 @@ import { formatCalendarDate, todayCalendarDate, toCalendarDateInput } from "../u
 import { notifyRecoveryChanged } from "../utils/recoveryEvents";
 
 const PostTripCareModal = ({ booking, onClose, onChanged }) => {
-    const { hasPermission } = usePermissions();
+    const { hasPermission, admin } = usePermissions();
     const canUpdate = hasPermission("booking.update");
     const [care, setCare] = useState(null);
     const [draft, setDraft] = useState(null);
@@ -15,6 +15,9 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
     const [note, setNote] = useState("");
     const [rating, setRating] = useState("");
     const [feedbackDueDate, setFeedbackDueDate] = useState("");
+    const [ownerChoice, setOwnerChoice] = useState("");
+    const [assignees, setAssignees] = useState([]);
+    const [assigneeError, setAssigneeError] = useState("");
     const [recoveryAction, setRecoveryAction] = useState("recovery-plan");
     const [recoveryNote, setRecoveryNote] = useState("");
     const [recoveryChannel, setRecoveryChannel] = useState("Phone");
@@ -38,6 +41,7 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
                 setRating(data.feedbackRating == null ? "" : String(data.feedbackRating));
                 setChannel(data.lastContactChannel || "WhatsApp");
                 setFeedbackDueDate(toCalendarDateInput(data.nextFeedbackFollowUpDate));
+                setOwnerChoice(String(data.owner || ""));
                 setRecoveryAction(data.recovery?.status === "Resolved" ? "recovery-reopen" : "recovery-plan");
                 setRecoveryDueDate(toCalendarDateInput(data.recovery?.nextFollowUpDate));
             })
@@ -45,6 +49,15 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
     }, [booking._id]);
+
+    useEffect(() => {
+        if (!canUpdate) return undefined;
+        let active = true;
+        api.get("/bookings/preparation-assignees")
+            .then(({ data }) => { if (active) { setAssignees(data.admins || []); setAssigneeError(""); } })
+            .catch(() => { if (active) setAssigneeError("Could not load staff choices. You can still claim or clear this owner."); });
+        return () => { active = false; };
+    }, [booking._id, canUpdate]);
 
     useEffect(() => {
         const previousFocus = document.activeElement;
@@ -135,6 +148,21 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
             setError(err.response?.data?.message || "Could not save recovery. Reload and try again.");
         } finally { setBusy(false); }
     };
+    const saveOwner = async (event) => {
+        event.preventDefault();
+        if (busy || !canUpdate || !care) return;
+        setBusy(true); setError("");
+        try {
+            const { data } = await api.patch(`/bookings/${booking._id}/post-trip-care/assignee`, {
+                assignedTo: ownerChoice || null, expectedRevision: care.revision,
+            });
+            setCare((current) => ({ ...current, owner: data.owner, ownerName: data.ownerName, revision: data.revision }));
+            setOwnerChoice(String(data.owner || ""));
+            notifyRecoveryChanged(); onChanged();
+        } catch (err) {
+            setError(err.response?.data?.message || "Could not change the guest care owner. Reload and try again.");
+        } finally { setBusy(false); }
+    };
     const messageUrl = draft ? buildWhatsAppUrl(draft.number, draft.message) : "";
 
     return <>
@@ -148,6 +176,28 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
                     {!loading && care && <>
                         <p className="mb-2"><strong>{care.customerName || booking.customerName || "Guest"}</strong> · {care.status}</p>
                         <p className="small text-muted">{care.contactCount} recorded {care.contactCount === 1 ? "contact" : "contacts"}{care.lastContactChannel ? ` · Last channel: ${care.lastContactChannel}` : ""}. The draft below is editable and opening WhatsApp does not mark a message as sent.</p>
+                        <section className="border rounded p-3 mb-4" aria-labelledby="care-owner-title">
+                            <h6 id="care-owner-title">Guest care owner · {care.ownerName || "Unassigned"}</h6>
+                            {canUpdate && (care.careWindowOpen || care.recovery?.status === "Open") && <form onSubmit={saveOwner}>
+                                <label className="form-label" htmlFor="care-owner">Assign follow-up work</label>
+                                <div className="d-flex flex-wrap gap-2">
+                                    <select id="care-owner" className="form-select form-select-sm flex-grow-1" style={{ width: "min(100%, 18rem)" }}
+                                        value={ownerChoice} onChange={(event) => setOwnerChoice(event.target.value)} disabled={busy}>
+                                        <option value="">Unassigned</option>
+                                        <option value="__me__">Assign to me</option>
+                                        {assignees.map((person) => <option key={person._id} value={person._id}>{person.name} · {person.role}</option>)}
+                                        {care.owner && !assignees.some((person) => String(person._id) === String(care.owner)) &&
+                                            <option value={String(care.owner)}>{care.ownerName || "Current owner"} (current)</option>}
+                                    </select>
+                                    <button type="submit" className="btn btn-sm btn-outline-primary" disabled={busy ||
+                                        ownerChoice === String(care.owner || "") ||
+                                        (ownerChoice === "__me__" && String(care.owner) === String(admin?._id))}>
+                                        {busy ? "Saving..." : "Save owner"}</button>
+                                </div>
+                                {assigneeError && <p className="small text-warning-emphasis mt-2 mb-0">{assigneeError}</p>}
+                                <p className="small text-muted mt-2 mb-0">Owner changes update the worklist and do not contact the guest.</p>
+                            </form>}
+                        </section>
                         {care.contactNote && <p className="small"><strong>Last contact note:</strong> {care.contactNote}</p>}
                         {care.status === "Contacted" && <p className="small"><strong>Feedback follow-up:</strong> {care.nextFeedbackFollowUpDate ? formatCalendarDate(care.nextFeedbackFollowUpDate) : "None scheduled"}</p>}
                         {care.feedbackNote && <p className="small"><strong>Feedback note:</strong> {care.feedbackNote}</p>}

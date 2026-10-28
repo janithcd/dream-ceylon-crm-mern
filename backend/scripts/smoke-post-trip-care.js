@@ -20,8 +20,8 @@ const main = async () => {
         const dayMs = 86400000;
         const start = dateOnly(new Date(Date.now() - 5 * dayMs));
         const end = dateOnly(new Date(Date.now() - 2 * dayMs));
-        for (const role of ["Sales", "Viewer"]) admins.push(await Admin.create({
-            name: `CI Post Trip ${role}`, email: `ci-post-trip-${role}-${Date.now()}@example.invalid`,
+        for (const [index, role] of ["Sales", "Viewer", "Sales"].entries()) admins.push(await Admin.create({
+            name: `CI Post Trip ${role} ${index}`, email: `ci-post-trip-${role}-${index}-${Date.now()}@example.invalid`,
             password: "disposable-ci-only-password", role,
         }));
         for (const status of ["Completed", "In Progress"]) bookings.push(await Booking.create({
@@ -30,20 +30,27 @@ const main = async () => {
             travelStartDate: new Date(start), travelEndDate: new Date(end), numberOfTravelers: 2,
             totalPrice: 900, bookingStatus: status, adminNotes: "PRIVATE-POST-TRIP-NOTE",
         }));
+        const ownerBooking = await Booking.create({
+            bookingCode: `CI-POST-OWNER-${Date.now()}`,
+            customer: { fullName: "CI Owner Guest", email: "owner-post-trip@example.invalid", whatsappNumber: "+94771234567", country: "UK" },
+            travelStartDate: new Date(start), travelEndDate: new Date(end), numberOfTravelers: 2,
+            totalPrice: 900, bookingStatus: "Completed",
+        });
+        bookings.push(ownerBooking);
         const request = (admin, path, method = "GET", body) => fetch(`http://127.0.0.1:5000/api/bookings${path}`, {
             method, headers: { Authorization: `Bearer ${jwt.sign({ id: admin._id, v: 0 }, process.env.JWT_SECRET)}`,
                 "Content-Type": "application/json" },
             body: body === undefined ? undefined : JSON.stringify(body),
         });
-        const [sales, viewer] = admins;
+        const [sales, viewer, otherSales] = admins;
         const [completed, open] = bookings;
-        const queue = async (filter) => {
-            const response = await request(sales, `/post-trip-care?filter=${filter}`);
+        const queue = async (filter, owner = "all", staff = sales) => {
+            const response = await request(staff, `/post-trip-care?filter=${filter}&owner=${owner}`);
             assert.equal(response.status, 200, `Post-trip ${filter}: ${await response.clone().text()}`);
             return response.json();
         };
-        const recoveryAlerts = async () => {
-            const response = await request(viewer, "/post-trip-care/alerts");
+        const recoveryAlerts = async (staff = sales) => {
+            const response = await request(staff, "/post-trip-care/alerts");
             assert.equal(response.status, 200, await response.clone().text());
             assert.equal(response.headers.get("cache-control"), "no-store");
             const result = await response.json();
@@ -53,6 +60,7 @@ const main = async () => {
             return result;
         };
         const due = await queue("due");
+        assert.equal((await request(sales, "/post-trip-care?owner=invalid")).status, 400);
         assert.ok(due.items.some((item) => item.bookingCode === completed.bookingCode));
         assert.ok(!JSON.stringify(due).includes("private-post-trip@example.invalid"));
         assert.ok(!JSON.stringify(due).includes("PRIVATE-POST-TRIP-NOTE"));
@@ -140,7 +148,37 @@ const main = async () => {
         assert.equal(audit.length, 3);
         assert.ok(!JSON.stringify(audit).includes("Loved the trip"));
         assert.ok(!JSON.stringify(await ActivityLog.find({ relatedRecordId: completed._id })).includes("Guest accepted our remedy"));
-        console.log("Post-trip private care history, feedback reminders, recovery, permissions and stale-write checks passed.");
+        const ownerPath = `/${ownerBooking._id}/post-trip-care`;
+        const assignPath = `${ownerPath}/assignee`;
+        assert.equal((await request(viewer, assignPath, "PATCH", { assignedTo: "__me__", expectedRevision: 0 })).status, 403);
+        assert.equal((await request(sales, assignPath, "PATCH", { assignedTo: "__me__", expectedRevision: "0" })).status, 400);
+        assert.equal((await request(sales, `/${open._id}/post-trip-care/assignee`, "PATCH", { assignedTo: "__me__", expectedRevision: 0 })).status, 409);
+        const assigned = await request(sales, assignPath, "PATCH", { assignedTo: String(otherSales._id), expectedRevision: 0 });
+        assert.equal(assigned.status, 200, await assigned.clone().text());
+        assert.equal((await assigned.json()).revision, 1);
+        assert.equal(String((await (await request(viewer, ownerPath)).json()).owner), String(otherSales._id));
+        assert.ok(!(await recoveryAlerts(sales)).contact.items.some((item) => item.bookingCode === ownerBooking.bookingCode));
+        assert.ok(!(await recoveryAlerts(viewer)).contact.items.some((item) => item.bookingCode === ownerBooking.bookingCode));
+        assert.ok((await recoveryAlerts(otherSales)).contact.items.some((item) => item.bookingCode === ownerBooking.bookingCode));
+        assert.ok((await queue("due", "mine", otherSales)).items.some((item) => item.bookingCode === ownerBooking.bookingCode));
+        assert.ok(!(await queue("due", "mine", sales)).items.some((item) => item.bookingCode === ownerBooking.bookingCode));
+        assert.ok(!(await queue("due", "unassigned")).items.some((item) => item.bookingCode === ownerBooking.bookingCode));
+        assert.ok((await queue("due", "all")).items.some((item) => item.bookingCode === ownerBooking.bookingCode));
+        assert.equal((await request(sales, assignPath, "PATCH", { assignedTo: "__me__", expectedRevision: 0 })).status, 409);
+        assert.equal((await request(sales, assignPath, "PATCH", { assignedTo: String(otherSales._id), expectedRevision: 1 })).status, 400);
+        assert.equal((await request(sales, assignPath, "PATCH", { assignedTo: String(viewer._id), expectedRevision: 1 })).status, 400);
+        const claimed = await request(sales, assignPath, "PATCH", { assignedTo: "__me__", expectedRevision: 1 });
+        assert.equal(claimed.status, 200, await claimed.clone().text());
+        assert.ok((await queue("due", "mine", sales)).items.some((item) => item.bookingCode === ownerBooking.bookingCode));
+        const cleared = await request(sales, assignPath, "PATCH", { assignedTo: null, expectedRevision: 2 });
+        assert.equal(cleared.status, 200, await cleared.clone().text());
+        assert.ok((await queue("due", "unassigned")).items.some((item) => item.bookingCode === ownerBooking.bookingCode));
+        assert.equal((await request(sales, ownerPath, "PATCH", { action: "contacted", note: "Reached the guest", channel: "Phone", expectedRevision: 0 })).status, 409);
+        const ownerContact = await request(sales, ownerPath, "PATCH", { action: "contacted", note: "Reached the guest", channel: "Phone", expectedRevision: 3 });
+        assert.equal(ownerContact.status, 200, await ownerContact.clone().text());
+        assert.equal((await ownerContact.json()).care.contactCount, 1);
+        assert.ok(!(await recoveryAlerts()).contact.items.some((item) => item.bookingCode === ownerBooking.bookingCode));
+        console.log("Post-trip private history, owner handoffs, scoped alerts, feedback reminders, recovery and stale-write checks passed.");
     } finally {
         if (bookings.length) {
             await ActivityLog.deleteMany({ relatedRecordId: { $in: bookings.map((item) => item._id) } });

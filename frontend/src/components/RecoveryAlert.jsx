@@ -90,12 +90,13 @@ const RecoveryAlert = () => {
                     <strong>Guest care needing attention</strong>
                     <button type="button" className="btn btn-sm btn-link p-0" onClick={refreshNow} disabled={loading} aria-label="Refresh guest care alerts"><FaSyncAlt aria-hidden="true" /></button>
                 </div>
+                <p className="small text-muted mb-2">Your assigned work and unassigned guest care.</p>
                 {loading && !data ? <p className="small text-muted mb-0">Loading guest care alerts...</p> : error ?
                     <p className="small text-danger mb-0" role="alert">{error} Try refreshing.</p> : <>
                         {contactCount > 0 && <>
                             <p className="small fw-semibold mb-2">{contactCount} completed {contactCount === 1 ? "trip" : "trips"} awaiting guest contact</p>
                             <div className="list-group list-group-flush mb-2">{(data?.contact?.items || []).map((item) =>
-                                <Link key={item.bookingId} to={`/post-trip-care?filter=due&booking=${encodeURIComponent(item.bookingId)}`}
+                                <Link key={item.bookingId} to={`/post-trip-care?filter=due&owner=attention&booking=${encodeURIComponent(item.bookingId)}`}
                                     className="list-group-item list-group-item-action px-0 py-2" onClick={() => setOpen(false)}>
                                     <span className="d-block fw-semibold small">{item.bookingCode}</span>
                                     <span className="d-block text-muted small">Trip ended {formatCalendarDate(item.travelEndDate)}</span>
@@ -104,7 +105,7 @@ const RecoveryAlert = () => {
                         {feedbackCount > 0 && <>
                             <p className="small fw-semibold mb-2">{feedbackCount} feedback {feedbackCount === 1 ? "follow-up" : "follow-ups"} due · {data.feedback.overdue} overdue</p>
                             <div className="list-group list-group-flush mb-2">{(data?.feedback?.items || []).map((item) =>
-                                <Link key={item.bookingId} to={`/post-trip-care?filter=feedback-due&booking=${encodeURIComponent(item.bookingId)}`}
+                                <Link key={item.bookingId} to={`/post-trip-care?filter=feedback-due&owner=attention&booking=${encodeURIComponent(item.bookingId)}`}
                                     className="list-group-item list-group-item-action px-0 py-2" onClick={() => setOpen(false)}>
                                     <span className="d-block fw-semibold small">{item.bookingCode}</span>
                                     <span className="d-block text-muted small">{item.overdue ? "Overdue" : "Due today"} · {formatCalendarDate(item.followUpDate)}</span>
@@ -116,7 +117,7 @@ const RecoveryAlert = () => {
                             <span className="fw-semibold">{unscheduled} without a date</span></p>}
                         {total === 0 && <p className="small text-muted mb-2">No guest care follow-ups need attention today.</p>}
                         {count > 0 && <div className="list-group list-group-flush mb-2">{(data?.items || []).map((item) =>
-                                <Link key={item.bookingId} to={`/post-trip-care?filter=recovery&booking=${encodeURIComponent(item.bookingId)}`}
+                                <Link key={item.bookingId} to={`/post-trip-care?filter=recovery&owner=attention&booking=${encodeURIComponent(item.bookingId)}`}
                                     className="list-group-item list-group-item-action px-0 py-2" onClick={() => setOpen(false)}>
                                     <span className="d-block fw-semibold small">{item.bookingCode}</span>
                                     <span className="d-block text-muted small">{item.overdue ? `Overdue · ${formatCalendarDate(item.followUpDate)}` :
@@ -124,9 +125,9 @@ const RecoveryAlert = () => {
                                 </Link>)}</div>}
                     </>}
                 <div className="d-grid gap-2 mt-2">
-                    <Link to="/post-trip-care?filter=due" className="btn btn-sm btn-outline-primary" onClick={() => setOpen(false)}>View guests to contact</Link>
-                    <Link to="/post-trip-care?filter=feedback-due" className="btn btn-sm btn-outline-primary" onClick={() => setOpen(false)}>View feedback due</Link>
-                    <Link to="/post-trip-care?filter=recovery" className="btn btn-sm btn-outline-primary" onClick={() => setOpen(false)}>View open recoveries</Link>
+                    <Link to="/post-trip-care?filter=due&owner=attention" className="btn btn-sm btn-outline-primary" onClick={() => setOpen(false)}>View guests to contact</Link>
+                    <Link to="/post-trip-care?filter=feedback-due&owner=attention" className="btn btn-sm btn-outline-primary" onClick={() => setOpen(false)}>View feedback due</Link>
+                    <Link to="/post-trip-care?filter=recovery&owner=attention" className="btn btn-sm btn-outline-primary" onClick={() => setOpen(false)}>View open recoveries</Link>
                 </div>
             </div>
         </div>}

@@ -278,6 +278,8 @@ const bookingSchema = new mongoose.Schema(
         travelerRosterVersion: { type: Number, default: 0, min: 0 },
 
         postTripCare: { type: postTripCareSchema, default: null },
+        postTripCareOwner: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+        postTripCareOwnerName: { type: String, trim: true, maxlength: 120, default: "" },
         postTripCareRevision: { type: Number, default: 0, min: 0 },
         tripIssues: { type: [tripIssueSchema], default: [],
             validate: { validator: (issues) => issues.length <= 30, message: "A booking can have at most 30 trip issues" } },

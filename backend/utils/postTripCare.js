@@ -5,6 +5,14 @@ const DAY_MS = 86400000;
 const PAGE_SIZE = 20;
 const FILTERS = ["due", "closeout", "waiting", "feedback-due", "done", "all", "recovery", "recovery-closed"];
 const CHANNELS = ["WhatsApp", "Email", "Phone", "Other"];
+const OWNER_FILTERS = ["all", "attention", "mine", "unassigned"];
+
+const getCareOwnerQuery = (owner = "all", adminId = null) => {
+    if (owner === "mine") return { postTripCareOwner: adminId };
+    if (owner === "unassigned") return { postTripCareOwner: null };
+    if (owner === "attention") return { postTripCareOwner: { $in: [adminId, null] } };
+    return {};
+};
 
 const getPostTripQuery = (filter = "due", now = new Date()) => {
     const { start } = getBusinessDayBounds(now);
@@ -28,10 +36,10 @@ const getPostTripQuery = (filter = "due", now = new Date()) => {
 };
 
 // Return only booking identifiers, codes and follow-up timing; recovery notes remain in the detail endpoint.
-const buildRecoveryAlertsPipeline = (now = new Date()) => {
+const buildRecoveryAlertsPipeline = (now = new Date(), adminId = null) => {
     const { start, end } = getBusinessDayBounds(now);
     return [
-        { $match: { ...getPostTripQuery("recovery", now), $or: [
+        { $match: { ...getPostTripQuery("recovery", now), ...(adminId ? getCareOwnerQuery("attention", adminId) : {}), $or: [
             { "postTripCare.recovery.nextFollowUpDate": null },
             { "postTripCare.recovery.nextFollowUpDate": { $lte: end } },
         ] } },
@@ -55,8 +63,8 @@ const buildRecoveryAlertsPipeline = (now = new Date()) => {
 };
 
 // Completed trips in the 90-day care window that have not had their first recorded contact.
-const buildContactAlertsPipeline = (now = new Date()) => [
-    { $match: getPostTripQuery("due", now) },
+const buildContactAlertsPipeline = (now = new Date(), adminId = null) => [
+    { $match: { ...getPostTripQuery("due", now), ...(adminId ? getCareOwnerQuery("attention", adminId) : {}) } },
     { $project: { bookingCode: 1, travelEndDate: 1 } },
     { $facet: {
         summary: [{ $count: "count" }],
@@ -66,10 +74,10 @@ const buildContactAlertsPipeline = (now = new Date()) => [
 ];
 
 // Only scheduled, due feedback requests are actionable. The contact note and guest details stay in the care record.
-const buildFeedbackAlertsPipeline = (now = new Date()) => {
+const buildFeedbackAlertsPipeline = (now = new Date(), adminId = null) => {
     const { start } = getBusinessDayBounds(now);
     return [
-        { $match: getPostTripQuery("feedback-due", now) },
+        { $match: { ...getPostTripQuery("feedback-due", now), ...(adminId ? getCareOwnerQuery("attention", adminId) : {}) } },
         { $project: { bookingCode: 1, followUpDate: "$postTripCare.nextFeedbackFollowUpDate" } },
         { $addFields: { overdue: { $lt: ["$followUpDate", start] } } },
         { $facet: {
@@ -235,6 +243,8 @@ const summarizeCare = (booking) => ({
     lastContactedAt: booking.postTripCare?.lastContactedAt || null,
     lastContactChannel: booking.postTripCare?.lastContactChannel || null,
     nextFeedbackFollowUpDate: booking.postTripCare?.nextFeedbackFollowUpDate || null,
+    owner: booking.postTripCareOwner || null,
+    ownerName: booking.postTripCareOwnerName || "",
     feedbackRating: booking.postTripCare?.feedbackRating ?? null,
     feedbackAt: booking.postTripCare?.feedbackAt || null,
     recoveryStatus: isLowRating(booking.postTripCare) ? booking.postTripCare?.recovery?.status || "Open" : null,
@@ -242,5 +252,5 @@ const summarizeCare = (booking) => ({
     revision: booking.postTripCareRevision ?? 0,
 });
 
-module.exports = { PAGE_SIZE, FILTERS, getPostTripQuery, buildRecoveryAlertsPipeline, buildContactAlertsPipeline,
+module.exports = { PAGE_SIZE, FILTERS, OWNER_FILTERS, getCareOwnerQuery, getPostTripQuery, buildRecoveryAlertsPipeline, buildContactAlertsPipeline,
     buildFeedbackAlertsPipeline, lastCareDay, endedBeforeToday, isLowRating, parseCareAction, summarizeCare };
