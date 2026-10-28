@@ -28,6 +28,11 @@ test("departure query respects Colombo day boundaries and excludes inactive trip
     assert.equal(query.travelStartDate.$gte.toISOString(), "2026-10-16T18:30:00.000Z");
     assert.equal(query.travelStartDate.$lte.toISOString(), "2026-11-16T18:29:59.999Z");
     assert.deepEqual(query.bookingStatus.$in, ["Pending", "Confirmed", "In Progress"]);
+    const unsent = getDepartureReadinessQuery(new Date("2026-10-16T19:00:00Z"), "unsent");
+    assert.equal(unsent.bookingStatus, "Confirmed");
+    assert.equal(unsent["preArrivalContact.sentAt"], null);
+    assert.equal(unsent.travelStartDate.$gte.toISOString(), query.travelStartDate.$gte.toISOString());
+    assert.deepEqual(getDepartureReadinessQuery(new Date("2026-10-16T19:00:00Z"), "sent")["preArrivalContact.sentAt"], { $type: "date" });
 });
 
 test("queue distinguishes action, optional plan review and no recorded gaps without leaking names", () => {
@@ -38,6 +43,7 @@ test("queue distinguishes action, optional plan review and no recorded gaps with
     assert.equal(active.pendingTransportCount, 1);
     assert.equal(active.openTaskCount, 1);
     assert.equal(active.missingTravelerCount, 0);
+    assert.equal(active.preArrivalSentAt, null);
     assert.ok(!JSON.stringify(active).includes("PRIVATE"));
     assert.ok(!JSON.stringify(active).includes("1000000"));
 
@@ -56,20 +62,28 @@ test("queue distinguishes action, optional plan review and no recorded gaps with
     assert.equal(summarizeDepartureReadiness(booking).missingTravelerCount, 1);
     booking.hotelStays.forEach((stay) => { stay.status = "Cancelled"; });
     assert.equal(summarizeDepartureReadiness(booking).missingRoomingCount, 0);
+    booking.preArrivalContact = { sentAt: new Date("2027-03-25"), sentByName: "Casey", channel: "Email", privateText: "PRIVATE MESSAGE" };
+    const sent = summarizeDepartureReadiness(booking);
+    assert.equal(sent.preArrivalSentByName, "Casey");
+    assert.equal(sent.preArrivalSentChannel, "Email");
+    assert.equal(JSON.stringify(sent).includes("PRIVATE MESSAGE"), false);
 });
 
 test("queue API enforces booking permission, paginates and returns a safe summary", async (t) => {
     const id = "507f1f77bcf86cd799439202";
     const deniedId = "507f1f77bcf86cd799439203";
     let reads = 0;
+    let selectedQuery;
     t.mock.method(Admin, "findById", (value) => ({ select: async () => ({
         _id: value, role: String(value) === deniedId ? "No booking access" : "Viewer", status: "Active", tokenVersion: 0,
     }) }));
-    t.mock.method(Booking, "find", () => {
+    t.mock.method(Booking, "find", (query) => {
         reads += 1;
+        selectedQuery = query;
         return { select: (projection) => {
             assert.match(projection, /travelerRosterVersion/);
             assert.match(projection, /hotelStays\.roomingPlan/);
+            assert.match(projection, /preArrivalContact\.sentAt/);
             return { sort: () => ({ skip: (offset) => ({ limit: () => ({ lean: async () => {
                 assert.equal(offset, 20);
                 return [example()];
@@ -87,6 +101,7 @@ test("queue API enforces booking permission, paginates and returns a safe summar
     assert.equal((await request(url, false)).status, 401);
     assert.equal((await request(url, true, deniedId)).status, 403);
     assert.equal((await request(`${url}?page=0`)).status, 400);
+    assert.equal((await request(`${url}?message=other`)).status, 400);
     assert.equal(reads, 0);
     const response = await request(`${url}?page=2`);
     assert.equal(response.status, 200);
@@ -95,7 +110,11 @@ test("queue API enforces booking permission, paginates and returns a safe summar
     assert.equal(body.total, 23);
     assert.equal(body.page, 2);
     assert.equal(body.totalPages, 2);
+    assert.equal(body.message, "all");
     assert.equal(body.items[0].status, "attention");
     assert.ok(!JSON.stringify(body).includes("PRIVATE"));
     assert.ok(!JSON.stringify(body).includes("1000000"));
+    assert.equal((await request(`${url}?page=2&message=unsent`)).status, 200);
+    assert.equal(selectedQuery.bookingStatus, "Confirmed");
+    assert.equal(selectedQuery["preArrivalContact.sentAt"], null);
 });

@@ -88,6 +88,13 @@ const paymentContactSchema = new mongoose.Schema({
     nextFollowUpDate: { type: Date, default: null },
 }, { _id: false });
 
+const preArrivalContactSchema = new mongoose.Schema({
+    sentAt: { type: Date, required: true },
+    sentBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+    sentByName: { type: String, trim: true, maxlength: 120, default: "" },
+    channel: { type: String, enum: ["WhatsApp", "Email", "Other"], required: true },
+}, { _id: false });
+
 const supplierContactSchema = new mongoose.Schema({
     contactedAt: { type: Date, required: true },
     contactedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
@@ -278,6 +285,8 @@ const bookingSchema = new mongoose.Schema(
         travelerRosterVersion: { type: Number, default: 0, min: 0 },
 
         postTripCare: { type: postTripCareSchema, default: null },
+        preArrivalContact: { type: preArrivalContactSchema, default: null },
+        preArrivalRevision: { type: Number, default: 0, min: 0 },
         postTripCareOwner: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
         postTripCareOwnerName: { type: String, trim: true, maxlength: 120, default: "" },
         postTripCareRevision: { type: Number, default: 0, min: 0 },

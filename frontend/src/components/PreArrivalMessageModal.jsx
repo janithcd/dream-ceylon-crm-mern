@@ -3,12 +3,15 @@ import { FaCopy, FaWhatsapp } from "react-icons/fa";
 import api from "../api/axios";
 import { buildWhatsAppUrl } from "../utils/whatsappFollowUp";
 
-const PreArrivalMessageModal = ({ bookingId, onClose }) => {
+const PreArrivalMessageModal = ({ bookingId, onClose, onContactChanged }) => {
     const [draft, setDraft] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [status, setStatus] = useState("");
     const [reloadKey, setReloadKey] = useState(0);
+    const [channel, setChannel] = useState("WhatsApp");
+    const [reason, setReason] = useState("");
+    const [saving, setSaving] = useState(false);
     const dialogRef = useRef(null);
     const messageRef = useRef(null);
 
@@ -83,6 +86,25 @@ const PreArrivalMessageModal = ({ bookingId, onClose }) => {
             setStatus("Message selected. Press Ctrl+C or Command+C to copy it.");
         }
     };
+    const updateContact = async (action) => {
+        setSaving(true);
+        setError("");
+        setStatus("");
+        try {
+            const { data } = await api.patch(`/bookings/${bookingId}/pre-arrival-message/contact`, {
+                action, expectedRevision: draft.revision,
+                ...(action === "sent" ? { channel } : { reason }),
+            });
+            setDraft((current) => ({ ...current, contact: data.contact, revision: data.revision }));
+            setReason("");
+            setStatus(action === "sent" ? "Sent record saved. The departure queue has been updated." : "Sent record cleared. The booking is awaiting a note again.");
+            onContactChanged?.();
+        } catch (err) {
+            setError(err.response?.data?.message || "Could not update the pre-arrival record. Refresh and try again.");
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return <>
         <div ref={dialogRef} className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="pre-arrival-message-title">
@@ -97,7 +119,7 @@ const PreArrivalMessageModal = ({ bookingId, onClose }) => {
                         {error && <div className="alert alert-danger" role="alert">{error}</div>}
                         {!loading && !draft && <button type="button" className="btn btn-outline-primary" onClick={reload}>Try again</button>}
                         {!loading && draft && <>
-                            <p className="text-muted">Review all arrangements and the guest number before sharing. This opens WhatsApp for you to send; it does not record contact in the CRM.</p>
+                            <p className="text-muted">Review all arrangements and the guest number before sharing. Opening WhatsApp or copying a draft does not record contact in the CRM.</p>
                             <p><strong>Guest:</strong> {draft.guestName}</p>
                             {draft.reviewItems.length > 0 && <div className="alert alert-warning small">
                                 <strong>Check before sharing:</strong>
@@ -111,13 +133,31 @@ const PreArrivalMessageModal = ({ bookingId, onClose }) => {
                             <textarea ref={messageRef} id="pre-arrival-message" className="form-control" rows="12" value={draft.message}
                                 onChange={(event) => edit("message", event.target.value)} />
                             <small className="text-muted d-block mt-2">Edits here apply only to this draft. Refresh to rebuild it from the latest saved booking.</small>
+                            <div className="border rounded p-3 mt-4">
+                                <h6>Guest contact record</h6>
+                                {draft.contact?.sentAt ? <>
+                                    <p className="mb-2">Recorded as sent by {draft.contact.sentByName || "Staff"} via {draft.contact.channel} on {new Date(draft.contact.sentAt).toLocaleString("en-GB", { timeZone: "Asia/Colombo" })} (Sri Lanka time).</p>
+                                    <label className="form-label" htmlFor="pre-arrival-correction">Correction reason</label>
+                                    <input id="pre-arrival-correction" className="form-control" maxLength="300" value={reason}
+                                        onChange={(event) => setReason(event.target.value)} placeholder="Explain why the sent record is incorrect" />
+                                    <button type="button" className="btn btn-sm btn-outline-danger mt-2" disabled={saving || reason.trim().length < 10}
+                                        onClick={() => updateContact("clear")}>Clear incorrect record</button>
+                                </> : <>
+                                    <p className="small text-muted mb-2">Record this only after you actually send the note to the guest outside the CRM.</p>
+                                    <label className="form-label" htmlFor="pre-arrival-channel">Sent through</label>
+                                    <select id="pre-arrival-channel" className="form-select mb-2" value={channel} onChange={(event) => setChannel(event.target.value)}>
+                                        <option>WhatsApp</option><option>Email</option><option>Other</option>
+                                    </select>
+                                    <button type="button" className="btn btn-sm btn-primary" disabled={saving} onClick={() => updateContact("sent")}>Record message sent</button>
+                                </>}
+                            </div>
                             {status && <div className="alert alert-info mt-3 mb-0" role="status">{status}</div>}
                         </>}
                     </div>
                     <div className="modal-footer flex-wrap">
                         <button type="button" className="btn btn-outline-secondary" onClick={onClose}>Close</button>
                         {draft && !loading && <>
-                            <button type="button" className="btn btn-outline-secondary" onClick={reload}>Refresh draft</button>
+                            <button type="button" className="btn btn-outline-secondary" onClick={reload} disabled={saving}>Refresh draft</button>
                             <button type="button" className="btn btn-outline-secondary" onClick={copyMessage} disabled={!draft.message.trim()}><FaCopy className="me-2" />Copy message</button>
                             <button type="submit" className="btn btn-success" disabled={!draft.message.trim()}><FaWhatsapp className="me-2" />Open WhatsApp</button>
                         </>}

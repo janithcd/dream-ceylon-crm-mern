@@ -2,6 +2,7 @@ const { roomingPlanState } = require("./roomingPlan");
 const { getUpcomingDepartureQuery } = require("./upcomingDepartures");
 
 const PAGE_SIZE = 20;
+const MESSAGE_FILTERS = ["all", "unsent", "sent"];
 
 // Return operational counts only. Names, assignments, contact details and notes stay on the booking.
 const summarizeDepartureReadiness = (booking) => {
@@ -28,6 +29,9 @@ const summarizeDepartureReadiness = (booking) => {
         customerName: booking.customer?.fullName || "",
         travelStartDate: booking.travelStartDate,
         bookingStatus: booking.bookingStatus,
+        preArrivalSentAt: booking.preArrivalContact?.sentAt || null,
+        preArrivalSentByName: booking.preArrivalContact?.sentByName || "",
+        preArrivalSentChannel: booking.preArrivalContact?.channel || null,
         namedTravelerCount: namedCount,
         travelerCount: headcount,
         missingTravelerCount,
@@ -40,6 +44,15 @@ const summarizeDepartureReadiness = (booking) => {
     };
 };
 
-const getDepartureReadinessQuery = (now = new Date()) => getUpcomingDepartureQuery(now);
+const getDepartureReadinessQuery = (now = new Date(), message = "all") => {
+    const query = getUpcomingDepartureQuery(now);
+    if (message === "unsent") {
+        query.bookingStatus = "Confirmed";
+        query["preArrivalContact.sentAt"] = null;
+    } else if (message === "sent") {
+        query["preArrivalContact.sentAt"] = { $type: "date" };
+    }
+    return query;
+};
 
-module.exports = { PAGE_SIZE, getDepartureReadinessQuery, summarizeDepartureReadiness };
+module.exports = { PAGE_SIZE, MESSAGE_FILTERS, getDepartureReadinessQuery, summarizeDepartureReadiness };

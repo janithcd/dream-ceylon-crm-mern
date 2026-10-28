@@ -8,11 +8,13 @@ import PreArrivalMessageModal from "../components/PreArrivalMessageModal";
 
 const statusLabels = { attention: "Needs action", review: "Review scope", "recorded-clear": "No recorded gaps" };
 const statusClasses = { attention: "text-bg-warning", review: "text-bg-secondary", "recorded-clear": "text-bg-success" };
+const messageFilters = { all: "All departures", unsent: "Awaiting note", sent: "Note recorded" };
 
 const DepartureReadiness = () => {
     const { hasPermission } = usePermissions();
     const [messageBookingId, setMessageBookingId] = useState(null);
     const [page, setPage] = useState(1);
+    const [messageFilter, setMessageFilter] = useState("all");
     const [reloadKey, setReloadKey] = useState(0);
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -20,7 +22,7 @@ const DepartureReadiness = () => {
 
     useEffect(() => {
         let active = true;
-        api.get("/bookings/departure-readiness", { params: { page } })
+        api.get("/bookings/departure-readiness", { params: { page, message: messageFilter } })
             .then(({ data: result }) => {
                 if (!active) return;
                 if (page > result.totalPages) { setPage(result.totalPages); return; }
@@ -34,7 +36,7 @@ const DepartureReadiness = () => {
             })
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
-    }, [page, reloadKey]);
+    }, [page, messageFilter, reloadKey]);
 
     const refresh = () => {
         setLoading(true);
@@ -44,6 +46,11 @@ const DepartureReadiness = () => {
     const changePage = (value) => {
         setLoading(true);
         setPage(value);
+    };
+    const changeFilter = (value) => {
+        setLoading(true);
+        setPage(1);
+        setMessageFilter(value);
     };
 
     return <div>
@@ -57,12 +64,17 @@ const DepartureReadiness = () => {
         <div className="alert alert-info small">
             This view checks saved traveler names, supplier confirmations, hotel rooming plans and open tasks. A missing plan or service may be outside the agreed scope. Confirm the arrangements with the team; payment and supplier costs are reviewed separately.
         </div>
+        <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Pre-arrival message filter">
+            {Object.entries(messageFilters).map(([value, label]) => <button key={value} type="button"
+                className={`btn btn-sm ${messageFilter === value ? "btn-primary" : "btn-outline-primary"}`}
+                aria-pressed={messageFilter === value} onClick={() => changeFilter(value)}>{label}</button>)}
+        </div>
         {loading && <p role="status" className="text-muted py-3">Checking upcoming departures...</p>}
         {error && <div className="alert alert-danger" role="alert">{error} <button type="button" className="btn btn-sm btn-outline-danger ms-2" onClick={refresh}>Try again</button></div>}
         {!loading && !error && data && <>
-            <p className="text-muted small">{data.total} {data.total === 1 ? "booking" : "bookings"} departing in this window · ordered by departure date.</p>
+            <p className="text-muted small">{data.total} {data.total === 1 ? "booking" : "bookings"} {messageFilter === "all" ? "departing in this window" : `in ${messageFilters[messageFilter].toLowerCase()}`} · ordered by departure date.</p>
             {!data.items.length ? <div className="card border-0 shadow-sm"><div className="card-body text-center py-5">
-                <h5>No upcoming departures on this page</h5><p className="text-muted mb-3">Bookings that start within the next 30 days will appear here.</p>
+                <h5>No matching departures</h5><p className="text-muted mb-3">Confirmed bookings that still need a note appear under Awaiting note.</p>
                 <Link className="btn btn-outline-primary" to="/bookings">Open bookings</Link>
             </div></div> : <div className="d-grid gap-3">
                 {data.items.map((item) => <article className="card border-0 shadow-sm" key={item._id}>
@@ -74,10 +86,14 @@ const DepartureReadiness = () => {
                             </div>
                             <div className="d-flex align-items-center flex-wrap gap-2">
                                 <span className={`badge ${statusClasses[item.status]}`}>{statusLabels[item.status]}</span>
-                                {item.bookingStatus === "Confirmed" && hasPermission("booking.update") && <button type="button" className="btn btn-sm btn-outline-success" onClick={() => setMessageBookingId(item._id)}>Prepare arrival note</button>}
+                                {item.preArrivalSentAt ? <span className="badge text-bg-success">Note recorded</span>
+                                    : item.bookingStatus === "Confirmed" ? <span className="badge text-bg-warning">Note not recorded</span>
+                                        : <span className="badge text-bg-secondary">Confirm before note</span>}
+                                {item.bookingStatus === "Confirmed" && hasPermission("booking.update") && <button type="button" className="btn btn-sm btn-outline-success" onClick={() => setMessageBookingId(item._id)}>{item.preArrivalSentAt ? "View arrival note" : "Prepare arrival note"}</button>}
                                 <Link className="btn btn-sm btn-outline-primary" to={`/bookings?keyword=${encodeURIComponent(item.bookingCode)}&open=readiness`}>Review booking</Link>
                             </div>
                         </div>
+                        {item.preArrivalSentAt && <p className="text-muted small mb-3">Pre-arrival note recorded by {item.preArrivalSentByName || "Staff"} via {item.preArrivalSentChannel} on {new Date(item.preArrivalSentAt).toLocaleString("en-GB", { timeZone: "Asia/Colombo" })} (Sri Lanka time).</p>}
                         <div className="row g-3 small">
                             <div className="col-sm-6 col-xl"><strong>Travelers</strong><div className={item.missingTravelerCount ? "text-warning-emphasis" : "text-muted"}>{item.namedTravelerCount} of {item.travelerCount} named{item.missingTravelerCount ? ` · ${item.missingTravelerCount} missing` : ""}</div></div>
                             <div className="col-sm-6 col-xl"><strong>Hotels</strong><div className={item.pendingHotelCount ? "text-warning-emphasis" : "text-muted"}>{item.pendingHotelCount ? `${item.pendingHotelCount} awaiting confirmation` : "No pending confirmations"}</div></div>
@@ -96,7 +112,7 @@ const DepartureReadiness = () => {
                 </div>
             </div>}
         </>}
-        {messageBookingId && <PreArrivalMessageModal bookingId={messageBookingId} onClose={() => setMessageBookingId(null)} />}
+        {messageBookingId && <PreArrivalMessageModal bookingId={messageBookingId} onContactChanged={refresh} onClose={() => setMessageBookingId(null)} />}
     </div>;
 };
 
