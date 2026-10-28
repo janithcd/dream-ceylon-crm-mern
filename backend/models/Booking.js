@@ -95,6 +95,13 @@ const preArrivalContactSchema = new mongoose.Schema({
     channel: { type: String, enum: ["WhatsApp", "Email", "Other"], required: true },
 }, { _id: false });
 
+const handoverNoteSchema = new mongoose.Schema({
+    text: { type: String, required: true, trim: true, maxlength: 1000 },
+    createdAt: { type: Date, required: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+    createdByName: { type: String, trim: true, maxlength: 120, default: "" },
+});
+
 const supplierContactSchema = new mongoose.Schema({
     contactedAt: { type: Date, required: true },
     contactedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
@@ -287,6 +294,8 @@ const bookingSchema = new mongoose.Schema(
         postTripCare: { type: postTripCareSchema, default: null },
         preArrivalContact: { type: preArrivalContactSchema, default: null },
         preArrivalRevision: { type: Number, default: 0, min: 0 },
+        handoverNotes: { type: [handoverNoteSchema], default: [], select: false,
+            validate: { validator: (notes) => notes.length <= 200, message: "A booking can have at most 200 handover notes" } },
         postTripCareOwner: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
         postTripCareOwnerName: { type: String, trim: true, maxlength: 120, default: "" },
         postTripCareRevision: { type: Number, default: 0, min: 0 },

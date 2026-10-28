@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { FaHistory } from "react-icons/fa";
 import api from "../api/axios";
+import BookingHandoverPanel from "./BookingHandoverPanel";
 
 const formatDateTime = (value) => {
     const date = new Date(value);
@@ -16,6 +17,7 @@ const formatDateTime = (value) => {
 };
 
 const BookingActivityModal = ({ booking, onClose }) => {
+    const [tab, setTab] = useState("history");
     const [events, setEvents] = useState([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
@@ -51,13 +53,22 @@ const BookingActivityModal = ({ booking, onClose }) => {
                     <div className="modal-content">
                         <div className="modal-header">
                             <div>
-                                <h5 id="booking-activity-title" className="modal-title"><FaHistory className="me-2" />Booking history</h5>
+                                <h5 id="booking-activity-title" className="modal-title"><FaHistory className="me-2" />Booking history &amp; handover</h5>
                                 <small className="text-muted">{booking.bookingCode} · {booking.customer?.fullName}</small>
                             </div>
                             <button type="button" className="btn-close" aria-label="Close" onClick={onClose} />
                         </div>
 
                         <div className="modal-body">
+                            <div className="btn-group mb-3" role="group" aria-label="Booking record view">
+                                <button type="button" className={`btn btn-sm ${tab === "history" ? "btn-primary" : "btn-outline-primary"}`}
+                                    aria-pressed={tab === "history"} aria-controls="booking-history-panel" onClick={() => {
+                                        setTab("history"); setPage(1); setLoading(true); setReload((value) => value + 1);
+                                    }}>Activity</button>
+                                <button type="button" className={`btn btn-sm ${tab === "handover" ? "btn-primary" : "btn-outline-primary"}`}
+                                    aria-pressed={tab === "handover"} aria-controls="booking-handover-panel" onClick={() => setTab("handover")}>Handover notes</button>
+                            </div>
+                            {tab === "handover" ? <BookingHandoverPanel bookingId={booking._id} /> : <div id="booking-history-panel" role="region" aria-label="Booking activity">
                             {error && <div className="alert alert-danger" role="alert">{error}</div>}
                             {events.length === 0 && !loading && !error && (
                                 <p className="text-muted mb-0">No changes have been recorded for this booking.</p>
@@ -88,6 +99,7 @@ const BookingActivityModal = ({ booking, onClose }) => {
                                     Retry
                                 </button>
                             )}
+                            </div>}
                         </div>
                         <div className="modal-footer">
                             <button type="button" className="btn btn-outline-secondary" onClick={onClose}>Close</button>

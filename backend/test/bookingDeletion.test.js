@@ -15,6 +15,7 @@ test("booking deletion preserves supplier payment history", async (t) => {
     const adminId = "507f1f77bcf86cd799439011";
     const bookingId = "507f1f77bcf86cd799439012";
     let hasPayments = true;
+    let hasHandoverNotes = false;
     let deleted = false;
     let cleaned = false;
     t.mock.method(Admin, "findById", () => ({ select: async () => ({
@@ -24,6 +25,10 @@ test("booking deletion preserves supplier payment history", async (t) => {
         _id: bookingId, bookingCode: "DCJ-TEST", customer: { fullName: "CI Guest" },
         deleteOne: async () => { deleted = true; },
     }));
+    t.mock.method(Booking, "exists", async (query) => {
+        assert.deepEqual(query["handoverNotes.0"], { $exists: true });
+        return hasHandoverNotes ? { _id: bookingId } : null;
+    });
     t.mock.method(CostEntry, "exists", async () => hasPayments ? { _id: "507f1f77bcf86cd799439013" } : null);
     t.mock.method(CostEntry, "deleteMany", async () => { cleaned = true; });
     t.mock.method(ActivityLog, "create", async () => ({}));
@@ -41,6 +46,12 @@ test("booking deletion preserves supplier payment history", async (t) => {
     assert.equal(cleaned, false);
 
     hasPayments = false;
+    hasHandoverNotes = true;
+    const protectedResponse = await fetch(url, { method: "DELETE", headers });
+    assert.equal(protectedResponse.status, 409);
+    assert.match((await protectedResponse.json()).message, /handover notes/);
+    assert.equal(deleted, false);
+    hasHandoverNotes = false;
     assert.equal((await fetch(url, { method: "DELETE", headers })).status, 200);
     assert.equal(deleted, true);
     assert.equal(cleaned, true);

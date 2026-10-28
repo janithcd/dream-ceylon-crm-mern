@@ -1168,8 +1168,8 @@ const Bookings = () => {
                                                     type="button"
                                                     className="btn btn-sm btn-outline-secondary"
                                                     onClick={() => setSelectedActivityBooking(booking)}
-                                                    title="Booking history"
-                                                    aria-label={`History for ${booking.bookingCode}`}
+                                                    title="Booking history and handover notes"
+                                                    aria-label={`History and handover notes for ${booking.bookingCode}`}
                                                 >
                                                     <FaHistory />
                                                 </button>

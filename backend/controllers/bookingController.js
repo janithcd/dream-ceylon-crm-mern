@@ -534,6 +534,12 @@ const deleteBooking = async (req, res) => {
             });
         }
 
+        if (await Booking.exists({ _id: booking._id, "handoverNotes.0": { $exists: true } })) {
+            return res.status(409).json({
+                message: "This booking has private handover notes. Cancel it instead of deleting its team history.",
+            });
+        }
+
         const hasSupplierPayments = await CostEntry.exists({
             recordType: "Booking", recordId: booking._id,
             $or: [{ paidAmount: { $gt: 0 } }, { "paymentHistory.0": { $exists: true } }],
