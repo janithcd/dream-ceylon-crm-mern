@@ -4,6 +4,7 @@ import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { notifyLeadsChanged } from "../utils/leadEvents";
+import LeadFirstResponseModal from "../components/LeadFirstResponseModal";
 
 const filters = [
     { value: "all", label: "All new" },
@@ -30,6 +31,7 @@ const LeadTriage = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [selectedInquiryId, setSelectedInquiryId] = useState(null);
 
     useEffect(() => {
         if (!canUpdate) return;
@@ -116,6 +118,7 @@ const LeadTriage = () => {
                                     <strong>{inquiry.fullName}</strong><br />
                                     <a href={`mailto:${inquiry.email}`}>{inquiry.email}</a><br />
                                     <small>{inquiry.whatsappNumber} · {inquiry.country}</small><br />
+                                    <button type="button" className="btn btn-link btn-sm p-0 mt-1" onClick={() => setSelectedInquiryId(inquiry._id)}>Review request{canUpdate ? " & reply" : ""}</button><br />
                                     <Link to={`/inquiries?keyword=${encodeURIComponent(inquiry.email)}`} className="small">{inquiry.relatedInquiryCount > 0 ? "Review inquiries" : "Open inquiry"}</Link>
                                     {(inquiry.relatedInquiryCount > 0 || inquiry.relatedBookingCount > 0) &&
                                         <div className="small mt-2">
@@ -161,6 +164,7 @@ const LeadTriage = () => {
                     <button className="btn btn-outline-secondary btn-sm" onClick={() => setPage((value) => value + 1)} disabled={page >= queue.totalPages}>Next</button>
                 </div>}
             </div></div>
+            {selectedInquiryId && <LeadFirstResponseModal key={selectedInquiryId} inquiryId={selectedInquiryId} canContact={canUpdate} onClose={() => setSelectedInquiryId(null)} />}
         </div>
     );
 };
