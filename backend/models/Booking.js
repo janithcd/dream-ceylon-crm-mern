@@ -432,6 +432,7 @@ bookingSchema.index({ "preparationTasks.assignedTo": 1, bookingStatus: 1 });
 bookingSchema.index({ bookingStatus: 1, "preparationTasks.completedAt": 1 });
 bookingSchema.index({ "transportAssignments.registrationKey": 1, "transportAssignments.startDate": 1, "transportAssignments.endDate": 1 });
 bookingSchema.index({ inquiry: 1 });
+bookingSchema.index({ "customer.email": 1 });
 bookingSchema.index({ bookingStatus: 1, updatedAt: -1 });
 bookingSchema.index({ bookingStatus: 1, travelEndDate: -1 });
 bookingSchema.index({ "tripIssues.status": 1 });

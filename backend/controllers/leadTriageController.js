@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Inquiry = require("../models/Inquiry");
+const Booking = require("../models/Booking");
 const Admin = require("../models/Admin");
 const { PERMISSIONS, resolveAdminPermissions } = require("../config/permissions");
 const { createActivityLog } = require("../utils/createActivityLog");
@@ -24,6 +25,7 @@ const getLeadAssignees = async (req, res) => {
 };
 
 const getLeadTriage = async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
     const filter = req.query.filter || "all";
     const pageText = req.query.page === undefined ? "1" : req.query.page;
     if (typeof filter !== "string" || !FILTERS.includes(filter) ||
@@ -43,13 +45,33 @@ const getLeadTriage = async (req, res) => {
                 .sort({ createdAt: 1, _id: 1 })
                 .skip((page - 1) * limit)
                 .limit(limit)
-                .populate("assignedTo", "name role status"),
+                .populate("assignedTo", "name role status")
+                .lean(),
             Inquiry.countDocuments(query),
             Inquiry.countDocuments({ status: "New", assignedTo: null }),
             Inquiry.countDocuments({ status: "New", assignedTo: req.admin._id }),
             Inquiry.countDocuments({ status: "New" }),
         ]);
-        return res.json({ items, total, page, totalPages: Math.ceil(total / limit) || 1,
+        const emails = [...new Set(items.map((item) => String(item.email || "").trim().toLowerCase()).filter(Boolean))];
+        const canViewBookings = req.adminPermissions.includes(PERMISSIONS.BOOKING_VIEW);
+        let inquiryCounts = new Map();
+        let bookingCounts = new Map();
+        if (emails.length) {
+            const [inquiryMatches, bookingMatches] = await Promise.all([
+                Inquiry.aggregate([{ $match: { email: { $in: emails } } },
+                    { $group: { _id: "$email", count: { $sum: 1 } } }]),
+                canViewBookings ? Booking.aggregate([{ $match: { "customer.email": { $in: emails } } },
+                    { $group: { _id: "$customer.email", count: { $sum: 1 } } }]) : [],
+            ]);
+            inquiryCounts = new Map(inquiryMatches.map(({ _id, count }) => [_id, count]));
+            bookingCounts = new Map(bookingMatches.map(({ _id, count }) => [_id, count]));
+        }
+        const leads = items.map((item) => {
+            const email = String(item.email || "").trim().toLowerCase();
+            return { ...item, relatedInquiryCount: Math.max(0, (inquiryCounts.get(email) || 1) - 1),
+                ...(canViewBookings ? { relatedBookingCount: bookingCounts.get(email) || 0 } : {}) };
+        });
+        return res.json({ items: leads, total, page, totalPages: Math.ceil(total / limit) || 1,
             summary: { all, unassigned, mine } });
     } catch (error) {
         return res.status(500).json({ message: "Failed to load new inquiries." });

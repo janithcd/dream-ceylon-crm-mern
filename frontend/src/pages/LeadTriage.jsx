@@ -86,6 +86,7 @@ const LeadTriage = () => {
                 <Link to="/inquiries" className="btn btn-outline-primary">All Inquiries</Link>
             </div>
             <p className="text-muted small">Recording contact updates the inquiry to Contacted and removes it from this queue. It does not send an email or WhatsApp message. An unassigned lead is assigned to the staff member who records contact.</p>
+            <p className="text-muted small">A same-email cue counts other inquiries and, if you can view bookings, bookings saved with that exact email. Shared email addresses can belong to different travelers; review the records before following up.</p>
             {error && <div className="alert alert-danger" role="alert">{error}</div>}
             {success && <div className="alert alert-success" role="status">{success}</div>}
 
@@ -115,7 +116,15 @@ const LeadTriage = () => {
                                     <strong>{inquiry.fullName}</strong><br />
                                     <a href={`mailto:${inquiry.email}`}>{inquiry.email}</a><br />
                                     <small>{inquiry.whatsappNumber} · {inquiry.country}</small><br />
-                                    <Link to={`/inquiries?keyword=${encodeURIComponent(inquiry.email)}`} className="small">Open inquiry</Link>
+                                    <Link to={`/inquiries?keyword=${encodeURIComponent(inquiry.email)}`} className="small">{inquiry.relatedInquiryCount > 0 ? "Review inquiries" : "Open inquiry"}</Link>
+                                    {(inquiry.relatedInquiryCount > 0 || inquiry.relatedBookingCount > 0) &&
+                                        <div className="small mt-2">
+                                            <span className="badge text-bg-info me-2">Same email in CRM</span>
+                                            {inquiry.relatedInquiryCount > 0 && <span>{inquiry.relatedInquiryCount} other {inquiry.relatedInquiryCount === 1 ? "inquiry" : "inquiries"}</span>}
+                                            {inquiry.relatedBookingCount > 0 && <span>{inquiry.relatedInquiryCount > 0 ? " · " : ""}{inquiry.relatedBookingCount} {inquiry.relatedBookingCount === 1 ? "booking" : "bookings"}</span>}
+                                            {inquiry.relatedBookingCount > 0 && hasPermission("booking.view") &&
+                                                <div className="mt-1"><Link to={`/bookings?keyword=${encodeURIComponent(inquiry.email)}`}>Review bookings</Link></div>}
+                                        </div>}
                                 </td>
                                 <td className="text-nowrap">{formatCalendarDate(inquiry.createdAt)}<br /><small className="text-muted">{waitingDays(inquiry.createdAt)} days waiting</small></td>
                                 <td>{inquiry.source}</td>

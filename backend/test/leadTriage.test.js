@@ -8,6 +8,7 @@ process.env.AUTH_RATE_LIMIT_MAX = "1000";
 const app = require("../app");
 const Admin = require("../models/Admin");
 const Inquiry = require("../models/Inquiry");
+const Booking = require("../models/Booking");
 const ActivityLog = require("../models/ActivityLog");
 
 test("lead queue is permissioned, oldest first and only includes new inquiries", async (t) => {
@@ -15,6 +16,7 @@ test("lead queue is permissioned, oldest first and only includes new inquiries",
     const viewerId = "507f1f77bcf86cd799439912";
     const financeId = "507f1f77bcf86cd799439913";
     const inactiveId = "507f1f77bcf86cd799439914";
+    const inquiryOnlyId = "507f1f77bcf86cd799439916";
     const inquiryId = "507f1f77bcf86cd799439915";
     let status = "New";
     let owner = null;
@@ -22,8 +24,11 @@ test("lead queue is permissioned, oldest first and only includes new inquiries",
     const updates = [];
     const logs = [];
     let readQuery, readSort;
+    const inquiryAggregations = [];
+    const bookingAggregations = [];
     const admin = (id) => ({
-        _id: id, name: "CI Admin", role: String(id) === viewerId ? "Viewer" : String(id) === financeId ? "Finance" : "Sales",
+        _id: id, name: "CI Admin", role: String(id) === viewerId ? "Viewer" : String(id) === financeId ? "Finance" : String(id) === inquiryOnlyId ? "Unknown Role" : "Sales",
+        customPermissions: String(id) === inquiryOnlyId ? ["inquiry.view"] : [],
         status: String(id) === inactiveId ? "Inactive" : "Active", tokenVersion: 0,
     });
     t.mock.method(Admin, "findById", (id) => ({ select: async () => admin(id) }));
@@ -40,6 +45,14 @@ test("lead queue is permissioned, oldest first and only includes new inquiries",
         };
     });
     t.mock.method(Inquiry, "countDocuments", async (query) => query.assignedTo === null ? 1 : query.assignedTo ? 0 : 1);
+    t.mock.method(Inquiry, "aggregate", async (pipeline) => {
+        inquiryAggregations.push(pipeline);
+        return [{ _id: "guest@example.test", count: 2 }];
+    });
+    t.mock.method(Booking, "aggregate", async (pipeline) => {
+        bookingAggregations.push(pipeline);
+        return [{ _id: "guest@example.test", count: 1, totalPrice: 99999 }];
+    });
     t.mock.method(Inquiry, "exists", async () => true);
     t.mock.method(Inquiry, "findOneAndUpdate", async (query, change, options) => {
         updates.push({ query, change, options });
@@ -75,9 +88,21 @@ test("lead queue is permissioned, oldest first and only includes new inquiries",
     assert.equal((await request("/triage?filter=bad")).status, 400);
     const queue = await request("/triage?filter=unassigned&page=1", "GET", undefined, viewerId);
     assert.equal(queue.status, 200);
-    assert.equal((await queue.json()).summary.unassigned, 1);
+    assert.equal(queue.headers.get("cache-control"), "no-store");
+    const queueData = await queue.json();
+    assert.equal(queueData.summary.unassigned, 1);
+    assert.equal(queueData.items[0].relatedInquiryCount, 1);
+    assert.equal(queueData.items[0].relatedBookingCount, 1);
+    assert.equal(JSON.stringify(queueData).includes("99999"), false);
+    assert.deepEqual(inquiryAggregations[0][0].$match, { email: { $in: ["guest@example.test"] } });
+    assert.deepEqual(bookingAggregations[0][0].$match, { "customer.email": { $in: ["guest@example.test"] } });
     assert.deepEqual(readQuery, { status: "New", assignedTo: null });
     assert.deepEqual(readSort, { createdAt: 1, _id: 1 });
+    const bookingQueryCount = bookingAggregations.length;
+    const inquiryOnlyQueue = await (await request("/triage", "GET", undefined, inquiryOnlyId)).json();
+    assert.equal(inquiryOnlyQueue.items[0].relatedInquiryCount, 1);
+    assert.equal(Object.hasOwn(inquiryOnlyQueue.items[0], "relatedBookingCount"), false);
+    assert.equal(bookingAggregations.length, bookingQueryCount, "Inquiry-only access cannot query booking history");
 
     assert.equal((await request("/attention", "GET", undefined, null)).status, 401);
     assert.equal((await request("/attention", "GET", undefined, viewerId)).status, 403);

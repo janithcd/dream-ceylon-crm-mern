@@ -109,6 +109,7 @@ const inquirySchema = new mongoose.Schema(
 );
 
 inquirySchema.index({ status: 1, assignedTo: 1, createdAt: 1 });
+inquirySchema.index({ email: 1 });
 
 const Inquiry = mongoose.model("Inquiry", inquirySchema);
 
