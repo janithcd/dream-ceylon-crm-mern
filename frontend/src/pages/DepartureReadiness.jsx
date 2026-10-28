@@ -3,11 +3,15 @@ import { Link } from "react-router-dom";
 import { FaClipboardCheck, FaSyncAlt } from "react-icons/fa";
 import api from "../api/axios";
 import { formatCalendarDate } from "../utils/calendarDate";
+import { usePermissions } from "../context/PermissionContext";
+import PreArrivalMessageModal from "../components/PreArrivalMessageModal";
 
 const statusLabels = { attention: "Needs action", review: "Review scope", "recorded-clear": "No recorded gaps" };
 const statusClasses = { attention: "text-bg-warning", review: "text-bg-secondary", "recorded-clear": "text-bg-success" };
 
 const DepartureReadiness = () => {
+    const { hasPermission } = usePermissions();
+    const [messageBookingId, setMessageBookingId] = useState(null);
     const [page, setPage] = useState(1);
     const [reloadKey, setReloadKey] = useState(0);
     const [data, setData] = useState(null);
@@ -70,6 +74,7 @@ const DepartureReadiness = () => {
                             </div>
                             <div className="d-flex align-items-center flex-wrap gap-2">
                                 <span className={`badge ${statusClasses[item.status]}`}>{statusLabels[item.status]}</span>
+                                {item.bookingStatus === "Confirmed" && hasPermission("booking.update") && <button type="button" className="btn btn-sm btn-outline-success" onClick={() => setMessageBookingId(item._id)}>Prepare arrival note</button>}
                                 <Link className="btn btn-sm btn-outline-primary" to={`/bookings?keyword=${encodeURIComponent(item.bookingCode)}&open=readiness`}>Review booking</Link>
                             </div>
                         </div>
@@ -91,6 +96,7 @@ const DepartureReadiness = () => {
                 </div>
             </div>}
         </>}
+        {messageBookingId && <PreArrivalMessageModal bookingId={messageBookingId} onClose={() => setMessageBookingId(null)} />}
     </div>;
 };
 
