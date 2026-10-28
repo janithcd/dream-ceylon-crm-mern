@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { FaCopy, FaWhatsapp } from "react-icons/fa";
 import api from "../api/axios";
 import { buildWhatsAppUrl } from "../utils/whatsappFollowUp";
+import { notifyPreArrivalChanged } from "../utils/preArrivalEvents";
 
 const PreArrivalMessageModal = ({ bookingId, onClose, onContactChanged }) => {
     const [draft, setDraft] = useState(null);
@@ -98,6 +99,7 @@ const PreArrivalMessageModal = ({ bookingId, onClose, onContactChanged }) => {
             setDraft((current) => ({ ...current, contact: data.contact, revision: data.revision }));
             setReason("");
             setStatus(action === "sent" ? "Sent record saved. The departure queue has been updated." : "Sent record cleared. The booking is awaiting a note again.");
+            notifyPreArrivalChanged();
             onContactChanged?.();
         } catch (err) {
             setError(err.response?.data?.message || "Could not update the pre-arrival record. Refresh and try again.");

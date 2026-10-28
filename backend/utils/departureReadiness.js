@@ -1,8 +1,11 @@
 const { roomingPlanState } = require("./roomingPlan");
 const { getUpcomingDepartureQuery } = require("./upcomingDepartures");
+const { getBusinessDayBounds } = require("./businessDate");
 
 const PAGE_SIZE = 20;
-const MESSAGE_FILTERS = ["all", "unsent", "sent"];
+const MESSAGE_FILTERS = ["all", "due", "unsent", "sent"];
+const REMINDER_DAYS = 3;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Return operational counts only. Names, assignments, contact details and notes stay on the booking.
 const summarizeDepartureReadiness = (booking) => {
@@ -46,13 +49,16 @@ const summarizeDepartureReadiness = (booking) => {
 
 const getDepartureReadinessQuery = (now = new Date(), message = "all") => {
     const query = getUpcomingDepartureQuery(now);
-    if (message === "unsent") {
+    if (message === "unsent" || message === "due") {
         query.bookingStatus = "Confirmed";
         query["preArrivalContact.sentAt"] = null;
+        if (message === "due") {
+            query.travelStartDate.$lte = new Date(getBusinessDayBounds(now).end.getTime() + REMINDER_DAYS * DAY_MS);
+        }
     } else if (message === "sent") {
         query["preArrivalContact.sentAt"] = { $type: "date" };
     }
     return query;
 };
 
-module.exports = { PAGE_SIZE, MESSAGE_FILTERS, getDepartureReadinessQuery, summarizeDepartureReadiness };
+module.exports = { PAGE_SIZE, MESSAGE_FILTERS, REMINDER_DAYS, getDepartureReadinessQuery, summarizeDepartureReadiness };

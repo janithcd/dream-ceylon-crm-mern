@@ -25,7 +25,7 @@ const main = async () => {
         booking = await Booking.create({ bookingCode: `CI-ARRIVAL-${Date.now()}`, bookingStatus: "Confirmed",
             customer: { fullName: "CI Arrival Guest", email: "private-arrival@example.invalid",
                 whatsappNumber: "+94771234567", country: "UK" },
-            travelStartDate: new Date(dateOnly(new Date(Date.now() + 5 * 86400000))),
+            travelStartDate: new Date(dateOnly(new Date(Date.now() + 2 * 86400000))),
             travelEndDate: new Date(dateOnly(new Date(Date.now() + 8 * 86400000))),
             numberOfTravelers: 1, totalPrice: 1000, adminNotes: "PRIVATE ARRIVAL NOTE",
         });
@@ -43,8 +43,17 @@ const main = async () => {
         };
         const draftPath = `/${booking._id}/pre-arrival-message`;
         const contactPath = `${draftPath}/contact`;
+        const alertsPath = "/departure-readiness/alerts";
         assert.equal((await request(staff, "/departure-readiness?message=invalid")).status, 400);
         assert.ok((await queue("unsent")).items.some((item) => item.bookingCode === booking.bookingCode));
+        assert.ok((await queue("due")).items.some((item) => item.bookingCode === booking.bookingCode));
+        assert.equal((await request(viewer, alertsPath)).status, 403);
+        const alertsBefore = await request(staff, alertsPath);
+        assert.equal(alertsBefore.status, 200, await alertsBefore.clone().text());
+        assert.equal(alertsBefore.headers.get("cache-control"), "no-store");
+        const reminders = await alertsBefore.json();
+        assert.ok(reminders.items.some((item) => item.bookingCode === booking.bookingCode));
+        assert.equal(JSON.stringify(reminders).includes("private-arrival@example.invalid"), false);
         assert.equal((await request(viewer, draftPath)).status, 403);
         assert.equal((await request(viewer, contactPath, "PATCH", { action: "sent", channel: "Email", expectedRevision: 0 })).status, 403);
         const draft = await request(staff, draftPath);
@@ -61,6 +70,8 @@ const main = async () => {
         assert.equal(String(saved.preArrivalContact.sentBy), String(staff._id));
         assert.equal((await request(staff, contactPath, "PATCH", sentBody)).status, 409);
         assert.ok(!(await queue("unsent")).items.some((item) => item.bookingCode === booking.bookingCode));
+        assert.ok(!(await queue("due")).items.some((item) => item.bookingCode === booking.bookingCode));
+        assert.ok(!(await (await request(staff, alertsPath)).json()).items.some((item) => item.bookingCode === booking.bookingCode));
         const sentQueue = await queue("sent");
         const item = sentQueue.items.find((candidate) => candidate.bookingCode === booking.bookingCode);
         assert.equal(item.preArrivalSentByName, "CI Arrival Staff");
@@ -74,6 +85,7 @@ const main = async () => {
         assert.equal((await corrected.json()).revision, 2);
         assert.equal((await Booking.findById(booking._id)).preArrivalContact, null);
         assert.ok((await queue("unsent")).items.some((candidate) => candidate.bookingCode === booking.bookingCode));
+        assert.ok((await (await request(staff, alertsPath)).json()).items.some((item) => item.bookingCode === booking.bookingCode));
         const logs = await ActivityLog.find({ relatedRecordId: booking._id, description: /Pre-arrival/ }).sort({ createdAt: 1 });
         assert.equal(logs.length, 2);
         assert.equal(logs[0].metadata.channel, "WhatsApp");

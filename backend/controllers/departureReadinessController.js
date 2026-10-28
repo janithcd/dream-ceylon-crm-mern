@@ -1,5 +1,23 @@
 const Booking = require("../models/Booking");
-const { PAGE_SIZE, MESSAGE_FILTERS, getDepartureReadinessQuery, summarizeDepartureReadiness } = require("../utils/departureReadiness");
+const { PAGE_SIZE, MESSAGE_FILTERS, REMINDER_DAYS, getDepartureReadinessQuery, summarizeDepartureReadiness } = require("../utils/departureReadiness");
+
+const getPreArrivalAlerts = async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+        const query = getDepartureReadinessQuery(new Date(), "due");
+        const [count, bookings] = await Promise.all([
+            Booking.countDocuments(query),
+            Booking.find(query).select("bookingCode travelStartDate")
+                .sort({ travelStartDate: 1, _id: 1 }).limit(5).lean(),
+        ]);
+        return res.json({ count, withinDays: REMINDER_DAYS,
+            items: bookings.map((booking) => ({ bookingId: booking._id, bookingCode: booking.bookingCode,
+                travelStartDate: booking.travelStartDate })) });
+    } catch (error) {
+        console.error("Pre-arrival alerts failed:", error.message);
+        return res.status(500).json({ message: "Failed to load pre-arrival alerts" });
+    }
+};
 
 const getDepartureReadiness = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -30,4 +48,4 @@ const getDepartureReadiness = async (req, res) => {
     }
 };
 
-module.exports = { getDepartureReadiness };
+module.exports = { getDepartureReadiness, getPreArrivalAlerts };

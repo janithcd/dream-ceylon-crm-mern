@@ -33,6 +33,14 @@ test("departure query respects Colombo day boundaries and excludes inactive trip
     assert.equal(unsent["preArrivalContact.sentAt"], null);
     assert.equal(unsent.travelStartDate.$gte.toISOString(), query.travelStartDate.$gte.toISOString());
     assert.deepEqual(getDepartureReadinessQuery(new Date("2026-10-16T19:00:00Z"), "sent")["preArrivalContact.sentAt"], { $type: "date" });
+    const beforeMidnight = getDepartureReadinessQuery(new Date("2026-10-16T18:29:59Z"), "due");
+    assert.equal(beforeMidnight.bookingStatus, "Confirmed");
+    assert.equal(beforeMidnight["preArrivalContact.sentAt"], null);
+    assert.equal(beforeMidnight.travelStartDate.$gte.toISOString(), "2026-10-15T18:30:00.000Z");
+    assert.equal(beforeMidnight.travelStartDate.$lte.toISOString(), "2026-10-19T18:29:59.999Z");
+    const afterMidnight = getDepartureReadinessQuery(new Date("2026-10-16T18:30:00Z"), "due");
+    assert.equal(afterMidnight.travelStartDate.$gte.toISOString(), "2026-10-16T18:30:00.000Z");
+    assert.equal(afterMidnight.travelStartDate.$lte.toISOString(), "2026-10-20T18:29:59.999Z");
 });
 
 test("queue distinguishes action, optional plan review and no recorded gaps without leaking names", () => {
@@ -117,4 +125,53 @@ test("queue API enforces booking permission, paginates and returns a safe summar
     assert.equal((await request(`${url}?page=2&message=unsent`)).status, 200);
     assert.equal(selectedQuery.bookingStatus, "Confirmed");
     assert.equal(selectedQuery["preArrivalContact.sentAt"], null);
+    assert.equal((await request(`${url}?page=2&message=due`)).status, 200);
+    assert.equal(selectedQuery.bookingStatus, "Confirmed");
+    assert.equal(selectedQuery["preArrivalContact.sentAt"], null);
+    assert.equal(selectedQuery.travelStartDate.$lte.getTime() - selectedQuery.travelStartDate.$gte.getTime(),
+        4 * 86400000 - 1);
+});
+
+test("pre-arrival reminder endpoint is permissioned and exposes only due booking references", async (t) => {
+    const managerId = "507f1f77bcf86cd799439204";
+    const viewerId = "507f1f77bcf86cd799439205";
+    const updateOnlyId = "507f1f77bcf86cd799439206";
+    let reads = 0;
+    t.mock.method(Admin, "findById", (id) => ({ select: async () => ({
+        _id: id, role: String(id) === viewerId ? "Viewer" : String(id) === updateOnlyId ? "Unknown Role" : "Sales",
+        customPermissions: String(id) === updateOnlyId ? ["booking.update"] : [], status: "Active", tokenVersion: 0,
+    }) }));
+    t.mock.method(Booking, "find", (query) => {
+        reads += 1;
+        assert.equal(query.bookingStatus, "Confirmed");
+        assert.equal(query["preArrivalContact.sentAt"], null);
+        return { select: (fields) => {
+            assert.equal(fields, "bookingCode travelStartDate");
+            return { sort: () => ({ limit: (value) => {
+                assert.equal(value, 5);
+                return { lean: async () => [{ _id: "507f1f77bcf86cd799439201", bookingCode: "DCJ-READY-TEST",
+                    travelStartDate: new Date("2027-04-01"), customer: { email: "PRIVATE@example.invalid" } }],
+                };
+            } }) };
+        } };
+    });
+    t.mock.method(Booking, "countDocuments", async () => 7);
+    const server = app.listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const url = `http://127.0.0.1:${server.address().port}/api/bookings/departure-readiness/alerts`;
+    const request = (id) => fetch(url, { headers: id ? { Authorization: `Bearer ${jwt.sign({ id }, process.env.JWT_SECRET)}` } : {} });
+    assert.equal((await request(null)).status, 401);
+    assert.equal((await request(viewerId)).status, 403);
+    assert.equal((await request(updateOnlyId)).status, 403);
+    assert.equal(reads, 0);
+    const response = await request(managerId);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    const body = await response.json();
+    assert.equal(body.count, 7);
+    assert.equal(body.withinDays, 3);
+    assert.equal(body.items[0].bookingCode, "DCJ-READY-TEST");
+    assert.equal(body.items[0].bookingId, "507f1f77bcf86cd799439201");
+    assert.equal(JSON.stringify(body).includes("PRIVATE"), false);
 });

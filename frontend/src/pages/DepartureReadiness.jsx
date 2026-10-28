@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { FaClipboardCheck, FaSyncAlt } from "react-icons/fa";
 import api from "../api/axios";
 import { formatCalendarDate } from "../utils/calendarDate";
@@ -8,13 +8,18 @@ import PreArrivalMessageModal from "../components/PreArrivalMessageModal";
 
 const statusLabels = { attention: "Needs action", review: "Review scope", "recorded-clear": "No recorded gaps" };
 const statusClasses = { attention: "text-bg-warning", review: "text-bg-secondary", "recorded-clear": "text-bg-success" };
-const messageFilters = { all: "All departures", unsent: "Awaiting note", sent: "Note recorded" };
+const messageFilters = { all: "All departures", due: "Due within 3 days", unsent: "Awaiting note", sent: "Note recorded" };
+const filterDescriptions = { all: "departing in this window", due: "departing within 3 days without a recorded note",
+    unsent: "awaiting a note", sent: "with a recorded note" };
 
 const DepartureReadiness = () => {
     const { hasPermission } = usePermissions();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const requestedFilter = searchParams.get("message");
+    const messageFilter = Object.hasOwn(messageFilters, requestedFilter) ? requestedFilter : "all";
+    const requestedPage = Number(searchParams.get("page"));
+    const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
     const [messageBookingId, setMessageBookingId] = useState(null);
-    const [page, setPage] = useState(1);
-    const [messageFilter, setMessageFilter] = useState("all");
     const [reloadKey, setReloadKey] = useState(0);
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -25,7 +30,15 @@ const DepartureReadiness = () => {
         api.get("/bookings/departure-readiness", { params: { page, message: messageFilter } })
             .then(({ data: result }) => {
                 if (!active) return;
-                if (page > result.totalPages) { setPage(result.totalPages); return; }
+                if (page > result.totalPages) {
+                    setSearchParams((current) => {
+                        const next = new URLSearchParams(current);
+                        if (result.totalPages > 1) next.set("page", String(result.totalPages));
+                        else next.delete("page");
+                        return next;
+                    });
+                    return;
+                }
                 setData(result);
                 setError("");
             })
@@ -36,7 +49,7 @@ const DepartureReadiness = () => {
             })
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
-    }, [page, messageFilter, reloadKey]);
+    }, [page, messageFilter, reloadKey, setSearchParams]);
 
     const refresh = () => {
         setLoading(true);
@@ -45,12 +58,16 @@ const DepartureReadiness = () => {
     };
     const changePage = (value) => {
         setLoading(true);
-        setPage(value);
+        setSearchParams((current) => {
+            const next = new URLSearchParams(current);
+            if (value > 1) next.set("page", String(value));
+            else next.delete("page");
+            return next;
+        });
     };
     const changeFilter = (value) => {
         setLoading(true);
-        setPage(1);
-        setMessageFilter(value);
+        setSearchParams(value === "all" ? {} : { message: value });
     };
 
     return <div>
@@ -72,9 +89,12 @@ const DepartureReadiness = () => {
         {loading && <p role="status" className="text-muted py-3">Checking upcoming departures...</p>}
         {error && <div className="alert alert-danger" role="alert">{error} <button type="button" className="btn btn-sm btn-outline-danger ms-2" onClick={refresh}>Try again</button></div>}
         {!loading && !error && data && <>
-            <p className="text-muted small">{data.total} {data.total === 1 ? "booking" : "bookings"} {messageFilter === "all" ? "departing in this window" : `in ${messageFilters[messageFilter].toLowerCase()}`} · ordered by departure date.</p>
+            <p className="text-muted small">{data.total} {data.total === 1 ? "booking" : "bookings"} {filterDescriptions[messageFilter]} · ordered by departure date.</p>
             {!data.items.length ? <div className="card border-0 shadow-sm"><div className="card-body text-center py-5">
-                <h5>No matching departures</h5><p className="text-muted mb-3">Confirmed bookings that still need a note appear under Awaiting note.</p>
+                <h5>No matching departures</h5><p className="text-muted mb-3">{messageFilter === "due"
+                    ? "No confirmed trips within three days are awaiting a pre-arrival note."
+                    : messageFilter === "all" ? "Bookings starting in the next 30 days will appear here."
+                        : "Try another pre-arrival note filter to see other upcoming bookings."}</p>
                 <Link className="btn btn-outline-primary" to="/bookings">Open bookings</Link>
             </div></div> : <div className="d-grid gap-3">
                 {data.items.map((item) => <article className="card border-0 shadow-sm" key={item._id}>

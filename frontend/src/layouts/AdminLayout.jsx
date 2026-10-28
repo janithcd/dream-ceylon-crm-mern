@@ -39,6 +39,7 @@ import PaymentAlert from "../components/PaymentAlert";
 import SupplierPayableAlert from "../components/SupplierPayableAlert";
 import TripSupportAlert from "../components/TripSupportAlert";
 import RecoveryAlert from "../components/RecoveryAlert";
+import DepartureReminderLink from "../components/DepartureReminderLink";
 import { ROUTE_PERMISSIONS } from "../config/routePermissions";
 
 const AdminLayout = () => {
@@ -142,10 +143,7 @@ const AdminLayout = () => {
                     </PermissionGuard>
 
                     <PermissionGuard permission={ROUTE_PERMISSIONS.bookings}>
-                        <NavLink to="/departure-readiness">
-                            <FaClipboardCheck />
-                            Departure Readiness
-                        </NavLink>
+                        <DepartureReminderLink />
                     </PermissionGuard>
 
                     <PermissionGuard permission={ROUTE_PERMISSIONS.bookings}>
