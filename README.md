@@ -114,6 +114,7 @@ The system combines operational management, AI-powered productivity tools, brand
 - View bookings in a calendar
 - Generate booking invoices, individual payment receipts, refund confirmations and guest payment statements
 - The booking invoice uses the current booking price, optional hotel advance target and saved due dates. It displays the company's configured payment instructions, never private admin notes or special requests, and does not claim a paid amount from the booking summary. A cancelled or unpriced booking cannot produce one. For proof of a payment, open **Bookings → Payments** and download the receipt on the specific recorded payment; use the guest statement for the verified full balance. The older booking-level receipt action was removed because it presented a cumulative balance as one receipt; direct API calls return HTTP 410 with guidance. Guest invoices are current snapshots, not immutable historical invoice revisions.
+- Booking invoices support Latin extended, Cyrillic, Greek, Sinhala and Tamil guest names and package text using the same embedded font coverage as the other operational PDFs. Unknown glyphs show a visible placeholder; long payment instructions continue on another page. The invoice footer includes the configured business contact details.
 - Track outstanding balances
 - Set an optional payment due date when creating or editing a booking; Finance can update it from Outstanding Balances
 - Log actual payment contact and schedule the next follow-up from Outstanding Balances

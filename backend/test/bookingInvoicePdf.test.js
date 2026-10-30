@@ -6,7 +6,7 @@ const { createInvoicePdf } = require("../controllers/bookingPdfController");
 test("invoice prints public payment instructions without private notes or unchecked paid totals", async () => {
     const booking = {
         bookingCode: "CI-INVOICE-1", bookingStatus: "Confirmed", currency: "USD",
-        customer: { fullName: "Synthetic Guest", email: "guest@example.invalid",
+        customer: { fullName: "Łukasz Nowak / Анна / සිංහල / தமிழ்", email: "guest@example.invalid",
             whatsappNumber: "+94771234567", country: "UK" },
         travelStartDate: new Date("2026-11-10"), travelEndDate: new Date("2026-11-16"),
         numberOfTravelers: 2, vehicleType: "Car", totalPrice: 1000,
@@ -25,6 +25,10 @@ test("invoice prints public payment instructions without private notes or unchec
         const document = await task.promise;
         const content = await (await document.getPage(1)).getTextContent();
         const text = content.items.map(({ str }) => str).join(" ");
+        const compactText = content.items.map(({ str }) => str).join("").replace(/\s+/gu, "");
+        for (const name of ["Łukasz", "Анна", "සිංහල", "தமிழ்"]) {
+            assert.ok(compactText.includes(name), name);
+        }
         for (const label of ["BOOKING INVOICE", "USD 1,000.00", "USD 300.00",
             "Public payment instruction", "Nov 1, 2026", "Nov 9, 2026",
             "Check the guest payment statement for your current balance before paying."]) {
