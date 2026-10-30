@@ -92,4 +92,6 @@ const followUpSchema = new mongoose.Schema(
     }
 );
 
+followUpSchema.index({ quotation: 1, status: 1 });
+
 module.exports = mongoose.model("FollowUp", followUpSchema);

@@ -17,6 +17,7 @@ import {
 import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
+import { usePermissions } from "../context/PermissionContext";
 import QuotationComparisonModal from "../components/QuotationComparisonModal";
 const statusOptions = ["Draft", "Sent", "Accepted", "Rejected", "Expired"];
 const currencyOptions = ["USD", "LKR", "EUR", "GBP"];
@@ -123,12 +124,14 @@ const buildQuotationPayload = (quotation, overrides = {}) => {
 
 const QuotationHistory = () => {
     const navigate = useNavigate();
+    const { hasPermission } = usePermissions();
 
     const [quotations, setQuotations] = useState([]);
     const [keyword, setKeyword] = useState("");
     const [status, setStatus] = useState("");
     const [currency, setCurrency] = useState("");
     const [validity, setValidity] = useState("");
+    const [followUp, setFollowUp] = useState("");
     const [page, setPage] = useState(1);
     const [exportLoading, setExportLoading] = useState(false);
     const [pagination, setPagination] = useState({
@@ -154,6 +157,7 @@ const QuotationHistory = () => {
                                        statusValue = status,
                                        currencyValue = currency,
                                        validityValue = validity,
+                                       followUpValue = followUp,
                                    } = {}) => {
         try {
             setLoading(true);
@@ -176,6 +180,7 @@ const QuotationHistory = () => {
                 params.currency = currencyValue;
             }
             if (validityValue) params.validity = validityValue;
+            if (followUpValue) params.followUp = followUpValue;
 
             const response = await api.get("/quotations", { params });
 
@@ -199,7 +204,7 @@ const QuotationHistory = () => {
     useEffect(() => {
         fetchQuotations({ pageValue: page });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [page, status, currency, validity]);
+    }, [page, status, currency, validity, followUp]);
 
     const handleSearch = (e) => {
         e.preventDefault();
@@ -211,6 +216,7 @@ const QuotationHistory = () => {
             statusValue: status,
             currencyValue: currency,
             validityValue: validity,
+            followUpValue: followUp,
         });
     };
 
@@ -219,6 +225,7 @@ const QuotationHistory = () => {
         setStatus("");
         setCurrency("");
         setValidity("");
+        setFollowUp("");
         setPage(1);
 
         fetchQuotations({
@@ -227,6 +234,7 @@ const QuotationHistory = () => {
             statusValue: "",
             currencyValue: "",
             validityValue: "",
+            followUpValue: "",
         });
     };
 
@@ -466,9 +474,14 @@ const QuotationHistory = () => {
                 params.currency = currency;
             }
             if (validity) params.validity = validity;
+            if (followUp) params.followUp = followUp;
 
             const response = await api.get("/quotations", { params });
             const exportQuotations = response.data.quotations || [];
+            if (response.data.totalQuotations > exportQuotations.length) {
+                setError("More than 10,000 quotations match. Narrow the filters before exporting.");
+                return;
+            }
 
             const rows = exportQuotations.map((quotation) => ({
                 "Quotation No": quotation.quotationNo || "",
@@ -575,7 +588,10 @@ const QuotationHistory = () => {
                                     value={status}
                                     onChange={(e) => {
                                         setStatus(e.target.value);
-                                        if (e.target.value && e.target.value !== "Sent") setValidity("");
+                                        if (e.target.value !== "Sent") {
+                                            setValidity("");
+                                            setFollowUp("");
+                                        }
                                         setPage(1);
                                     }}
                                 >
@@ -618,6 +634,20 @@ const QuotationHistory = () => {
                                 </select>
                             </div>
 
+                            {hasPermission("followUp.view") && <div className="col-12">
+                                <button type="button"
+                                    className={`btn btn-sm ${followUp === "missing" ? "btn-warning" : "btn-outline-warning"}`}
+                                    aria-pressed={followUp === "missing"}
+                                    onClick={() => {
+                                        setFollowUp(followUp === "missing" ? "" : "missing");
+                                        setStatus("Sent");
+                                        setPage(1);
+                                    }}>
+                                    No pending reminder
+                                </button>
+                                <span className="text-muted small ms-2">Sent, unconverted quotations without a pending CRM follow-up.</span>
+                            </div>}
+
                             <div className="col-12 d-flex justify-content-end gap-2">
                                 <button type="submit" className="btn btn-success">
                                     Search
@@ -633,6 +663,11 @@ const QuotationHistory = () => {
                             </div>
                         </div>
                     </form>
+                    {followUp === "missing" && <p className="small text-muted mt-3 mb-0">
+                        Oldest offers appear first. A completed or cancelled reminder no longer covers the offer.
+                        {hasPermission("followUp.manage") ? " Use Create follow-up to schedule a new reminder." : ""}
+                        {" "}Update the quotation outcome after the guest replies if you have edit access.
+                    </p>}
                 </div>
             </div>
 

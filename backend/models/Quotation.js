@@ -223,5 +223,6 @@ const quotationSchema = new mongoose.Schema(
 );
 
 quotationSchema.index({ status: 1, validUntil: 1 });
+quotationSchema.index({ status: 1, booking: 1, createdAt: 1 });
 
 module.exports = mongoose.model("Quotation", quotationSchema);

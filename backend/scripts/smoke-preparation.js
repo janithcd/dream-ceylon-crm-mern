@@ -6,6 +6,7 @@ const Booking = require("../models/Booking");
 const BookingPayment = require("../models/BookingPayment");
 const TourPackage = require("../models/TourPackage");
 const Quotation = require("../models/Quotation");
+const FollowUp = require("../models/FollowUp");
 const CostEntry = require("../models/CostEntry");
 const ActivityLog = require("../models/ActivityLog");
 const { PDFDocument } = require("pdf-lib");
@@ -24,6 +25,7 @@ const main = async () => {
     let tourPackage;
     let quotation;
     let revisedQuotation;
+    let quoteReminder;
 
     try {
         const dayMs = 24 * 60 * 60 * 1000;
@@ -306,6 +308,24 @@ const main = async () => {
         assert.equal((await listValidity("pastDue")).totalQuotations, 1);
         assert.equal((await listValidity("dueSoon")).totalQuotations, 0);
         assert.equal((await request(`${quotationsUrl}?validity=invalid`, "GET")).status, 400);
+        const noReminderUrl = `${quotationsUrl}?keyword=${encodeURIComponent(validityClient)}&followUp=missing`;
+        const noReminder = await request(noReminderUrl, "GET");
+        assert.equal(noReminder.status, 200, await noReminder.clone().text());
+        assert.equal(noReminder.headers.get("cache-control"), "no-store");
+        assert.deepEqual((await noReminder.json()).quotations.map((item) => item._id), [quotation]);
+        assert.equal((await (await request(`${noReminderUrl}&validity=pastDue`, "GET")).json()).totalQuotations, 1);
+        assert.equal((await financeRequest(noReminderUrl)).status, 403, "Finance cannot inspect follow-up coverage");
+        assert.equal((await request(`${quotationsUrl}?followUp=invalid`, "GET")).status, 400);
+        assert.equal((await request(`${noReminderUrl}&status=Draft`, "GET")).status, 400);
+        const reminderResponse = await request("http://127.0.0.1:5000/api/follow-ups", "POST", {
+            title: "Check quote response", type: "Quotation", quotation,
+            followUpDate: dateOnly(new Date(Date.now() + 2 * dayMs)),
+        });
+        assert.equal(reminderResponse.status, 201, `Create quote reminder: ${await reminderResponse.clone().text()}`);
+        quoteReminder = (await reminderResponse.json()).followUp._id;
+        assert.equal((await (await request(noReminderUrl, "GET")).json()).totalQuotations, 0);
+        assert.equal((await request(`http://127.0.0.1:5000/api/follow-ups/${quoteReminder}/complete`, "PATCH")).status, 200);
+        assert.equal((await (await request(noReminderUrl, "GET")).json()).totalQuotations, 1);
         const quotationUrl = `${quotationsUrl}/${quotation}`;
         const nextValidity = dateOnly(new Date(Date.now() + 2 * dayMs));
         assert.equal((await request(quotationUrl, "PUT", { validUntil: "2027-02-30" })).status, 400);
@@ -342,6 +362,8 @@ const main = async () => {
         assert.equal((await Quotation.findById(quotation)).vehicleDailyRate, 80, "Original price remains unchanged");
         assert.equal((await Quotation.findById(quotation)).status, "Sent", "Original status remains unchanged");
         await Quotation.updateOne({ _id: quotation }, { $set: { booking: booking._id } });
+        assert.equal((await (await request(noReminderUrl, "GET")).json()).totalQuotations, 0,
+            "Converted offers do not need a quotation reminder");
         assert.equal((await request(`${quotationUrl}/revisions`, "POST")).status, 409, "Converted quotations cannot start a revised sales draft");
         await Quotation.updateOne({ _id: quotation }, { $set: { booking: null } });
         assert.equal((await request(quotationUrl, "PUT", { validUntil: null })).status, 200);
@@ -914,6 +936,10 @@ const main = async () => {
         assert.equal((await getPaymentAttention()).summary.total, 0);
         console.log("Quotation validity, booking preparation, package itinerary import, supplier confirmations, payment alerts and follow-ups, transport overlaps, PDFs, dashboard attention, assigned tasks, and booking history smoke tests passed against MongoDB.");
     } finally {
+        if (quoteReminder) {
+            await ActivityLog.deleteMany({ relatedRecordId: quoteReminder });
+            await FollowUp.deleteOne({ _id: quoteReminder });
+        }
         if (booking) {
             await CostEntry.deleteMany({ recordType: "Booking", recordId: booking._id });
             await BookingPayment.deleteMany({ booking: booking._id });

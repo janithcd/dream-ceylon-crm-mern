@@ -1,6 +1,8 @@
 const mongoose = require("mongoose");
 const Quotation = require("../models/Quotation");
+const FollowUp = require("../models/FollowUp");
 const CostEntry = require("../models/CostEntry");
+const { PERMISSIONS } = require("../config/permissions");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { VALIDITY_FILTERS, parseQuotationValidUntil, getValidityQuery } = require("../utils/quotationValidity");
 
@@ -392,10 +394,52 @@ const getQuotations = async (req, res) => {
         if (!VALIDITY_FILTERS.includes(validity) || (validity !== "all" && req.query.status && req.query.status !== "Sent")) {
             return res.status(400).json({ message: "Validity filters apply to sent quotations only" });
         }
+        const followUp = req.query.followUp || "all";
+        if (!["all", "missing"].includes(followUp) ||
+            (followUp === "missing" && req.query.status && req.query.status !== "Sent")) {
+            return res.status(400).json({ message: "Choose a valid reminder filter for sent quotations." });
+        }
+        if (followUp === "missing" && !req.adminPermissions.includes(PERMISSIONS.FOLLOW_UP_VIEW)) {
+            return res.status(403).json({ message: "Follow-up view permission is required for this filter." });
+        }
         const page = parsePositiveInteger(req.query.page, 1);
         const limit = Math.min(parsePositiveInteger(req.query.limit, 10), 10000);
         const skip = (page - 1) * limit;
         const query = buildQuotationQuery(req.query);
+
+        if (followUp === "missing") {
+            const [result] = await Quotation.aggregate([
+                { $match: { ...query, status: "Sent", booking: null } },
+                { $lookup: {
+                    from: FollowUp.collection.name, let: { quoteId: "$_id" },
+                    pipeline: [
+                        { $match: { status: "Pending", $expr: { $eq: ["$quotation", "$$quoteId"] } } },
+                        { $limit: 1 }, { $project: { _id: 1 } },
+                    ],
+                    as: "pendingReminders",
+                } },
+                { $match: { pendingReminders: { $size: 0 } } },
+                { $sort: { createdAt: 1, _id: 1 } },
+                { $facet: {
+                    items: [{ $skip: skip }, { $limit: limit }, { $project: { _id: 1 } }],
+                    total: [{ $count: "value" }],
+                } },
+            ]);
+            const ids = result.items.map((item) => item._id);
+            const documents = ids.length
+                ? await populateQuotation(Quotation.find({ _id: { $in: ids } }))
+                : [];
+            const byId = new Map(documents.map((item) => [String(item._id), item]));
+            const totalQuotations = result.total[0]?.value || 0;
+            res.set("Cache-Control", "no-store");
+            return res.status(200).json({
+                quotations: ids.map((id) => byId.get(String(id))).filter(Boolean),
+                currentPage: page,
+                totalPages: Math.ceil(totalQuotations / limit) || 1,
+                totalQuotations,
+                limit,
+            });
+        }
 
         const [quotations, totalQuotations] = await Promise.all([
             populateQuotation(
