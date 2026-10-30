@@ -1,6 +1,6 @@
 const cents = (amount) => Math.round(Number(amount) * 100);
 
-const validatePaymentEntry = ({ amount, paymentType, status }) => {
+const validatePaymentEntry = ({ amount, paymentType, status, paymentMethod, referenceNumber }) => {
     if (!Number.isFinite(amount) || amount <= 0 ||
         Math.abs(amount * 100 - cents(amount)) > 0.000001) {
         return "Enter an amount greater than zero with at most two decimals.";
@@ -8,6 +8,10 @@ const validatePaymentEntry = ({ amount, paymentType, status }) => {
     if ((status === "Refunded" && paymentType !== "Refund") ||
         (paymentType === "Refund" && status === "Received")) {
         return "A refund must have type Refund and status Refunded. Cancelled entries do not affect the balance.";
+    }
+    if (paymentMethod === "PayHere" &&
+        (typeof referenceNumber !== "string" || !referenceNumber.trim() || referenceNumber.trim().length > 100)) {
+        return "Enter the PayHere payment or refund reference (1–100 characters).";
     }
     return null;
 };

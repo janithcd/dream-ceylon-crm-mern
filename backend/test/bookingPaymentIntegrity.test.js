@@ -13,6 +13,16 @@ test("refunds need matching type and status and monetary amounts use cents", () 
     ]) assert.ok(validatePaymentEntry(entry));
 });
 
+test("PayHere entries require a traceable transaction reference", () => {
+    const entry = { amount: 100, paymentType: "Advance", status: "Received", paymentMethod: "PayHere" };
+    assert.match(validatePaymentEntry({ ...entry, referenceNumber: "" }), /PayHere payment or refund reference/);
+    assert.match(validatePaymentEntry({ ...entry, referenceNumber: " ".repeat(101) }), /PayHere payment or refund reference/);
+    assert.equal(validatePaymentEntry({ ...entry, referenceNumber: " PH-123 " }), null);
+    assert.equal(validatePaymentEntry({ ...entry, paymentType: "Refund", status: "Refunded",
+        referenceNumber: "PH-REF-123" }), null);
+    assert.equal(validatePaymentEntry({ ...entry, paymentMethod: "Card", referenceNumber: "" }), null);
+});
+
 test("refund capacity follows real receipts and excludes cancelled and foreign-currency records", () => {
     const payments = [
         { _id: "receipt", currency: "USD", amount: 100.1, status: "Received" },

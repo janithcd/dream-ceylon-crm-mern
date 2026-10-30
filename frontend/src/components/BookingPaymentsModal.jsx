@@ -15,6 +15,7 @@ import PermissionGuard from "./PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
 import { notifyPaymentAttentionChanged } from "../utils/paymentEvents";
 import { getGuestPaymentMilestones } from "../utils/guestPaymentMilestones";
+import { paymentMethods } from "../utils/paymentMethods";
 
 const initialPaymentForm = () => ({
     amount: "",
@@ -32,14 +33,6 @@ const paymentTypeOptions = [
     "Partial Payment",
     "Final Payment",
     "Refund",
-    "Other",
-];
-
-const paymentMethodOptions = [
-    "Cash",
-    "Bank Transfer",
-    "Card",
-    "Online Payment",
     "Other",
 ];
 
@@ -750,12 +743,13 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                             value={formData.paymentMethod}
                                                             onChange={handleChange}
                                                         >
-                                                            {paymentMethodOptions.map((method) => (
+                                                            {paymentMethods.map((method) => (
                                                                 <option key={method} value={method}>
                                                                     {method}
                                                                 </option>
                                                             ))}
                                                         </select>
+                                                        {formData.paymentMethod === "PayHere" && <small className="text-muted">Record only a confirmed guest payment. Match it to the bank credit later in Payment Reports.</small>}
                                                     </div>
 
                                                     <div className="col-md-4">
@@ -786,7 +780,9 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                             className="form-control"
                                                             value={formData.referenceNumber}
                                                             onChange={handleChange}
-                                                            placeholder="Bank ref / receipt no"
+                                                            placeholder={formData.paymentMethod === "PayHere" ? "PayHere payment / refund ID" : "Bank ref / receipt no"}
+                                                            required={formData.paymentMethod === "PayHere"}
+                                                            maxLength={formData.paymentMethod === "PayHere" ? 100 : undefined}
                                                         />
                                                     </div>
 

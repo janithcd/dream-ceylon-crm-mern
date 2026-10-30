@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { PAYMENT_METHODS } = require("../utils/paymentMethods");
 
 const reconciliationEventSchema = new mongoose.Schema({
     action: { type: String, enum: ["reconciled", "reopened"], required: true },
@@ -52,7 +53,7 @@ const bookingPaymentSchema = new mongoose.Schema(
 
         paymentMethod: {
             type: String,
-            enum: ["Cash", "Bank Transfer", "Card", "Online Payment", "Other"],
+            enum: PAYMENT_METHODS,
             default: "Bank Transfer",
         },
 

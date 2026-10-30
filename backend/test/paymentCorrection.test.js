@@ -36,3 +36,11 @@ test("payment corrections reject future and invalid dates before database writes
         { correctionReason: "Bank value date", paymentDate: "2026-10-21" }, now);
     assert.deepEqual(valid.value.changedFields, ["paymentDate"]);
 });
+
+test("payment corrections allow changing a verified card transaction to PayHere", () => {
+    const result = validatePaymentCorrection(original,
+        { ...original, paymentMethod: "PayHere", referenceNumber: "PH-123" },
+        { correctionReason: "Verified PayHere transaction" }, now);
+    assert.deepEqual(result.value.changedFields, ["paymentMethod", "referenceNumber"]);
+    assert.equal(result.value.after.paymentMethod, "PayHere");
+});

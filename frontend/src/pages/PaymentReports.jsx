@@ -28,6 +28,7 @@ import api from "../api/axios";
 import { exportToCsv } from "../utils/csvExport";
 import PermissionGuard from "../components/PermissionGuard";
 import GuestPaymentRegister from "../components/GuestPaymentRegister";
+import { paymentMethods } from "../utils/paymentMethods";
 
 const COLORS = ["#0f766e", "#2563eb", "#f59e0b", "#dc2626", "#7c3aed"];
 
@@ -38,14 +39,6 @@ const paymentTypeOptions = [
     "Partial Payment",
     "Final Payment",
     "Refund",
-    "Other",
-];
-
-const paymentMethodOptions = [
-    "Cash",
-    "Bank Transfer",
-    "Card",
-    "Online Payment",
     "Other",
 ];
 
@@ -519,7 +512,7 @@ const PaymentReports = () => {
                                     onChange={handleFilterChange}
                                 >
                                     <option value="">All Methods</option>
-                                    {paymentMethodOptions.map((item) => (
+                                    {paymentMethods.map((item) => (
                                         <option key={item} value={item}>
                                             {item}
                                         </option>

@@ -1,4 +1,5 @@
 const { getBusinessDayBounds } = require("./businessDate");
+const { PAYMENT_METHODS } = require("./paymentMethods");
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const COLOMBO_OFFSET_MS = 330 * 60 * 1000;
@@ -27,15 +28,21 @@ const parseRegisterQuery = (params = {}, now = new Date()) => {
     if (!["all", "unreconciled", "reconciled"].includes(status)) {
         return { error: "Choose all, unreconciled, or reconciled payments." };
     }
+    const paymentMethod = params.paymentMethod ?? "";
+    if (typeof paymentMethod !== "string" ||
+        (paymentMethod !== "" && !PAYMENT_METHODS.includes(paymentMethod))) {
+        return { error: "Choose a valid payment method." };
+    }
     const reference = params.reference ?? "";
     if (typeof reference !== "string" || reference.trim().length > 100) {
         return { error: "Payment reference must be at most 100 characters." };
     }
     const escaped = reference.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     return { value: {
-        from, to, page: Number(page), status, reference: reference.trim(),
+        from, to, page: Number(page), status, paymentMethod, reference: reference.trim(),
         query: {
             status: { $in: ["Received", "Refunded"] },
+            ...(paymentMethod ? { paymentMethod } : {}),
             paymentDate: {
                 $gte: new Date(start.getTime() - COLOMBO_OFFSET_MS),
                 $lt: new Date(end.getTime() + DAY_MS - COLOMBO_OFFSET_MS),

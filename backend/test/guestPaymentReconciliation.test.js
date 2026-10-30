@@ -14,11 +14,15 @@ test("guest register uses Sri Lanka calendar dates and excludes cancelled paymen
     assert.equal(parseRegisterQuery({ from: "2025-01-01", to: "2026-10-25" }).error !== undefined, true);
     assert.equal(parseRegisterQuery({ page: "1abc" }).error !== undefined, true);
     assert.equal(parseRegisterQuery({ status: "cancelled" }).error !== undefined, true);
+    assert.equal(parseRegisterQuery({ paymentMethod: "payhere" }).error !== undefined, true);
+    assert.equal(parseRegisterQuery({ paymentMethod: ["PayHere"] }).error !== undefined, true);
 });
 
 test("guest register treats references as literal text and filters missing matches", () => {
-    const parsed = parseRegisterQuery({ status: "unreconciled", reference: " (a+b) " });
+    const parsed = parseRegisterQuery({ status: "unreconciled", paymentMethod: "PayHere", reference: " (a+b) " });
     assert.equal(parsed.value.query.reconciledAt, null);
+    assert.equal(parsed.value.query.paymentMethod, "PayHere");
+    assert.equal(parseRegisterQuery({}).value.query.paymentMethod, undefined);
     assert.equal(parsed.value.query.$or[0].referenceNumber.$regex, "\\(a\\+b\\)");
     assert.deepEqual(parseRegisterQuery({ status: "reconciled" }).value.query.reconciledAt, { $ne: null });
 });

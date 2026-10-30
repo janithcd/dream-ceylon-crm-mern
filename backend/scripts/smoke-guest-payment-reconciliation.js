@@ -39,9 +39,14 @@ const main = async () => {
         }, sales);
         assert.equal(created.status, 201, `Create booking: ${await created.clone().text()}`);
         booking = (await created.json()).booking;
+        const missingReference = await request("/booking-payments", "POST", {
+            booking: booking._id, amount: 300, currency: "USD", paymentDate: today,
+            paymentType: "Advance", paymentMethod: "PayHere", status: "Received",
+        });
+        assert.equal(missingReference.status, 400);
         const recorded = await request("/booking-payments", "POST", {
             booking: booking._id, amount: 300, currency: "USD", paymentDate: today,
-            paymentType: "Advance", paymentMethod: "Bank Transfer", status: "Received", referenceNumber: "PAY-REF",
+            paymentType: "Advance", paymentMethod: "PayHere", status: "Received", referenceNumber: "PAY-REF",
         });
         assert.equal(recorded.status, 201, `Record payment: ${await recorded.clone().text()}`);
         const payment = (await recorded.json()).payment;
@@ -50,6 +55,10 @@ const main = async () => {
         assert.equal((await register("&status=unreconciled").then((r) => r.json())).total, 1);
         assert.equal((await register("&status=reconciled").then((r) => r.json())).total, 0);
         assert.equal((await register("&reference=PAY-REF").then((r) => r.json())).total, 1);
+        assert.equal((await register("&paymentMethod=PayHere&status=unreconciled").then((r) => r.json())).total, 1);
+        assert.equal((await register("&paymentMethod=Bank%20Transfer").then((r) => r.json())).total, 0);
+        assert.equal((await register("&paymentMethod=payhere")).status, 400);
+        assert.equal((await request(`/booking-payments/register/export?from=${today}&to=${today}&paymentMethod=PayHere`, "GET", undefined, superAdmin)).status, 200);
         assert.equal((await request("/booking-payments/register?from=2026-02-30&to=2026-10-25")).status, 400);
         assert.equal((await request(`/booking-payments/register?from=${today}&to=${today}`, "GET", undefined, sales)).status, 403);
         assert.equal((await request(`/booking-payments/${payment._id}/reconciliation`, "PATCH", {
@@ -95,6 +104,12 @@ const main = async () => {
         });
         assert.equal(refundResponse.status, 201, `Record refund: ${await refundResponse.clone().text()}`);
         const refund = (await refundResponse.json()).payment;
+        const payHereExport = await request(`/booking-payments/register/export?from=${today}&to=${today}&paymentMethod=PayHere`,
+            "GET", undefined, superAdmin);
+        assert.equal(payHereExport.status, 200);
+        const payHereCsv = await payHereExport.text();
+        assert.match(payHereCsv, /PAY-REF/);
+        assert.doesNotMatch(payHereCsv, /REF-50/);
         assert.equal((await request(`/booking-payments/${refund._id}/reconciliation`, "PATCH", {
             reconciled: true, statementReference: "BANK-REFUND-42",
         })).status, 200);
@@ -105,6 +120,8 @@ const main = async () => {
         assert.equal(cancelled.status, 201, `Record cancelled entry: ${await cancelled.clone().text()}`);
         const result = await register().then((response) => response.json());
         assert.equal(result.total, 2);
+        assert.equal((await register("&paymentMethod=PayHere").then((r) => r.json())).total, 1);
+        assert.equal((await register("&paymentMethod=Bank%20Transfer").then((r) => r.json())).total, 1);
         assert.deepEqual(result.totalsByCurrency, [{ currency: "USD", received: 275, refunded: 50, net: 225 }]);
         assert.equal((await (await request(`/bookings/${booking._id}`)).json()).advancePayment, 225);
         console.log("Guest payment register, matching, reopening, edit lock, and export passed against MongoDB.");

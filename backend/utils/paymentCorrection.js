@@ -1,4 +1,5 @@
 const { getBusinessDayBounds } = require("./businessDate");
+const { PAYMENT_METHODS } = require("./paymentMethods");
 
 const FIELDS = ["booking", "amount", "currency", "paymentDate", "paymentType",
     "paymentMethod", "status", "referenceNumber", "notes"];
@@ -37,7 +38,7 @@ const validatePaymentCorrection = (previous, next, body, now = new Date()) => {
     }
     if (!["Received", "Refunded", "Cancelled"].includes(next.status) ||
         !["Advance", "Partial Payment", "Final Payment", "Refund", "Other"].includes(next.paymentType) ||
-        !["Cash", "Bank Transfer", "Card", "Online Payment", "Other"].includes(next.paymentMethod)) {
+        !PAYMENT_METHODS.includes(next.paymentMethod)) {
         return { error: "Choose a valid payment status, type and method." };
     }
 

@@ -5,9 +5,10 @@ import PermissionGuard from "./PermissionGuard";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { notifyPaymentAttentionChanged } from "../utils/paymentEvents";
+import { paymentMethods } from "../utils/paymentMethods";
 
 const today = todayCalendarDate();
-const initialFilters = { from: `${today.slice(0, 7)}-01`, to: today, reference: "", status: "all" };
+const initialFilters = { from: `${today.slice(0, 7)}-01`, to: today, reference: "", status: "all", paymentMethod: "" };
 const filtersFromLink = (params) => {
     const payment = params.get("payment")?.trim();
     if (!payment || payment.length > 100) return initialFilters;
@@ -20,7 +21,6 @@ const filtersFromLink = (params) => {
 const emptyRegister = { items: [], total: 0, page: 1, limit: 25, pages: 0, totalsByCurrency: [] };
 const statuses = [{ value: "all", label: "All" }, { value: "unreconciled", label: "To match" }, { value: "reconciled", label: "Matched" }];
 const paymentTypes = ["Advance", "Partial Payment", "Final Payment", "Refund", "Other"];
-const paymentMethods = ["Cash", "Bank Transfer", "Card", "Online Payment", "Other"];
 const money = (amount, currency) => `${currency} ${Number(amount).toLocaleString("en-US", {
     minimumFractionDigits: 2, maximumFractionDigits: 2,
 })}`;
@@ -86,7 +86,7 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
     const openEditor = (item) => {
         setCorrection(null);
         setEditor({ id: item._id, reconciled: !item.reconciledAt, paymentNo: item.paymentNo,
-            amount: item.amount, currency: item.currency, status: item.status });
+            amount: item.amount, currency: item.currency, status: item.status, paymentMethod: item.paymentMethod });
         setStatementReference("");
         setReason("");
         setActionError("");
@@ -197,7 +197,7 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
         <div id="guest-payment-matching" className="card border-0 shadow-sm rounded-4 mb-4">
             <div className="card-body p-4">
                 <h4 className="fw-bold mb-1">Guest payment matching</h4>
-                <p className="text-muted small mb-3">Compare recorded receipts and refunds with your bank statement or cashbook. Matching verifies a record; it does not change the guest balance. Cancelled records are excluded.</p>
+                <p className="text-muted small mb-3">Compare recorded receipts and refunds with your bank statement or cashbook. For PayHere, use the payment ID to locate the transaction and match only when the bank settlement appears. Matching does not change the guest balance. Cancelled records are excluded.</p>
                 <form className="row g-2 align-items-end mb-3" onSubmit={(event) => {
                     event.preventDefault();
                     setPage(1);
@@ -206,12 +206,12 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                     setCorrection(null);
                     setSuccess("");
                 }}>
-                    <div className="col-sm-6 col-lg-3">
+                    <div className="col-sm-6 col-lg-2">
                         <label className="form-label" htmlFor="guest-register-from">From</label>
                         <input id="guest-register-from" className="form-control" type="date" required value={filters.from}
                             onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
                     </div>
-                    <div className="col-sm-6 col-lg-3">
+                    <div className="col-sm-6 col-lg-2">
                         <label className="form-label" htmlFor="guest-register-to">To</label>
                         <input id="guest-register-to" className="form-control" type="date" required value={filters.to}
                             onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
@@ -221,6 +221,14 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                         <input id="guest-register-reference" className="form-control" maxLength={100} value={filters.reference}
                             onChange={(event) => setFilters({ ...filters, reference: event.target.value })} placeholder="Bank transaction or payment number" />
                     </div>
+                    <div className="col-sm-6 col-lg-2">
+                        <label className="form-label" htmlFor="guest-register-method">Method</label>
+                        <select id="guest-register-method" className="form-select" value={filters.paymentMethod}
+                            onChange={(event) => setFilters({ ...filters, paymentMethod: event.target.value })}>
+                            <option value="">All methods</option>
+                            {paymentMethods.map((method) => <option key={method} value={method}>{method}</option>)}
+                        </select>
+                    </div>
                     <div className="col-sm-6 col-lg-2"><button className="btn btn-outline-primary w-100" type="submit">Apply</button></div>
                 </form>
                 <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Guest payment matching status">
@@ -229,7 +237,7 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                         aria-pressed={applied.status === value} onClick={() => selectStatus(value)}>{label}</button>)}
                 </div>
                 <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                    <span className="small text-muted">Payment dates {applied.from} through {applied.to} (Sri Lanka). Up to 366 days per search.</span>
+                    <span className="small text-muted">Payment dates {applied.from} through {applied.to} (Sri Lanka){applied.paymentMethod ? ` · ${applied.paymentMethod}` : ""}. Up to 366 days per search.</span>
                     <div className="d-flex gap-2">
                         <button type="button" className="btn btn-sm btn-outline-secondary" disabled={loading} onClick={() => {
                             setEditor(null); setCorrection(null); setActionError(""); setRefreshKey((current) => current + 1);
@@ -290,7 +298,9 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                         {editor.reconciled ? <><label className="form-label" htmlFor="guest-register-statement-reference">Statement or cashbook reference</label>
                             <input id="guest-register-statement-reference" className="form-control mb-2" maxLength={100} required value={statementReference}
                                 onChange={(event) => setStatementReference(event.target.value)} placeholder="Bank transaction ID or cashbook entry" />
-                            <p className="small text-muted">Check the amount, currency, direction, and payment date before confirming.</p></>
+                            <p className="small text-muted">{editor.paymentMethod === "PayHere"
+                                ? "Verify the PayHere payment ID and settlement report against the bank credit. A payout may combine payments and deduct fees; keep the guest payment at its confirmed amount."
+                                : "Check the amount, currency, direction, and payment date before confirming."}</p></>
                             : <><label className="form-label" htmlFor="guest-register-reopen-reason">Reason for reopening</label>
                                 <textarea id="guest-register-reopen-reason" className="form-control mb-2" minLength={3} maxLength={300} required value={reason}
                                     onChange={(event) => setReason(event.target.value)} placeholder="Explain the mismatch or correction" /></>}
