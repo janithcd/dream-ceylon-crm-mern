@@ -9,6 +9,9 @@ const { validatePaymentCorrection } = require("../utils/paymentCorrection");
 const { acquireBookingPaymentLocks } = require("../utils/bookingPaymentLock");
 const { getBusinessDayBounds } = require("../utils/businessDate");
 const { planGuestPaymentSummaryReconciliation } = require("../utils/guestPaymentStatement");
+const { payHereReceiptKey } = require("../utils/payHereReceipt");
+
+const duplicateReceiptMessage = "This PayHere payment reference is already recorded as a received payment. Check the guest payment register before saving.";
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -374,6 +377,22 @@ const buildPaymentPayload = (body, existingPayment = null) => {
     return payload;
 };
 
+const hasDuplicatePayHereReceipt = async (payload, excludedId = null) => {
+    if (!payload.payHereReceiptKey) return false;
+    const reference = safeText(payload.referenceNumber);
+    // Older PayHere receipts have no indexed key. Check them as well, allowing
+    // surrounding whitespace and case differences in historical references.
+    const legacyReference = new RegExp(`^\\s*${escapeRegex(reference)}\\s*$`, "i");
+    return Boolean(await BookingPayment.exists({
+        paymentMethod: "PayHere", status: "Received",
+        ...(excludedId ? { _id: { $ne: excludedId } } : {}),
+        $or: [
+            { payHereReceiptKey: payload.payHereReceiptKey },
+            { payHereReceiptKey: { $exists: false }, referenceNumber: legacyReference },
+        ],
+    }));
+};
+
 const validatePaymentBalance = async (booking, previousPayment, nextPayment) => {
     const previousBookingId = previousPayment?.booking?._id || previousPayment?.booking;
     const bookingIds = [String(booking._id)];
@@ -441,6 +460,10 @@ const createBookingPayment = async (req, res) => {
 
         const entryError = validatePaymentEntry(payload);
         if (entryError) return res.status(400).json({ message: entryError });
+        payload.payHereReceiptKey = payHereReceiptKey(payload);
+        if (await hasDuplicatePayHereReceipt(payload)) {
+            return res.status(409).json({ message: duplicateReceiptMessage });
+        }
         const balanceError = await validatePaymentBalance(booking, null, payload);
         if (balanceError) return res.status(409).json({ message: balanceError });
 
@@ -486,6 +509,9 @@ const createBookingPayment = async (req, res) => {
         });
     } catch (error) {
         if (error.code === "PAYMENT_WRITE_BUSY") return res.status(409).json({ message: error.message });
+        if (error.code === 11000 && error.keyPattern?.payHereReceiptKey) {
+            return res.status(409).json({ message: duplicateReceiptMessage });
+        }
         return res.status(500).json({
             message: "Failed to create booking payment",
             error: error.message,
@@ -777,6 +803,10 @@ const updateBookingPayment = async (req, res) => {
         if (entryError) return res.status(400).json({ message: entryError });
         const correction = validatePaymentCorrection(payment, payload, req.body);
         if (correction.error) return res.status(400).json({ message: correction.error });
+        payload.payHereReceiptKey = payHereReceiptKey(payload);
+        if (await hasDuplicatePayHereReceipt(payload, payment._id)) {
+            return res.status(409).json({ message: duplicateReceiptMessage });
+        }
         const balanceError = await validatePaymentBalance(booking, payment, payload);
         if (balanceError) return res.status(409).json({ message: balanceError });
 
@@ -844,6 +874,9 @@ const updateBookingPayment = async (req, res) => {
         });
     } catch (error) {
         if (error.code === "PAYMENT_WRITE_BUSY") return res.status(409).json({ message: error.message });
+        if (error.code === 11000 && error.keyPattern?.payHereReceiptKey) {
+            return res.status(409).json({ message: duplicateReceiptMessage });
+        }
         return res.status(500).json({
             message: "Failed to update booking payment",
             error: error.message,

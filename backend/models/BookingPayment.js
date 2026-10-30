@@ -69,6 +69,10 @@ const bookingPaymentSchema = new mongoose.Schema(
             default: "",
         },
 
+        // New receipts are indexed atomically. Existing records without this
+        // field are checked separately until they are corrected or re-saved.
+        payHereReceiptKey: { type: String, select: false },
+
         notes: {
             type: String,
             default: "",
@@ -86,5 +90,9 @@ const bookingPaymentSchema = new mongoose.Schema(
 );
 
 bookingPaymentSchema.index({ paymentDate: -1, status: 1, reconciledAt: 1 });
+bookingPaymentSchema.index({ payHereReceiptKey: 1 }, {
+    unique: true,
+    partialFilterExpression: { payHereReceiptKey: { $type: "string" } },
+});
 
 module.exports = mongoose.model("BookingPayment", bookingPaymentSchema);

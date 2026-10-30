@@ -78,6 +78,7 @@ jobs:
       - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-follow-up-ownership.js
       - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-guest-payment-milestones.js
       - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-guest-payment-reconciliation.js
+      - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-payhere-duplicates.js
       - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-payment-report-currencies.js
       - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-booking-payment-currency.js
       - run: docker compose exec -T -e CI_SMOKE_TESTS=true backend node scripts/smoke-guest-refund-guardrails.js

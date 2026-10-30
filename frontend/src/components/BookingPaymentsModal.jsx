@@ -749,7 +749,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                                 </option>
                                                             ))}
                                                         </select>
-                                                        {formData.paymentMethod === "PayHere" && <small className="text-muted">Record only a confirmed guest payment. Match it to the bank credit later in Payment Reports.</small>}
+                                                        {formData.paymentMethod === "PayHere" && <small className="text-muted">Record only a confirmed guest payment. A received PayHere reference can be used once across all bookings. Match it to the bank credit later in Payment Reports.</small>}
                                                     </div>
 
                                                     <div className="col-md-4">

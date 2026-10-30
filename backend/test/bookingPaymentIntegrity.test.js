@@ -1,6 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { validatePaymentEntry, netReceivedCents, validateProjectedBalance } = require("../utils/bookingPaymentIntegrity");
+const { payHereReceiptKey } = require("../utils/payHereReceipt");
 
 test("refunds need matching type and status and monetary amounts use cents", () => {
     assert.equal(validatePaymentEntry({ amount: 0.01, paymentType: "Refund", status: "Refunded" }), null);
@@ -21,6 +22,14 @@ test("PayHere entries require a traceable transaction reference", () => {
     assert.equal(validatePaymentEntry({ ...entry, paymentType: "Refund", status: "Refunded",
         referenceNumber: "PH-REF-123" }), null);
     assert.equal(validatePaymentEntry({ ...entry, paymentMethod: "Card", referenceNumber: "" }), null);
+});
+
+test("only received PayHere transactions claim a normalized reference", () => {
+    const entry = { paymentMethod: "PayHere", status: "Received", referenceNumber: "  ph-Ａ12  " };
+    assert.equal(payHereReceiptKey(entry), "PH-A12");
+    assert.equal(payHereReceiptKey({ ...entry, status: "Cancelled" }), null);
+    assert.equal(payHereReceiptKey({ ...entry, status: "Refunded" }), null);
+    assert.equal(payHereReceiptKey({ ...entry, paymentMethod: "Bank Transfer" }), null);
 });
 
 test("refund capacity follows real receipts and excludes cancelled and foreign-currency records", () => {

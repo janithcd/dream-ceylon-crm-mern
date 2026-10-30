@@ -341,7 +341,8 @@ const GuestPaymentRegister = ({ onChanged, reloadKey }) => {
                                 </select></div>
                             <div className="col-sm-6"><label className="form-label" htmlFor="guest-correction-reference">Payment reference</label>
                                 <input id="guest-correction-reference" className="form-control" maxLength={100} value={correction.referenceNumber}
-                                    onChange={(event) => setCorrection({ ...correction, referenceNumber: event.target.value })} /></div>
+                                    onChange={(event) => setCorrection({ ...correction, referenceNumber: event.target.value })} />
+                                {correction.paymentMethod === "PayHere" && <small className="text-muted">A received PayHere reference can be used once across all bookings.</small>}</div>
                         </div>
                         <label className="form-label" htmlFor="guest-correction-reason">Correction reason</label>
                         <textarea id="guest-correction-reason" className="form-control mb-2" minLength={3} maxLength={300} required value={correction.reason}
