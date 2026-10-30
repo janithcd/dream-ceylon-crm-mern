@@ -96,8 +96,10 @@ GET    /bookings/cancellation-review?filter=open&page=1
 PUT    /bookings/:id
 DELETE /bookings/:id
 POST   /booking-pdf/invoice/:id
-POST   /booking-pdf/receipt/:id
+POST   /booking-pdf/receipt/:id              (retired: HTTP 410; use an individual payment receipt)
 ```
+
+`POST /booking-pdf/invoice/:id` requires `booking.view` and `pdf.generate`. It returns the current booked price and payment targets, with public company payment instructions. It excludes admin notes, special requests and unverified paid/balance figures. Invalid IDs return 400; cancelled or unpriced bookings return 409. It does not cache the PDF. Use an individual receipt from **Bookings → Payments** for a confirmed payment, or the guest payment statement for a verified balance. The old booking-level receipt endpoint returns HTTP 410 because its cumulative paid amount could be mistaken for a single transaction receipt.
 
 The traveler roster `GET` requires `booking.view` and returns the saved names, booking headcount, status and roster version. `PUT` requires `booking.view` and `booking.update` and accepts `travelerNames` (an array of single-line names, each 1–120 characters, at most the booked headcount and 60 total), `expectedVersion` and `expectedHeadcount` as integers from the last read. A stale version or changed headcount returns HTTP 409; invalid names return HTTP 400. Both responses use `Cache-Control: no-store`. Booking history records only counts. Reduce the roster before reducing the booking headcount.
 

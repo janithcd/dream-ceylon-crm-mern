@@ -15,7 +15,6 @@ import {
     FaMapMarkedAlt,
     FaPlus,
     FaPrint,
-    FaReceipt,
     FaSearch,
     FaTrash,
     FaUsers,
@@ -1206,7 +1205,7 @@ const Bookings = () => {
                                                     <button
                                                         className="btn btn-sm btn-outline-warning"
                                                         onClick={() => setSelectedPaymentBooking(booking)}
-                                                        title="Payment history"
+                                                        title="Payment history, individual receipts and guest statement"
                                                     >
                                                         <FaWallet />
                                                     </button>
@@ -1224,21 +1223,6 @@ const Bookings = () => {
                                                         title="Download invoice PDF"
                                                     >
                                                         <FaFileInvoiceDollar />
-                                                    </button>
-                                                </PermissionGuard>
-
-                                                <PermissionGuard permission="pdf.generate">
-                                                    <button
-                                                        className="btn btn-sm btn-outline-dark"
-                                                        onClick={() =>
-                                                            handleDownloadBookingPdf(booking, "receipt")
-                                                        }
-                                                        disabled={
-                                                            pdfLoadingKey === `receipt-${booking._id}`
-                                                        }
-                                                        title="Download receipt PDF"
-                                                    >
-                                                        <FaReceipt />
                                                     </button>
                                                 </PermissionGuard>
 

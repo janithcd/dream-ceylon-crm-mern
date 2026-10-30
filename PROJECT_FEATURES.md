@@ -18,7 +18,7 @@
 - AI-assisted itinerary PDF
 - Quotation PDF
 - Booking invoice
-- Booking receipt
+- Individual payment receipts, refund confirmations and guest payment statements
 - Payment receipt
 - Dynamic company identity
 - Configurable watermark, terms and payment instructions

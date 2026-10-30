@@ -2,6 +2,7 @@ const { formatDocumentDate } = require("../utils/documentDate");
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument, StandardFonts, rgb } = require("pdf-lib");
+const mongoose = require("mongoose");
 
 const Booking = require("../models/Booking");
 let brandConfig = require("../config/brandConfig");
@@ -391,23 +392,39 @@ const drawFooter = (page, fonts) => {
 
 const getBookingById = async (bookingId) => {
     return await Booking.findById(bookingId)
-        .populate("selectedPackage", "title durationDays category overview")
-        .populate("inquiry", "fullName email whatsappNumber country status message");
+        .select("bookingCode bookingStatus customer selectedPackage travelStartDate travelEndDate numberOfTravelers vehicleType totalPrice currency hotelAdvanceAmount hotelAdvanceDueDate paymentDueDate")
+        .populate("selectedPackage", "title");
 };
 
 const buildBookingFinancials = (booking) => {
     const totalPrice = toNumber(booking.totalPrice);
-    const advancePayment = toNumber(booking.advancePayment);
-    const balancePayment = Math.max(totalPrice - advancePayment, 0);
-
-    return {
-        totalPrice,
-        advancePayment,
-        balancePayment,
-    };
+    return { totalPrice };
 };
 
-const createInvoicePdf = async (booking) => {
+const wrapInvoiceLines = (value, font, size, maxWidth) => {
+    const lines = [];
+    let line = "";
+    for (const word of String(value).replace(/\s+/g, " ").trim().split(" ")) {
+        if (!word) continue;
+        if (font.widthOfTextAtSize(line ? `${line} ${word}` : word, size) <= maxWidth) {
+            line = line ? `${line} ${word}` : word;
+            continue;
+        }
+        if (line) lines.push(line);
+        line = "";
+        for (const character of word) {
+            if (font.widthOfTextAtSize(line + character, size) > maxWidth && line) {
+                lines.push(line);
+                line = "";
+            }
+            line += character;
+        }
+    }
+    if (line) lines.push(line);
+    return lines;
+};
+
+const createInvoicePdf = async (booking, documentSettings = brandConfig) => {
     const pdfDoc = await PDFDocument.create();
 
     const fonts = {
@@ -415,7 +432,7 @@ const createInvoicePdf = async (booking) => {
         bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
     };
 
-    const page = pdfDoc.addPage([595.28, 841.89]);
+    let page = pdfDoc.addPage([595.28, 841.89]);
 
     await drawWatermark(pdfDoc, page);
     await drawHeader(
@@ -544,8 +561,8 @@ const createInvoicePdf = async (booking) => {
                 value: booking.vehicleType,
             },
             {
-                label: "Payment",
-                value: booking.paymentStatus,
+                label: "Final Due",
+                value: formatDocumentDate(booking.paymentDueDate, { fallback: "Not scheduled" }),
             },
             {
                 label: "Issued Date",
@@ -561,19 +578,21 @@ const createInvoicePdf = async (booking) => {
     drawInfoBox(
         page,
         fonts,
-        "Payment Summary",
+        "Booking Price and Target",
         [
             {
                 label: "Total",
                 value: formatMoney(financials.totalPrice, booking.currency),
             },
             {
-                label: "Advance",
-                value: formatMoney(financials.advancePayment, booking.currency),
+                label: "Hotel Advance",
+                value: toNumber(booking.hotelAdvanceAmount) > 0
+                    ? formatMoney(booking.hotelAdvanceAmount, booking.currency)
+                    : "Not scheduled",
             },
             {
-                label: "Balance",
-                value: formatMoney(financials.balancePayment, booking.currency),
+                label: "Advance Due",
+                value: formatDocumentDate(booking.hotelAdvanceDueDate, { fallback: "Not scheduled" }),
             },
             {
                 label: "Currency",
@@ -588,7 +607,7 @@ const createInvoicePdf = async (booking) => {
 
     y -= 155;
 
-    page.drawText("Notes", {
+    page.drawText("Payment Instructions", {
         x: 45,
         y,
         size: 13,
@@ -598,230 +617,40 @@ const createInvoicePdf = async (booking) => {
 
     y -= 18;
 
-    const invoiceNotes =
-        booking.adminNotes ||
-        booking.specialRequests ||
-        "This invoice is generated for the confirmed travel booking. Final balance should be settled according to the agreed payment terms.";
+    const invoiceNotes = documentSettings.pdfSettings?.paymentInstructions ||
+        "Please quote the booking number when making a payment.";
 
-    drawText(page, invoiceNotes, 45, y, {
-        font: fonts.regular,
-        size: 9,
-        color: COLORS.text,
-        maxWidth: 500,
-        lineHeight: 13,
-    });
-
-    drawFooter(page, fonts);
-
-    return await pdfDoc.save();
-};
-
-const createReceiptPdf = async (booking) => {
-    const pdfDoc = await PDFDocument.create();
-
-    const fonts = {
-        regular: await pdfDoc.embedFont(StandardFonts.Helvetica),
-        bold: await pdfDoc.embedFont(StandardFonts.HelveticaBold),
-    };
-
-    const page = pdfDoc.addPage([595.28, 841.89]);
-
-    await drawWatermark(pdfDoc, page);
-    await drawHeader(
-        pdfDoc,
-        page,
-        fonts,
-        "PAYMENT RECEIPT",
-        `Receipt No: REC-${booking.bookingCode}`
-    );
-
-    drawCompanyInfo(page, fonts, 700);
-
-    const financials = buildBookingFinancials(booking);
-
-    const receiptColor =
-        booking.paymentStatus === "Paid" ? COLORS.primary : COLORS.warning;
-
-    drawStatusBadge(
-        page,
-        fonts,
-        booking.paymentStatus || "Payment Received",
-        410,
-        700,
-        receiptColor
-    );
-
-    drawInfoBox(
-        page,
-        fonts,
-        "Received From",
-        [
-            {
-                label: "Name",
-                value: booking.customer?.fullName,
-            },
-            {
-                label: "Email",
-                value: booking.customer?.email,
-            },
-            {
-                label: "WhatsApp",
-                value: booking.customer?.whatsappNumber,
-            },
-            {
-                label: "Country",
-                value: booking.customer?.country,
-            },
-        ],
-        45,
-        650,
-        245,
-        120
-    );
-
-    drawInfoBox(
-        page,
-        fonts,
-        "Booking Reference",
-        [
-            {
-                label: "Booking Code",
-                value: booking.bookingCode,
-            },
-            {
-                label: "Tour Start",
-                value: formatDate(booking.travelStartDate),
-            },
-            {
-                label: "Tour End",
-                value: formatDate(booking.travelEndDate),
-            },
-            {
-                label: "Receipt Date",
-                value: getTodayText(),
-            },
-        ],
-        305,
-        650,
-        245,
-        120
-    );
-
-    let y = 495;
-
-    drawRectangle(page, 45, y - 120, 505, 120, COLORS.light, COLORS.border);
-
-    page.drawText("Payment Received", {
-        x: 65,
-        y: y - 35,
-        size: 13,
-        font: fonts.bold,
-        color: COLORS.primaryDark,
-    });
-
-    page.drawText(formatMoney(financials.advancePayment, booking.currency), {
-        x: 65,
-        y: y - 78,
-        size: 28,
-        font: fonts.bold,
-        color: COLORS.primary,
-    });
-
-    page.drawText("Advance payment / received amount", {
-        x: 65,
-        y: y - 98,
-        size: 9,
-        font: fonts.regular,
-        color: COLORS.muted,
-    });
-
-    y -= 160;
-
-    const tableX = 45;
-    const widths = [250, 145, 150];
-
-    drawTableHeader(page, fonts, tableX, y, widths, [
-        "Description",
-        "Payment Status",
-        "Amount",
-    ]);
-
-    y -= 24;
-
-    drawTableRow(
-        page,
-        fonts,
-        tableX,
-        y,
-        widths,
-        [
-            booking.selectedPackage?.title || "Sri Lanka private tour booking",
-            booking.paymentStatus || "-",
-            formatMoney(financials.advancePayment, booking.currency),
-        ],
-        COLORS.white
-    );
-
-    y -= 60;
-
-    drawInfoBox(
-        page,
-        fonts,
-        "Booking Amount Summary",
-        [
-            {
-                label: "Total Price",
-                value: formatMoney(financials.totalPrice, booking.currency),
-            },
-            {
-                label: "Paid Amount",
-                value: formatMoney(financials.advancePayment, booking.currency),
-            },
-            {
-                label: "Balance",
-                value: formatMoney(financials.balancePayment, booking.currency),
-            },
-            {
-                label: "Currency",
-                value: booking.currency,
-            },
-        ],
-        45,
-        y,
-        505,
-        120
-    );
-
-    y -= 155;
-
-    page.drawText("Receipt Notes", {
-        x: 45,
-        y,
-        size: 13,
-        font: fonts.bold,
-        color: COLORS.primaryDark,
-    });
-
-    y -= 18;
-
-    const receiptNotes =
-        "This receipt confirms the payment received for the above booking. Please keep this receipt for your records. Remaining balance, if any, should be paid according to the agreed payment terms.";
-
-    drawText(page, receiptNotes, 45, y, {
-        font: fonts.regular,
-        size: 9,
-        color: COLORS.text,
-        maxWidth: 500,
-        lineHeight: 13,
-    });
+    const instructions = wrapInvoiceLines(invoiceNotes, fonts.regular, 9, 500);
+    const clarification = wrapInvoiceLines(
+        "This invoice shows the booked price and agreed targets. It does not reflect payments already recorded. Check the guest payment statement for your current balance before paying.",
+        fonts.regular, 9, 500);
+    for (const [index, line] of [...instructions, "", ...clarification].entries()) {
+        if (!line) { y -= 10; continue; }
+        if (y < 83) {
+            drawFooter(page, fonts);
+            page = pdfDoc.addPage([595.28, 841.89]);
+            await drawWatermark(pdfDoc, page);
+            await drawHeader(pdfDoc, page, fonts, "BOOKING INVOICE", `Invoice No: INV-${booking.bookingCode}`);
+            y = 690;
+            page.drawText("Payment Instructions (continued)", { x: 45, y, size: 12,
+                font: fonts.bold, color: COLORS.primaryDark });
+            y -= 25;
+        }
+        page.drawText(line, { x: 45, y, size: 9, font: fonts.regular,
+            color: index > instructions.length ? COLORS.muted : COLORS.text });
+        y -= 13;
+    }
 
     drawFooter(page, fonts);
 
     return await pdfDoc.save();
 };
-
 
 const generateBookingInvoicePdf = async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ message: "Invalid booking ID" });
+    }
     try {
         brandConfig = await getDocumentBrandConfig();
         const booking = await getBookingById(req.params.id);
@@ -829,6 +658,13 @@ const generateBookingInvoicePdf = async (req, res) => {
         if (!booking) {
             return res.status(404).json({
                 message: "Booking not found",
+            });
+        }
+        if (booking.bookingStatus === "Cancelled" ||
+            !Number.isFinite(booking.totalPrice) || booking.totalPrice <= 0 ||
+            Math.abs(booking.totalPrice * 100 - Math.round(booking.totalPrice * 100)) > 0.000001) {
+            return res.status(409).json({
+                message: "Review the booking status and price before issuing an invoice.",
             });
         }
 
@@ -849,10 +685,8 @@ const generateBookingInvoicePdf = async (req, res) => {
                 documentType: "Booking Invoice",
                 filename: fileName,
                 totalPrice: booking.totalPrice,
-                advancePayment: booking.advancePayment,
                 currency: booking.currency,
                 bookingStatus: booking.bookingStatus,
-                paymentStatus: booking.paymentStatus,
             },
         });
 
@@ -885,68 +719,14 @@ const generateBookingInvoicePdf = async (req, res) => {
 
 
 const generateBookingReceiptPdf = async (req, res) => {
-    try {
-        brandConfig = await getDocumentBrandConfig();
-        const booking = await getBookingById(req.params.id);
-
-        if (!booking) {
-            return res.status(404).json({
-                message: "Booking not found",
-            });
-        }
-
-        const pdfBytes = await createReceiptPdf(booking);
-
-        const fileName = `dream-ceylon-receipt-${booking.bookingCode}.pdf`;
-
-        await createActivityLog({
-            req,
-            action: "GENERATE",
-            module: "PDF",
-            description: `Booking receipt was generated for ${booking.bookingCode}`,
-            relatedRecordId: booking._id,
-            relatedModel: "Booking",
-            referenceNo: booking.bookingCode,
-            customerName: booking.customer?.fullName,
-            metadata: {
-                documentType: "Booking Receipt",
-                filename: fileName,
-                totalPrice: booking.totalPrice,
-                advancePayment: booking.advancePayment,
-                currency: booking.currency,
-                bookingStatus: booking.bookingStatus,
-                paymentStatus: booking.paymentStatus,
-            },
-        });
-
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-
-        return res.send(Buffer.from(pdfBytes));
-    } catch (error) {
-        await createActivityLog({
-            req,
-            action: "GENERATE",
-            module: "PDF",
-            description: `Booking receipt generation failed for booking ${req.params.id}`,
-            relatedRecordId: req.params.id,
-            relatedModel: "Booking",
-            referenceNo: req.params.id,
-            status: "Failed",
-            metadata: {
-                documentType: "Booking Receipt",
-                error: error.message,
-            },
-        });
-
-        res.status(500).json({
-            message: "Failed to generate booking receipt PDF",
-            error: error.message,
-        });
-    }
+    res.set("Cache-Control", "no-store");
+    return res.status(410).json({
+        message: "The booking-level receipt is retired. Open the booking's Payments panel to download a receipt for a recorded payment, or a guest payment statement for the full balance.",
+    });
 };
 
 module.exports = {
     generateBookingInvoicePdf,
     generateBookingReceiptPdf,
+    createInvoicePdf,
 };
