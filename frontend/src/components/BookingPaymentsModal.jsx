@@ -796,7 +796,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                             rows="2"
                                                             value={formData.notes}
                                                             onChange={handleChange}
-                                                            placeholder="Payment note..."
+                                                            placeholder="Private staff note (excluded from guest documents)..."
                                                         ></textarea>
                                                     </div>
                                                 </div>
