@@ -9,6 +9,8 @@ const app = require("../app");
 const Admin = require("../models/Admin");
 const ActivityLog = require("../models/ActivityLog");
 const CompanySetting = require("../models/CompanySetting");
+const { PDFDocument } = require("pdf-lib");
+const { createQuotationPdf, calculateQuotationTotals } = require("../controllers/quotationController");
 const { parseQuotationValidUntil, getQuotationValidityState, getValidityQuery } = require("../utils/quotationValidity");
 
 test("quotation validity uses Colombo calendar days and only flags sent offers", () => {
@@ -70,5 +72,44 @@ test("quotation PDF prints saved identity and validity without changing absent d
         assert.doesNotMatch(content.items.map(({ str }) => str).join(" "), /Valid until:/);
     } finally {
         await legacyPdf.destroy();
+    }
+});
+
+test("quotation PDF retains international client text, pricing and long inclusions across pages", async () => {
+    const data = {
+        quotationNo: "DCJ-Q-2026-123456", quotationDate: "2026-10-22", validUntil: "2026-11-10",
+        clientName: "Łukasz / Анна / සිංහල / தமிழ்", country: "Polska",
+        tourTitle: "Sigiriya - ąęź / Канди / සිංහල / தமிழ்",
+        travelStartDate: "2026-11-27", travelEndDate: "2026-12-07", travelers: 4,
+        durationDays: 10, vehicleType: "Van", currency: "USD",
+        inclusions: ["Chauffeur guide and drinking water", ...Array.from({ length: 65 }, (_, index) => `Day ${index + 1}: transport to a selected Sri Lanka destination.`)],
+        exclusions: ["Meals unless mentioned", "Entrance fees"],
+        notes: "Guest-facing note: this itinerary is customized for your group.",
+    };
+    const totals = calculateQuotationTotals({ vehicleDays: 10, vehicleDailyRate: 92,
+        hotelCost: 200, discount: 20, advancePayment: 300 });
+    const bytes = await createQuotationPdf(data, totals, { companyName: "Dream Ceylon Journeys",
+        email: "info@example.invalid", website: "https://example.invalid" });
+    assert.ok((await PDFDocument.load(bytes)).getPageCount() > 2);
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const task = getDocument({ data: new Uint8Array(bytes), disableFontFace: true, useSystemFonts: false });
+    try {
+        const document = await task.promise;
+        const content = [];
+        for (let page = 1; page <= document.numPages; page += 1) {
+            content.push(...(await (await document.getPage(page)).getTextContent()).items.map(({ str }) => str));
+        }
+        const printed = content.join(" ");
+        const compact = content.join("").replace(/\s+/gu, "");
+        for (const value of ["Łukasz", "Анна", "සිංහල", "தமிழ்", "ąęź"]) {
+            assert.ok(compact.includes(value), value);
+        }
+        for (const value of ["USD 1,100.00", "USD -20.00", "USD 800.00", "Advance requested",
+            "Remaining after advance", "November 10, 2026", "Day 65:", "Guest-facing note:",
+            "this quotation does not confirm any money received"]) {
+            assert.ok(printed.includes(value), value);
+        }
+    } finally {
+        await task.destroy();
     }
 });
