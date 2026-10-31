@@ -4,6 +4,7 @@ import { FaEdit, FaHistory, FaMoneyBillWave, FaPlus, FaSearch, FaTrash } from "r
 import api from "../api/axios";
 import PermissionGuard from "../components/PermissionGuard";
 import SupplierPaymentRegister from "../components/SupplierPaymentRegister";
+import SupplierPaymentVoucherModal from "../components/SupplierPaymentVoucherModal";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { notifySupplierPayablesChanged } from "../utils/supplierPayableEvents";
 
@@ -41,6 +42,7 @@ const CostProfit = () => {
     const paymentPanelRef = useRef(null);
     const [paymentForm, setPaymentForm] = useState(blankPayment);
     const [paymentSaving, setPaymentSaving] = useState(false);
+    const [voucherPayment, setVoucherPayment] = useState(null);
     const [listBusy, setListBusy] = useState(false);
     const [saving, setSaving] = useState(false);
     const [reloadKey, setReloadKey] = useState(0);
@@ -134,6 +136,7 @@ const CostProfit = () => {
         setSuccess("");
         setEditingId("");
         setPaymentCostId("");
+        setVoucherPayment(null);
         if (nextType !== type) setRecords([]);
         setSearchInput("");
         setSearchParams(nextId ? { type: nextType, id: nextId } : { type: nextType });
@@ -459,6 +462,9 @@ const CostProfit = () => {
                                             {entry.note && <div className="small">{entry.note}</div>}
                                             {entry.kind === "payment" && <div className="small">Bank match: {entry.reconciledAt
                                                 ? `Matched to ${entry.statementReference} by ${entry.reconciledByName} at ${formatRecordedAt(entry.reconciledAt)}` : "To match"}</div>}
+                                            {entry.kind === "payment" && <button type="button" className="btn btn-sm btn-outline-primary mt-2 mb-1" onClick={() => setVoucherPayment({ costId: paymentCost._id, paymentId: entry._id })}>
+                                                Payment voucher / email{entry.remittanceRevisions?.length > 0 ? ` · r${entry.remittanceRevisions.at(-1).revision}` : ""}
+                                            </button>}
                                             {(entry.reconciliationHistory || []).length > 0 && <details className="small"><summary>Match history ({entry.reconciliationHistory.length})</summary>
                                                 <ul className="list-unstyled mt-1 mb-0">{entry.reconciliationHistory.map((change) => <li key={change._id}>
                                                     {change.action === "reconciled" ? `Matched to ${change.statementReference}` : `Reopened: ${change.reason}`} · {change.recordedByName} · {formatRecordedAt(change.recordedAt)}
@@ -469,6 +475,8 @@ const CostProfit = () => {
                     </div>
                 </>
             )}
+            {voucherPayment && <SupplierPaymentVoucherModal key={`${voucherPayment.costId}/${voucherPayment.paymentId}`} {...voucherPayment}
+                onClose={() => setVoucherPayment(null)} onSaved={() => setReloadKey((value) => value + 1)} />}
         </div>
     );
 };

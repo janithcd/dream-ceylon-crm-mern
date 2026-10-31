@@ -179,6 +179,16 @@ The booking tab also has a **Supplier payment register** for matching recorded d
 
 Finance staff can filter the register to **To match** or **Matched**, enter a bank statement or cashbook reference to reconcile each payment, and reopen a mistaken match with a required reason. These actions require `cost.view` and `cost.manage` at `PATCH /api/finance/costs/:id/payments/:paymentId/reconciliation` (`{ reconciled: true, statementReference }` or `{ reconciled: false, reason }`). The payment amount and paid total do not change. The register, booking payment history, and CSV show current status; reconciliation events retain the staff member, time, previous reference, and reopening reason. Older payments start unmatched until reviewed. CSV exports respect the selected status filter.
 
+### Supplier payment vouchers and hotel remittance emails
+
+Open **Cost & Profit → Booking → a cost's Payments → Payment voucher / email** on an individual recorded payment. Enter the supplier name, invoice/pro forma reference, optional supplier email and guest/stay reference, and the actual amount, currency and transaction reference from the payment confirmation. Check the details before saving. The payment date and method come from the selected recorded payment. Each voucher covers that payment only; opening balances and paid-total corrections cannot produce vouchers.
+
+A payment recorded against a USD cost can have an LKR transfer amount. Enter the actual agreed amount sent, excluding bank charges; the CRM does not infer an exchange rate or change the cost ledger. If the transfer and cost use the same currency, the amounts must match. Bank transfers and card payments require a transaction reference. The voucher does not claim full invoice settlement or replace the bank confirmation or the hotel's receipt.
+
+Download the branded **Supplier Payment Voucher / Remittance Advice** PDF, then review and copy the email into Zoho Mail or open the configured email app. Attach the bank confirmation and downloaded voucher yourself and ask the hotel to acknowledge allocation and send its receipt. Email drafts contain the reviewed supplier/invoice/payment references, without cost descriptions, private payment notes, margins, correction reasons or staff names. No email is sent automatically, no attachments are uploaded, and preparing a draft does not mark it sent. Guest hotel vouchers remain separate reservation documents.
+
+Corrections require a reason and append a numbered revision with staff and time; previous details remain in the private revision history. Saving uses the cost document version to reject stale updates. PDF downloads require the revision currently displayed. Reload after a conflict. `GET` and `PUT /api/finance/costs/:id/payments/:paymentId/remittance` require `cost.view`; saving also requires `cost.manage` and `{ expectedVersion, confirmed: true, ...details }`. `POST` to the same path plus `/pdf` requires `cost.view`, `pdf.generate` and `{ revision }`. Advice responses use `Cache-Control: no-store`. General booking activity records saves/downloads without private supplier details.
+
 ### 🤖 AI Tools
 
 - Generate client replies
