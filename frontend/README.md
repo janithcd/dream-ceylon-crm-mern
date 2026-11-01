@@ -1,16 +1,28 @@
-# React + Vite
+# Dream Ceylon CRM frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The staff interface for Dream Ceylon CRM, built with React, Vite and Bootstrap.
 
-Currently, two official plugins are available:
+[Project overview and setup](../README.md) · [Feature guide](../PROJECT_FEATURES.md) · [CI and Docker](../docs/DEVOPS.md)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Local development
 
-## React Compiler
+Use Node.js 24 or 22.12+. From this directory:
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+npm ci
+npm run dev
+```
 
-## Expanding the ESLint configuration
+Copy [`.env.example`](.env.example) to `.env` on a fresh checkout and set `VITE_API_BASE_URL` to the backend URL, including `/api`. The default local API is `http://localhost:5000/api`; the default Vite page is `http://localhost:5173`.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Commands
+
+| Command | Purpose |
+| --- | --- |
+| `npm test` | Run frontend regression tests. |
+| `npm run lint:runtime` | Run the required runtime lint checks. |
+| `npm run lint` | Report the full lint ruleset, including existing debt. |
+| `npm run build` | Create the production build in `dist/`. |
+| `npm run preview` | Preview the built application locally. |
+
+Vite environment values are included in the browser build. Keep database credentials and provider keys in the backend environment.

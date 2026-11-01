@@ -1,16 +1,18 @@
 # CRM DevOps practical project
 
-## First milestone
+[Project overview](../README.md) · [Deployment guide](../DEPLOYMENT_GUIDE.md) · [Production checklist](../PRODUCTION_CHECKLIST.md)
+
+## Automated checks
 
 Every push, pull request, or manual workflow run executes:
 
 1. Dependency security audits (high/critical issues fail CI), backend syntax checks and Node's built-in test suite with coverage on Node 22 and 24.
-2. Frontend calendar date regression tests and a production build on Node 24.
+2. Frontend tests, required runtime lint and a production build on Node 24.
 3. Docker image builds and smoke tests of the React/Nginx frontend, Express API and disposable MongoDB database.
 
-The workflow has read-only repository permission and needs no AWS, OpenAI or production database credentials. Container images are built for verification; they are not published or deployed yet. See `.github/workflows/ci.yml` and the [Actions page](https://github.com/janithcd/dream-ceylon-crm-mern/actions).
+The workflow has read-only repository permission and needs no AWS, OpenAI or production database credentials. Container images are built for verification; they are not published or deployed yet. See the [workflow](../.github/workflows/ci.yml) and the [Actions page](https://github.com/janithcd/dream-ceylon-crm-mern/actions).
 
-Tests cover authentication failures, inactive/deleted administrators, all permission helpers, role restrictions, CORS/preflight, security headers, startup configuration, database readiness, public registration restrictions, malformed JSON and document dates across host timezones. The health tests simulate database state; container smoke tests use an actual disposable MongoDB instance. This is the first regression suite, not full business-flow coverage.
+Tests cover authentication, permissions, request validation, business dates, payment controls, document content and operational workflows. Unit/API tests use controlled fixtures; container smoke tests exercise persistence against a disposable MongoDB instance. Provider delivery and production deployment are outside this suite. Use the workflow results for the current test and coverage totals.
 
 ## Run checks locally
 
@@ -24,6 +26,7 @@ npm run test:coverage
 cd ../frontend
 npm ci
 npm test
+npm run lint:runtime
 npm run build
 npm run lint
 ```
@@ -73,11 +76,11 @@ CRM forms, lists, CSV exports and the booking calendar now use the same calendar
 
 ## Next milestones
 
-1. Add database-backed business-flow tests for successful login, inquiry → quotation → booking → payment, and PDF content. Resolve the 39 existing frontend lint errors and reduce bundle size. Complete the public-inquiry anti-spam requirement.
+1. Expand database-backed business-flow coverage, resolve the remaining frontend lint debt and reduce bundle size. Complete the public-inquiry anti-spam requirement.
 2. Set an AWS budget, region and target architecture; provision a staging environment and container registry with infrastructure as code. Keep the Namecheap domain registration and plan DNS/email migration separately.
 3. Add AWS deployment using short-lived GitHub OIDC credentials, a staging environment, health checks and a rollback path. Review database backups and upload persistence before cutover.
 4. Build a Jenkins pipeline using the same checks and containers. Run it on a dedicated learning agent; do not expose a Jenkins server to production traffic.
 5. Add a local Kubernetes lab, manifests with readiness/liveness, resource limits, secrets and ingress, then evaluate an AWS Kubernetes environment against the budget.
 6. Migrate the public website after staging, SSL, URLs, inquiry integration, SEO redirects, DNS and email records are verified.
 
-No AWS resources, DNS changes, Jenkins server or Kubernetes cluster are provisioned by this first milestone.
+The current workflow does not provision AWS resources, DNS changes, a Jenkins server or a Kubernetes cluster.

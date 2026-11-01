@@ -1,5 +1,15 @@
 # API Documentation
 
+[Project overview](README.md) · [Feature guide](PROJECT_FEATURES.md) · [Account recovery](docs/ACCOUNT_RECOVERY.md)
+
+This page lists the main route families. Detailed workflow rules, permissions and newer request examples are organized by module:
+
+- [Sales and quotations](docs/workflows/SALES.md)
+- [Bookings and operations](docs/workflows/BOOKINGS.md)
+- [Trip support and guest care](docs/workflows/GUEST_CARE.md)
+- [Guest payments and documents](docs/workflows/GUEST_PAYMENTS.md)
+- [Supplier costs, payments and vouchers](docs/workflows/SUPPLIER_PAYMENTS.md)
+
 Development base URL:
 
 ```text
@@ -16,12 +26,16 @@ Authorization: Bearer <JWT_TOKEN>
 
 ```http
 GET /health
+GET /health/live
 ```
 
 ## Authentication
 
 ```http
 POST /auth/login
+POST /auth/forgot-password
+POST /auth/verify-reset-code
+POST /auth/reset-password
 GET  /auth/profile
 ```
 
