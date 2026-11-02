@@ -113,3 +113,21 @@ test("quotation PDF retains international client text, pricing and long inclusio
         await task.destroy();
     }
 });
+
+test("a normal hotel-and-transport quote does not add an almost empty last page", async () => {
+    const data = {
+        quotationNo: "DCJ-Q-2026-123456", quotationDate: "2026-11-02", clientName: "Example Guest",
+        country: "United Kingdom", tourTitle: "Example 15D 14N Sri Lanka Tour",
+        travelStartDate: "2027-02-27", travelEndDate: "2027-03-13", travelers: 2, durationDays: 15,
+        vehicleType: "Car", currency: "USD",
+        inclusions: ["Private air-conditioned car", "Professional chauffeur guide", "Airport pickup and drop-off",
+            "Customized route planning", "Hotel accommodation", "Train tickets", "Water bottles during transfers"],
+        exclusions: ["Entrance fees", "Safari and activity fees", "Meals outside the listed hotel meal plans", "Personal expenses"],
+        notes: "Hotel stays, room categories and meal plans are as listed in this quotation. The order or timing of sightseeing may change due to weather, train schedules or local operating conditions. We will discuss any significant changes with you in advance.",
+    };
+    const totals = calculateQuotationTotals({ vehicleDays: 15, vehicleDailyRate: 86, hotelCost: 1326, advancePayment: 663 });
+    const bytes = await createQuotationPdf(data, totals, { companyName: "Dream Ceylon Journeys",
+        tagline: "Sri Lanka Private Tours & Tailor-Made Holidays", address: "Sri Lanka", mobiles: ["+94766550304"],
+        email: "info@example.invalid", website: "https://example.invalid", whatsapp: "+94766550304" });
+    assert.equal((await PDFDocument.load(bytes)).getPageCount(), 2);
+});

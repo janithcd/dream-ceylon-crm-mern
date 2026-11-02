@@ -218,9 +218,6 @@ const createQuotationPdf = async (data, totals, company = defaultBrandConfig) =>
                 `https://wa.me/${digits}`);
         }
     }
-    y += 10;
-    paragraph("Ready to confirm your Sri Lanka journey? Contact us to review your final route, hotels, and activities.", green);
-
     const count = pdf.bufferedPageRange().count;
     for (let index = 0; index < count; index += 1) {
         pdf.switchToPage(index);

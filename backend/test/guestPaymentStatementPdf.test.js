@@ -146,6 +146,8 @@ test("statement PDF carries the guest totals across pages without private notes"
         }
         assert.ok(pages.every((page) => page.includes("GUEST PAYMENT STATEMENT")));
         const printed = pages.join(" ");
+        assert.match(printed, /The advance is part of the tour price, not an additional charge/);
+        assert.doesNotMatch(printed, /part of the remaining booking balance/);
         for (const expected of ["GUEST PAYMENT STATEMENT", "555.00", "100.00", "HOTEL ADVANCE", "REF-1", "HISTORY-44", "2 / "]) {
             assert.ok(printed.includes(expected), expected);
         }

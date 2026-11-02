@@ -106,7 +106,7 @@ const createGuestPaymentStatementPdf = async (statement, company) => {
         detail("Agreed advance", money(statement.hotelAdvanceCents, statement.currency));
         detail("Still to collect", money(statement.hotelAdvanceOutstandingCents, statement.currency));
         detail("Due date", formatDocumentDate(statement.hotelAdvanceDueDate, { fallback: "Not scheduled" }));
-        line("The hotel advance is part of the remaining booking balance shown above.", { color: muted });
+        line("The advance is part of the tour price, not an additional charge.", { color: muted });
         y += 8;
     }
     if (statement.balanceCents > 0) {
