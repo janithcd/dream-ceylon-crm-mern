@@ -13,6 +13,7 @@ const {
     getDocumentBrandConfig,
 } = require("../utils/documentSettings");
 const { createActivityLog } = require("../utils/createActivityLog");
+const { needsUnicodeItineraryPdf, createUnicodeItineraryPdf } = require("../utils/unicodeItineraryPdf");
 
 const PAGE = {
     width: 595.28,
@@ -1135,6 +1136,22 @@ const drawContactSection = (state) => {
     state.cursorY = y + 218;
 };
 
+const sendItineraryPdf = async ({ req, res, data, pdfBytes, pageCount, renderer }) => {
+    const filename = `dream-ceylon-itinerary-${cleanFileName(data.clientName)}.pdf`;
+    await createActivityLog({
+        req, action: "GENERATE", module: "PDF",
+        description: `Itinerary PDF was generated for ${data.clientName || "client"}`,
+        relatedModel: "PDF", referenceNo: filename, customerName: data.clientName,
+        metadata: { documentType: "Itinerary", filename, country: data.country,
+            travelers: data.travelers, durationDays: data.durationDays,
+            vehicleType: data.vehicleType, pageCount, renderer },
+    });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("Content-Length", pdfBytes.length);
+    return res.status(200).send(Buffer.from(pdfBytes));
+};
+
 const generateItineraryPdf = async (req, res) => {
     try {
         const brand = await getDocumentBrandConfig();
@@ -1160,7 +1177,7 @@ const generateItineraryPdf = async (req, res) => {
             });
         }
 
-        const data = normalizePdfData({
+        const source = {
             clientName,
             country,
             travelers,
@@ -1173,7 +1190,18 @@ const generateItineraryPdf = async (req, res) => {
             arrivalCity,
             endingPreference,
             language,
-        });
+        };
+        const unicode = needsUnicodeItineraryPdf(generatedItinerary, ...Object.values(source),
+            brand.companyName, brand.tagline, brand.email);
+        const data = unicode ? {
+            ...source, clientName: String(clientName || "").trim(),
+            country: String(country || "").trim(), arrivalCity: String(arrivalCity || "").trim(),
+        } : normalizePdfData(source);
+        if (unicode) {
+            const pdfBytes = await createUnicodeItineraryPdf({ ...data, generatedItinerary }, brand);
+            const pageCount = (pdfBytes.toString("latin1").match(/\/Type \/Page\b/g) || []).length;
+            return sendItineraryPdf({ req, res, data, pdfBytes, pageCount, renderer: "Unicode" });
+        }
 
         const pdfDoc = await PDFDocument.create();
 
@@ -1229,35 +1257,7 @@ const generateItineraryPdf = async (req, res) => {
 
         const pdfBytes = await pdfDoc.save();
 
-        const filename = `dream-ceylon-itinerary-${cleanFileName(clientName)}.pdf`;
-
-        await createActivityLog({
-            req,
-            action: "GENERATE",
-            module: "PDF",
-            description: `Itinerary PDF was generated for ${data.clientName || "client"}`,
-            relatedModel: "PDF",
-            referenceNo: filename,
-            customerName: data.clientName,
-            metadata: {
-                documentType: "Itinerary",
-                filename,
-                country: data.country,
-                travelers: data.travelers,
-                durationDays: data.durationDays,
-                vehicleType: data.vehicleType,
-                pageCount: pages.length,
-            },
-        });
-
-        res.setHeader("Content-Type", "application/pdf");
-        res.setHeader(
-            "Content-Disposition",
-            `attachment; filename="${filename}"`
-        );
-        res.setHeader("Content-Length", pdfBytes.length);
-
-        res.status(200).send(Buffer.from(pdfBytes));
+        return sendItineraryPdf({ req, res, data, pdfBytes, pageCount: pages.length, renderer: "Standard" });
     } catch (error) {
         console.error("PDF Generation Error:", error);
 

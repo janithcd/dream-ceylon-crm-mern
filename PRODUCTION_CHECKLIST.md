@@ -7,7 +7,7 @@ This checklist is a gate for each release. A checked box must refer to evidence 
 - [ ] Record the candidate commit and confirm its GitHub Actions run is green for both Node versions, the frontend and Docker/MongoDB smoke tests.
 - [ ] Review the [release audit](docs/RELEASE_AUDIT_2026-11-02.md) and resolve or accept its open risks.
 - [ ] Recheck `npm audit` for the backend and `npm audit --omit=dev` for the frontend; evaluate any new advisory before release.
-- [ ] Review a normal and a multi-page PDF from the deployed build: quotation, invoice, guest itinerary, hotel voucher, supplier remittance and payment receipt/statement. Confirm the recipient, prices, dates and draft/validity labels.
+- [ ] Review a normal and a multi-page PDF from the deployed build: quotation, invoice, AI proposal (including a real-language sample), guest itinerary, hotel voucher, supplier remittance and payment receipt/statement. Confirm the recipient, prices, dates and draft/validity labels.
 
 ## Live environment and data
 

@@ -217,6 +217,8 @@ POST /ai/itinerary
 POST /pdf/itinerary
 ```
 
+The itinerary PDF is a proposal generated from the reviewed request content. Cyrillic, Greek, Sinhala, Tamil, route arrows and other text unsupported by the legacy Helvetica layout use a Unicode-aware layout; unknown glyphs appear as visible placeholders. It is not an official quotation or booking confirmation.
+
 ## Public Website API
 
 ```http
