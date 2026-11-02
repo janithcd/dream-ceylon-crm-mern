@@ -1,4 +1,5 @@
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Suspense } from "react";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
     FaBell,
     FaBan,
@@ -42,10 +43,13 @@ import RecoveryAlert from "../components/RecoveryAlert";
 import DepartureReminderLink from "../components/DepartureReminderLink";
 import TeamHandoverLink from "../components/TeamHandoverLink";
 import { ROUTE_PERMISSIONS } from "../config/routePermissions";
+import PageLoading from "../components/PageLoading";
+import PageErrorBoundary from "../components/PageErrorBoundary";
 
 const AdminLayout = () => {
     const { admin, logout } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
 
     const handleLogout = () => {
         logout();
@@ -362,7 +366,11 @@ const AdminLayout = () => {
                 </header>
 
                 <section className="content-area">
-                    <Outlet />
+                    <PageErrorBoundary key={location.pathname}>
+                        <Suspense fallback={<PageLoading />}>
+                            <Outlet />
+                        </Suspense>
+                    </PageErrorBoundary>
                 </section>
             </main>
         </div>

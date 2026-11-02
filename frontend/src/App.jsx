@@ -1,53 +1,57 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
-import ProtectedRoute from "./routes/ProtectedRoute";
-import AdminLayout from "./layouts/AdminLayout";
-import ClientTools from "./pages/ClientTools";
-import Login from "./pages/Login";
-import ForgotPassword from "./pages/ForgotPassword";
-import Dashboard from "./pages/Dashboard";
-import Destinations from "./pages/Destinations";
-import Packages from "./pages/Packages";
-import Inquiries from "./pages/Inquiries";
-import LeadInsights from "./pages/LeadInsights";
-import LeadTriage from "./pages/LeadTriage";
-import Bookings from "./pages/Bookings";
-import TeamHandovers from "./pages/TeamHandovers";
-import MyTasks from "./pages/MyTasks";
-import TeamTasks from "./pages/TeamTasks";
-import SupplierConfirmations from "./pages/SupplierConfirmations";
-import HotelCancellationDeadlines from "./pages/HotelCancellationDeadlines";
-import CancellationReview from "./pages/CancellationReview";
-import AirportTransfers from "./pages/AirportTransfers";
-import DepartureReadiness from "./pages/DepartureReadiness";
-import PostTripCare from "./pages/PostTripCare";
-import TripSupport from "./pages/TripSupport";
-import Vehicles from "./pages/Vehicles";
-import Quotations from "./pages/Quotations";
-import QuotationHistory from "./pages/QuotationHistory";
-import BookingCalendar from "./pages/BookingCalendar";
-import FollowUps from "./pages/FollowUps";
-import Customers from "./pages/Customers";
-import PaymentReports from "./pages/PaymentReports";
-import OutstandingBalances from "./pages/OutstandingBalances";
-import CostProfit from "./pages/CostProfit";
-import Settings from "./pages/Settings";
-import ActivityLogs from "./pages/ActivityLogs";
-import Admins from "./pages/Admins";
 import { PermissionProvider } from "./context/PermissionContext";
 import PermissionRoute from "./components/PermissionRoute";
-import AccessDenied from "./pages/AccessDenied";
-import ChatConversationDetails from "./pages/ChatConversationDetails";
-import ChatAnalytics from "./pages/ChatAnalytics";
-
+import PageLoading from "./components/PageLoading";
+import PageErrorBoundary from "./components/PageErrorBoundary";
+import ProtectedRoute from "./routes/ProtectedRoute";
+import AdminLayout from "./layouts/AdminLayout";
 import { ROUTE_PERMISSIONS } from "./config/routePermissions";
 
-import ChatConversations from "./pages/ChatConversations";
+const ClientTools = lazy(() => import("./pages/ClientTools"));
+const Login = lazy(() => import("./pages/Login"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Destinations = lazy(() => import("./pages/Destinations"));
+const Packages = lazy(() => import("./pages/Packages"));
+const Inquiries = lazy(() => import("./pages/Inquiries"));
+const LeadInsights = lazy(() => import("./pages/LeadInsights"));
+const LeadTriage = lazy(() => import("./pages/LeadTriage"));
+const Bookings = lazy(() => import("./pages/Bookings"));
+const TeamHandovers = lazy(() => import("./pages/TeamHandovers"));
+const MyTasks = lazy(() => import("./pages/MyTasks"));
+const TeamTasks = lazy(() => import("./pages/TeamTasks"));
+const SupplierConfirmations = lazy(() => import("./pages/SupplierConfirmations"));
+const HotelCancellationDeadlines = lazy(() => import("./pages/HotelCancellationDeadlines"));
+const CancellationReview = lazy(() => import("./pages/CancellationReview"));
+const AirportTransfers = lazy(() => import("./pages/AirportTransfers"));
+const DepartureReadiness = lazy(() => import("./pages/DepartureReadiness"));
+const PostTripCare = lazy(() => import("./pages/PostTripCare"));
+const TripSupport = lazy(() => import("./pages/TripSupport"));
+const Vehicles = lazy(() => import("./pages/Vehicles"));
+const Quotations = lazy(() => import("./pages/Quotations"));
+const QuotationHistory = lazy(() => import("./pages/QuotationHistory"));
+const BookingCalendar = lazy(() => import("./pages/BookingCalendar"));
+const FollowUps = lazy(() => import("./pages/FollowUps"));
+const Customers = lazy(() => import("./pages/Customers"));
+const PaymentReports = lazy(() => import("./pages/PaymentReports"));
+const OutstandingBalances = lazy(() => import("./pages/OutstandingBalances"));
+const CostProfit = lazy(() => import("./pages/CostProfit"));
+const Settings = lazy(() => import("./pages/Settings"));
+const ActivityLogs = lazy(() => import("./pages/ActivityLogs"));
+const Admins = lazy(() => import("./pages/Admins"));
+const AccessDenied = lazy(() => import("./pages/AccessDenied"));
+const ChatConversationDetails = lazy(() => import("./pages/ChatConversationDetails"));
+const ChatAnalytics = lazy(() => import("./pages/ChatAnalytics"));
+const ChatConversations = lazy(() => import("./pages/ChatConversations"));
 
 const App = () => {
     return (
         <AuthProvider>
             <BrowserRouter>
+                <PageErrorBoundary>
+                <Suspense fallback={<PageLoading />}>
                 <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -307,6 +311,8 @@ const App = () => {
 
                     <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
+                </Suspense>
+                </PageErrorBoundary>
             </BrowserRouter>
         </AuthProvider>
     );

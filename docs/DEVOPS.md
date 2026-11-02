@@ -60,7 +60,7 @@ docker compose down
 
 `docker compose down` preserves local named volumes. The CI cleanup additionally removes volumes because its data is disposable. Avoid copying that cleanup command into an environment whose data you need.
 
-The frontend proxies `/api` and `/uploads` to the backend and supports React Router page refreshes. MongoDB and the API have no published host ports. Only the frontend is exposed, bound to local loopback. Both application images run as non-root users. Uploads use a named volume.
+The frontend proxies `/api` and `/uploads` to the backend and supports React Router page refreshes. Screens are loaded as separate JavaScript chunks; the sidebar remains in place while a screen loads. Nginx serves hashed `/assets/` files with immutable caching, serves `index.html` with `no-cache`, and returns 404 for a missing chunk. The container smoke check verifies those responses. MongoDB and the API have no published host ports. Only the frontend is exposed, bound to local loopback. Both application images run as non-root users. Uploads use a named volume.
 
 AI features require a separately injected OpenAI key; they are not exercised by these checks. Compose is a local/CI lab with unauthenticated private MongoDB, HTTP and one API replica. It is not a production deployment manifest.
 
@@ -76,7 +76,7 @@ CRM forms, lists, CSV exports and the booking calendar now use the same calendar
 
 ## Next milestones
 
-1. Expand database-backed business-flow coverage, resolve the remaining frontend lint debt and reduce bundle size. Complete the public-inquiry anti-spam requirement.
+1. Expand database-backed business-flow coverage, resolve the remaining frontend lint debt and monitor the remaining route/chart chunk sizes. Complete the public-inquiry anti-spam requirement.
 2. Set an AWS budget, region and target architecture; provision a staging environment and container registry with infrastructure as code. Keep the Namecheap domain registration and plan DNS/email migration separately.
 3. Add AWS deployment using short-lived GitHub OIDC credentials, a staging environment, health checks and a rollback path. Review database backups and upload persistence before cutover.
 4. Build a Jenkins pipeline using the same checks and containers. Run it on a dedicated learning agent; do not expose a Jenkins server to production traffic.
