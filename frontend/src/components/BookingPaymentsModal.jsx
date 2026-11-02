@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
     FaFilePdf,
+    FaEnvelope,
     FaPlus,
     FaReceipt,
     FaSyncAlt,
@@ -16,6 +17,7 @@ import { usePermissions } from "../context/PermissionContext";
 import { notifyPaymentAttentionChanged } from "../utils/paymentEvents";
 import { getGuestPaymentMilestones } from "../utils/guestPaymentMilestones";
 import { paymentMethods } from "../utils/paymentMethods";
+import ClientPaymentEmailPanel from "./ClientPaymentEmailPanel";
 
 const initialPaymentForm = () => ({
     amount: "",
@@ -69,6 +71,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
     const canRefundPayment = hasPermission("payment.refund");
     const canDeletePayment = hasPermission("payment.delete");
     const canGeneratePdf = hasPermission("pdf.generate");
+    const canSendPaymentEmail = hasPermission("payment.email.send");
     const [payments, setPayments] = useState([]);
     const [currentBooking, setCurrentBooking] = useState(booking);
     const [formData, setFormData] = useState({
@@ -83,6 +86,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
     const [receiptLoadingId, setReceiptLoadingId] = useState("");
     const [statementLoading, setStatementLoading] = useState(false);
     const [statementReadiness, setStatementReadiness] = useState(null);
+    const [emailPayment, setEmailPayment] = useState(null);
     const [readinessError, setReadinessError] = useState("");
     const [summaryReviewOpen, setSummaryReviewOpen] = useState(false);
     const [summaryReason, setSummaryReason] = useState("");
@@ -140,6 +144,7 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
             setError("");
             setReadinessError("");
             setStatementReadiness(null);
+            setEmailPayment(null);
             setSummaryReviewOpen(false);
             setSummaryReason("");
             setSummaryConfirmed(false);
@@ -530,6 +535,11 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
 
                                 {error && <div className="alert alert-danger">{error}</div>}
                                 {success && <div className="alert alert-success">{success}</div>}
+
+                                {emailPayment && <ClientPaymentEmailPanel key={emailPayment._id}
+                                    payment={emailPayment} canSend={canSendPaymentEmail}
+                                    onClose={() => setEmailPayment(null)}
+                                    onSent={(message) => { setEmailPayment(null); setSuccess(message); }} />}
 
                                 <div className={`alert ${statementReadiness?.ready ? "alert-success" : "alert-warning"}`} role="status">
                                     {loading ? <strong>Checking guest statement...</strong> : readinessError ?
@@ -928,6 +938,15 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
                                                                         </button>
                                                                     </PermissionGuard>
                                                                 )}
+
+                                                            {payment.status === "Received" && <PermissionGuard all={["booking.view", "payment.view", "pdf.generate"]}>
+                                                                <button type="button" className="btn btn-sm btn-outline-primary"
+                                                                    title="Review receipt and statement email" aria-label="Review receipt and statement email"
+                                                                    onClick={() => { setEmailPayment(payment); setError(""); setSuccess(""); }}
+                                                                    disabled={loading || !statementReadiness?.ready || !canGeneratePdf}>
+                                                                    <FaEnvelope />
+                                                                </button>
+                                                            </PermissionGuard>}
 
                                                             <PermissionGuard permission="payment.delete">
                                                                 <button

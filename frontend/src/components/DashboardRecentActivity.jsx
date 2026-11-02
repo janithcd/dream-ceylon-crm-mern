@@ -50,6 +50,7 @@ const getActionBadgeClass = (action) => {
 
         case "DOWNLOAD":
         case "GENERATE":
+        case "SEND":
             return "text-bg-dark";
 
         case "CONVERT":

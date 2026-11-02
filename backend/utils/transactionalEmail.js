@@ -6,7 +6,7 @@ const isConfigured = () =>
 const safeCode = (value) => typeof value === "string" && /^[A-Z]{1,10}_[0-9]{1,5}$/.test(value) ? value : null;
 const safeRequestId = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(value) ? value : null;
 
-const sendPasswordResetCode = async ({ to, code }) => {
+const sendEmail = async (message) => {
     if (!isConfigured()) {
         throw new Error("Zoho transactional email is not configured.");
     }
@@ -23,16 +23,15 @@ const sendPasswordResetCode = async ({ to, code }) => {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            from: { address: process.env.ZOHO_CPaaS_FROM, name: "Dream Ceylon CRM" },
-            to: [{ email_address: { address: to } }],
-            subject: "Dream Ceylon CRM password reset code",
-            textbody: `Your Dream Ceylon CRM password reset code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.`,
+            from: { address: process.env.ZOHO_CPaaS_FROM, name: "Dream Ceylon Journeys" },
+            ...message,
         }),
         signal: AbortSignal.timeout(10000),
     });
     const result = await response.json().catch(() => null);
-    const recipientRejected = Array.isArray(result?.data) && result.data.some((item) => item.message !== "OK");
-    if (!response.ok || result?.message !== "OK" || recipientRejected) {
+    const recipientAccepted = Array.isArray(result?.data) && result.data.length === 1 &&
+        result.data[0]?.message === "OK";
+    if (!response.ok || result?.message !== "OK" || !recipientAccepted) {
         const providerData = Array.isArray(result?.data) ? result.data[0] : result?.data;
         const details = [`HTTP ${response.status}`];
         const errorCode = safeCode(providerData?.error_code);
@@ -41,9 +40,25 @@ const sendPasswordResetCode = async ({ to, code }) => {
         if (errorCode) details.push(`code ${errorCode}`);
         if (subCode) details.push(`sub-code ${subCode}`);
         if (requestId) details.push(`request ID ${requestId}`);
-        throw new Error(`Zoho CPaaS email request failed (${details.join(", ")}).`);
+        const error = new Error(`Zoho CPaaS email request failed (${details.join(", ")}).`);
+        // A non-2xx response with a provider rejection is safe to retry after correction.
+        error.definitivelyRejected = response.status >= 400 && response.status < 500;
+        throw error;
     }
     return safeRequestId(result.request_id);
 };
 
-module.exports = { isConfigured, sendPasswordResetCode };
+const sendPasswordResetCode = ({ to, code }) => sendEmail({
+    to: [{ email_address: { address: to } }],
+    subject: "Dream Ceylon CRM password reset code",
+    textbody: `Your Dream Ceylon CRM password reset code is ${code}. It expires in 10 minutes. If you did not request this, you can ignore this email.`,
+});
+
+const sendClientPaymentDocuments = ({ to, subject, textbody, attachments }) => sendEmail({
+    to: [{ email_address: { address: to } }], subject, textbody,
+    attachments: attachments.map(({ name, bytes }) => ({
+        name, mime_type: "application/pdf", content: bytes.toString("base64"),
+    })),
+});
+
+module.exports = { isConfigured, sendPasswordResetCode, sendClientPaymentDocuments };

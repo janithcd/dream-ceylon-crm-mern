@@ -51,6 +51,7 @@ const actionOptions = [
     "LOGOUT",
     "DOWNLOAD",
     "GENERATE",
+    "SEND",
     "CONVERT",
     "COMPLETE",
     "CANCEL",
@@ -98,6 +99,7 @@ const getActionBadgeClass = (action) => {
 
         case "DOWNLOAD":
         case "GENERATE":
+        case "SEND":
             return "text-bg-dark";
 
         case "CONVERT":

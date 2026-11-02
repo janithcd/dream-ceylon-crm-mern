@@ -32,6 +32,7 @@ export const PERMISSIONS = Object.freeze({
     PAYMENT_RECONCILE: "payment.reconcile",
     PAYMENT_DELETE: "payment.delete",
     PAYMENT_REFUND: "payment.refund",
+    PAYMENT_EMAIL_SEND: "payment.email.send",
 
     FOLLOW_UP_VIEW: "followUp.view",
     FOLLOW_UP_MANAGE: "followUp.manage",
@@ -129,6 +130,7 @@ export const PERMISSION_GROUPS = [
             ["payment.reconcile", "Match payments to bank or cashbook"],
             ["payment.delete", "Delete payments"],
             ["payment.refund", "Refund payments"],
+            ["payment.email.send", "Send payment receipt and statement to guest"],
         ],
     },
     {

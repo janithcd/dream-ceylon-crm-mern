@@ -29,7 +29,7 @@ The application includes permissions for different staff roles, branded PDF docu
 | **Quotations** | Prepare offers, set validity dates, compare revisions, generate PDFs and convert accepted offers into bookings. |
 | **Bookings and operations** | Plan itineraries, traveler rosters, hotel stays, rooming plans, transport and airport transfers. |
 | **Team coordination** | Assign preparation tasks, review departure readiness, record supplier contact and share private handover notes. |
-| **Guest finance** | Record receipts and refunds, manage collection targets, match bank entries and issue guest payment statements. |
+| **Guest finance** | Record receipts and refunds, manage collection targets, match bank entries, issue guest payment statements and review payment confirmation emails. |
 | **Supplier finance** | Track costs and profit, schedule supplier payments, match transfers and generate payment vouchers with email drafts. |
 | **Guest care** | Manage issues during trips, follow up after departure, collect feedback and track service recovery. |
 | **Documents and AI** | Generate branded quotations, invoices, receipts, itineraries and hotel vouchers; draft replies and itineraries with AI. |
@@ -57,7 +57,7 @@ A Super Admin can grant additional permissions. The backend enforces access; the
 | Backend | Node.js, Express, Mongoose, JWT, bcrypt |
 | Database | MongoDB / MongoDB Atlas |
 | Documents | PDFKit, pdf-lib, embedded Noto fonts |
-| Optional integrations | OpenAI for AI tools; Zoho CPaaS for password recovery |
+| Optional integrations | OpenAI for AI tools; Zoho CPaaS for password recovery and guest payment emails |
 | Development and delivery | Node test runner, ESLint, GitHub Actions, Docker Compose, Nginx |
 
 ## Quick start
@@ -96,6 +96,12 @@ node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
 ```
 
 AI tools and password recovery need their respective provider settings. Leave unused integration keys blank. See the [backend template](backend/.env.example), [frontend template](frontend/.env.example) and [account recovery guide](docs/ACCOUNT_RECOVERY.md).
+
+### Guest payment emails
+
+Open a booking's **Payment History**, select the envelope on a received payment, and review the recipient, subject, text and two PDF attachments. For PayHere, enter the **verified total card charge** (including any processing fee); the preview separates that fee from the amount applied to the tour. The statement must reconcile before the action is available. The email goes only to the address saved on the booking. The send action requires `payment.email.send`, available by default to Super Admin, Manager and Finance.
+
+Automatic sending uses the **Zoho CPaaS Email API**, which requires a verified domain and Agent API key in `backend/.env`. A Zoho Mail mailbox alone does not enable the CRM send button. When CPaaS is unconfigured, copy the reviewed email, download the receipt and statement, and attach them manually in Zoho Mail. The CRM records the provider acceptance and blocks duplicate or uncertain sends for the same payment; acceptance is not proof of delivery, so check Zoho logs if delivery is in doubt. Never send the quotation or an invoice automatically with this payment confirmation.
 
 ### 3. Start both applications
 

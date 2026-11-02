@@ -12,6 +12,7 @@ const activityLogSchema = new mongoose.Schema(
                 "LOGOUT",
                 "DOWNLOAD",
                 "GENERATE",
+                "SEND",
                 "CONVERT",
                 "COMPLETE",
                 "CANCEL",
