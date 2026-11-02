@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../api/axios";
 import { buildWhatsAppUrl } from "../utils/whatsappFollowUp";
 import { usePermissions } from "../context/PermissionContext";
@@ -86,11 +86,11 @@ const PostTripCareModal = ({ booking, onClose, onChanged }) => {
     }, []);
 
     const draftChanged = Boolean(draft && (draft.number !== draft.originalNumber || draft.message !== draft.originalMessage));
-    const close = () => {
+    const close = useCallback(() => {
         if (busy || (draftChanged && !window.confirm("Discard the edited message draft?"))) return;
         onClose();
-    };
-    closeRef.current = close;
+    }, [busy, draftChanged, onClose]);
+    useEffect(() => { closeRef.current = close; }, [close]);
 
     const prepare = async () => {
         if (busy) return;

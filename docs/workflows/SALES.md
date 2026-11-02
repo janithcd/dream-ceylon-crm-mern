@@ -109,8 +109,9 @@ Set an optional **Valid until** date on quotations. It appears on the client PDF
 CSV exports. In **Quotation History → Offer validity**, find sent offers past their validity date, ending
 within seven Sri Lanka calendar days, or missing a date. An expired date is flagged for a rate review but does
 not silently change the quotation's status or prevent a client from accepting it. Edit or clear the date when
-revising an offer. Saved quotation PDF downloads retain the saved quotation number and creation date; unsaved
-previews use a temporary number and current date.
+revising an offer. Saved quotation PDF downloads use the saved number, creation date and prices, and warn when
+the offer is a draft, rejected, expired or past its validity date. Unsaved previews are marked **DRAFT - NOT SAVED**
+and have no official number. Save any changes before downloading a client-ready PDF.
 
 **Quotation reminder coverage:** in Quotation History, choose **No pending reminder** to find Sent,
 unconverted offers without a pending CRM follow-up, oldest first. Create a follow-up from the existing bell

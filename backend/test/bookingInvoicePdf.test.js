@@ -52,3 +52,26 @@ test("long public payment instructions continue onto another invoice page", asyn
     }, { pdfSettings: { paymentInstructions: "Please quote the booking reference. ".repeat(35) } });
     assert.ok((await PDFDocument.load(bytes)).getPageCount() > 1);
 });
+
+test("long guest names continue with their label and retain booking totals", async () => {
+    const bytes = await createInvoicePdf({
+        bookingCode: "CI-INVOICE-LONG-GUEST", bookingStatus: "Confirmed", currency: "USD",
+        customer: { fullName: "Long Guest ".repeat(340) + "FINAL GUEST", email: "guest@example.invalid" },
+        numberOfTravelers: 2, totalPrice: 2616,
+        travelStartDate: new Date("2027-02-27"), travelEndDate: new Date("2027-03-13"),
+    }, { companyName: "Dream Ceylon Journeys" });
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const task = getDocument({ data: new Uint8Array(bytes), disableFontFace: true, useSystemFonts: false });
+    try {
+        const document = await task.promise;
+        assert.ok(document.numPages >= 2);
+        const pages = [];
+        for (let page = 1; page <= document.numPages; page += 1) {
+            const content = await (await document.getPage(page)).getTextContent();
+            pages.push(content.items.map(({ str }) => str).join(" "));
+        }
+        assert.ok(pages.some((page) => page.includes("Lead guest (continued)")));
+        assert.ok(pages.join(" ").includes("FINAL GUEST"));
+        assert.ok(pages.join(" ").includes("USD 2,616.00"));
+    } finally { await task.destroy(); }
+});

@@ -165,6 +165,7 @@ The full frontend `npm run lint` report still contains existing lint debt and is
 | [Deployment guide](DEPLOYMENT_GUIDE.md) | Hosting configuration and release checks |
 | [Server integration](SERVER_INTEGRATION.md) | Public website and API integration |
 | [Production checklist](PRODUCTION_CHECKLIST.md) | Checks before a production release |
+| [Release audit](docs/RELEASE_AUDIT_2026-11-02.md) | Source audit, PDF fixes, test evidence and remaining release gates |
 | [Security policy](SECURITY.md) | Secrets, access control and production requirements |
 
 ## Roadmap

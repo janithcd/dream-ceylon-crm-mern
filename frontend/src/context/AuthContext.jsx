@@ -1,21 +1,11 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useState } from "react";
 import api from "../api/axios";
+import { readSavedAdmin } from "../utils/savedAdmin";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-    const [admin, setAdmin] = useState(null);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        const savedAdmin = localStorage.getItem("adminInfo");
-
-        if (savedAdmin) {
-            setAdmin(JSON.parse(savedAdmin));
-        }
-
-        setLoading(false);
-    }, []);
+    const [admin, setAdmin] = useState(readSavedAdmin);
 
     const login = async (email, password) => {
         const response = await api.post("/auth/login", {
@@ -35,7 +25,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ admin, loading, login, logout }}>
+        <AuthContext.Provider value={{ admin, loading: false, login, logout }}>
             {children}
         </AuthContext.Provider>
     );

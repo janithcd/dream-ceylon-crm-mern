@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FaCopy, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
@@ -59,11 +59,11 @@ const BookingTravelersModal = ({ bookingId, onClose, onChanged }) => {
         };
     }, []);
 
-    const close = () => {
+    const close = useCallback(() => {
         if (busy || (dirty && !window.confirm("Discard unsaved traveler names?"))) return;
         onClose();
-    };
-    closeRef.current = close;
+    }, [busy, dirty, onClose]);
+    useEffect(() => { closeRef.current = close; }, [close]);
 
     const reload = async () => {
         if (busy || (dirty && !window.confirm("Discard these changes and reload the saved roster?"))) return;

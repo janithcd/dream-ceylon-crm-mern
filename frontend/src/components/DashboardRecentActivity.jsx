@@ -138,10 +138,16 @@ const DashboardRecentActivity = () => {
     };
 
     useEffect(() => {
-        if (!permissionsLoading && canViewActivityLogs) {
-            fetchRecentActivities();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+        if (permissionsLoading || !canViewActivityLogs) return undefined;
+        let active = true;
+        api.get("/activity-logs/summary").then((response) => {
+            if (active) setActivities(response.data.recentActivities || []);
+        }).catch((err) => {
+            if (active) setError(err.response?.data?.message || "Failed to load recent activities.");
+        }).finally(() => {
+            if (active) setLoading(false);
+        });
+        return () => { active = false; };
     }, [permissionsLoading, canViewActivityLogs]);
 
     if (permissionsLoading || !canViewActivityLogs) {

@@ -482,7 +482,9 @@ const Quotations = () => {
         try {
             setPdfLoading(true);
 
-            const response = await api.post("/quotations/pdf", buildPayload(), {
+            const saved = editId && !editedSinceSave;
+            const response = await api.post(saved ? `/quotations/${editId}/pdf` : "/quotations/pdf",
+                saved ? {} : buildPayload(), {
                 responseType: "blob",
             });
 
@@ -500,7 +502,7 @@ const Quotations = () => {
                     .replace(/^-+|-+$/g, "") || "client";
 
             link.href = fileUrl;
-            link.download = `dream-ceylon-quotation-${cleanClientName}.pdf`;
+            link.download = `dream-ceylon-${saved && formData.status !== "Draft" ? "quotation" : "draft-quotation"}-${cleanClientName}.pdf`;
             document.body.appendChild(link);
             link.click();
             link.remove();
@@ -924,7 +926,8 @@ const Quotations = () => {
                                         disabled={pdfLoading}
                                     >
                                         <FaDownload className="me-2" />
-                                        {pdfLoading ? "Generating PDF..." : "Download PDF"}
+                                        {pdfLoading ? "Generating PDF..." : editId && !editedSinceSave
+                                            ? "Download saved PDF" : "Download draft PDF"}
                                     </button>
                                 </PermissionGuard>
                             </div>

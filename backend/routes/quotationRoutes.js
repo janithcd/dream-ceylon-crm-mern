@@ -2,6 +2,7 @@ const express = require("express");
 
 const {
     generateQuotationPdf,
+    generateSavedQuotationPdf,
 } = require("../controllers/quotationController");
 
 const {
@@ -33,6 +34,13 @@ router.post(
         PERMISSIONS.PDF_GENERATE
     ),
     generateQuotationPdf
+);
+
+router.post(
+    "/:id/pdf",
+    protect,
+    authorizePermissions(PERMISSIONS.QUOTATION_VIEW, PERMISSIONS.PDF_GENERATE),
+    generateSavedQuotationPdf
 );
 
 router.post(

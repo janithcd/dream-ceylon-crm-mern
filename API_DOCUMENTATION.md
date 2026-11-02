@@ -91,7 +91,10 @@ PUT    /quotations/:id
 DELETE /quotations/:id
 POST   /quotations/:id/convert-to-booking
 POST   /quotations/pdf
+POST   /quotations/:id/pdf
 ```
+
+`POST /quotations/pdf` generates a visibly marked, unsaved draft from the submitted form; it cannot issue an official quotation number. `POST /quotations/:id/pdf` loads the saved quotation and prices from the server and requires `quotation.view` and `pdf.generate`. It returns `409` when saved payment targets disagree with the recalculated prices.
 
 ## Bookings
 

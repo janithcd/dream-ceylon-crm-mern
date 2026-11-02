@@ -69,7 +69,6 @@ const BookingPaymentsModal = ({ booking, onClose, onPaymentChanged }) => {
     const canViewPayments = hasPermission("payment.view");
     const canCreatePayment = hasPermission("payment.create");
     const canRefundPayment = hasPermission("payment.refund");
-    const canDeletePayment = hasPermission("payment.delete");
     const canGeneratePdf = hasPermission("pdf.generate");
     const canSendPaymentEmail = hasPermission("payment.email.send");
     const [payments, setPayments] = useState([]);

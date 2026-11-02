@@ -58,8 +58,17 @@ export const PermissionProvider = ({ children }) => {
     }, []);
 
     useEffect(() => {
-        loadAdminProfile();
-    }, [loadAdminProfile]);
+        let active = true;
+        api.get("/auth/profile").then((response) => {
+            if (active) setAdmin(response.data?.admin || response.data || null);
+        }).catch((requestError) => {
+            if (active) setError(requestError.response?.data?.message ||
+                "Failed to load the logged-in administrator.");
+        }).finally(() => {
+            if (active) setLoading(false);
+        });
+        return () => { active = false; };
+    }, []);
 
     const permissions = useMemo(
         () => normalizePermissionList(admin?.permissions),

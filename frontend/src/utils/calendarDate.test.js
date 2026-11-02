@@ -1,7 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "./calendarDate.js";
+import { addCalendarDays, formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "./calendarDate.js";
+
+test("calendar day offsets cross month and year boundaries without local timezone changes", () => {
+    assert.equal(addCalendarDays("2026-12-28", 6), "2027-01-03");
+    assert.equal(addCalendarDays("2026-03-01", -1), "2026-02-28");
+    assert.equal(addCalendarDays("2026-02-30", 6), "");
+});
 
 for (const timezone of ["UTC", "Asia/Colombo", "America/Los_Angeles", "Pacific/Auckland"]) {
     test(`forms, lists, and today's default agree on a ${timezone} browser`, () => {

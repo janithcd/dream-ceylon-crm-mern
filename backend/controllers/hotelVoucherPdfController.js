@@ -66,7 +66,11 @@ const createHotelVoucherPdf = async (voucher, company) => {
         ensureSpace(Math.min(lines.length * 16 + 10, 120));
         text.draw(label, { x: MARGIN, y, size: 9, color: muted });
         for (const line of lines) {
+            const page = pdf.bufferedPageRange().count;
             ensureSpace(16);
+            if (pdf.bufferedPageRange().count !== page) {
+                text.draw(`${label} (continued)`, { x: MARGIN, y, size: 9, color: muted });
+            }
             text.draw(line, { x: MARGIN + 133, y, size: 10, color: ink });
             y += 16;
         }

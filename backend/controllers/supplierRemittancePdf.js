@@ -47,7 +47,14 @@ const createSupplierRemittancePdf = async (voucher, company) => {
         ensureSpace(Math.min(lines.length * 16 + 8, 130));
         text.draw(label, { x: MARGIN, y, size: 9, color: muted });
         for (const line of lines) {
+            const page = pdf.bufferedPageRange().count;
             ensureSpace(16);
+            if (pdf.bufferedPageRange().count !== page) {
+                text.wrap(`${label} (continued)`, "regular", 7, 125).slice(0, 2)
+                    .forEach((part, index) => text.draw(part, {
+                        x: MARGIN, y: y + index * 8, size: 7, color: muted,
+                    }));
+            }
             text.draw(line, { x: MARGIN + 135, y, size: 10, color: ink });
             y += 16;
         }
@@ -78,13 +85,13 @@ const createSupplierRemittancePdf = async (voucher, company) => {
     draw("Please acknowledge receipt of the funds and allocation to the invoice, and send us your receipt.", { size: 9, color: muted, lineHeight: 14 });
     y += 8;
     draw("This advice records the payment details supplied by the payer. It is not bank proof or a receipt issued by the supplier, and does not certify that the invoice is settled in full.", { size: 9, color: muted, lineHeight: 14 });
-    if (company.email) { y += 12; draw(`Payment enquiries: ${company.email}`, { size: 9, color: muted, lineHeight: 14 }); }
-
     const pages = pdf.bufferedPageRange().count;
     for (let index = 0; index < pages; index += 1) {
         pdf.switchToPage(index);
         pdf.moveTo(MARGIN, HEIGHT - 58).lineTo(WIDTH - MARGIN, HEIGHT - 58).strokeColor(pale).stroke();
         text.draw(`${voucher.voucherNumber} | Revision ${voucher.revision}`, { x: MARGIN, y: HEIGHT - 47, size: 8, color: muted });
+        if (company.email) text.wrap(`Payment enquiries: ${company.email}`, "regular", 7, CONTENT - 40)
+            .slice(0, 1).forEach((line) => text.draw(line, { x: MARGIN, y: HEIGHT - 35, size: 7, color: muted }));
         text.draw(`${index + 1} / ${pages}`, { x: WIDTH - MARGIN - 26, y: HEIGHT - 47, size: 8, color: muted });
     }
     pdf.end();

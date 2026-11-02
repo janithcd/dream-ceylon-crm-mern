@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import {
     FaBuilding,
     FaCar,
-    FaCog,
     FaFilePdf,
     FaGlobe,
     FaRedo,

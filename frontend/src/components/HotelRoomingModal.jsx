@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FaCopy, FaEnvelope } from "react-icons/fa";
 import api from "../api/axios";
 import { buildHotelRoomingEmail } from "../utils/hotelRoomingEmail";
@@ -67,11 +67,11 @@ const HotelRoomingModal = ({ bookingId, stayId, onClose, onOpenRoster }) => {
         ? details.roomingPlan.assignments : details?.travelerNames.map(() => "") || [];
     const dirty = JSON.stringify(assignments) !== JSON.stringify(savedAssignments);
     const hasWork = dirty || Boolean(draft);
-    const close = () => {
+    const close = useCallback(() => {
         if (busy || (hasWork && !window.confirm("Discard the unsaved room changes or email draft?"))) return;
         onClose();
-    };
-    closeRef.current = close;
+    }, [busy, hasWork, onClose]);
+    useEffect(() => { closeRef.current = close; }, [close]);
 
     const reload = () => {
         if (busy || (hasWork && !window.confirm("Discard unsaved changes and load the latest saved details?"))) return;

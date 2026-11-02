@@ -1,4 +1,4 @@
-import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
+import { addCalendarDays, formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -150,6 +150,12 @@ const QuotationHistory = () => {
     const [deleteLoadingId, setDeleteLoadingId] = useState("");
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [today, setToday] = useState(todayCalendarDate);
+
+    useEffect(() => {
+        const interval = window.setInterval(() => setToday(todayCalendarDate()), 60_000);
+        return () => window.clearInterval(interval);
+    }, []);
 
     const fetchQuotations = async ({
                                        pageValue = page,
@@ -245,8 +251,8 @@ const QuotationHistory = () => {
             setSuccess("");
 
             const response = await api.post(
-                "/quotations/pdf",
-                buildQuotationPayload(quotation),
+                `/quotations/${quotation._id}/pdf`,
+                {},
                 {
                     responseType: "blob",
                 }
@@ -260,7 +266,7 @@ const QuotationHistory = () => {
             const link = document.createElement("a");
 
             link.href = fileUrl;
-            link.download = `dream-ceylon-quotation-${cleanFileName(
+            link.download = `dream-ceylon-${quotation.status === "Draft" ? "draft-quotation" : "quotation"}-${cleanFileName(
                 quotation.clientName
             )}.pdf`;
 
@@ -786,9 +792,9 @@ const QuotationHistory = () => {
                                             </small>
                                             <div className="small mt-1">Valid until: {quotation.validUntil ? formatCalendarDate(quotation.validUntil) : "Not set"}</div>
                                             {quotation.status === "Sent" && quotation.validUntil &&
-                                                (toCalendarDateInput(quotation.validUntil) < todayCalendarDate()
+                                                (toCalendarDateInput(quotation.validUntil) < today
                                                     ? <span className="badge text-bg-danger mt-1">Validity passed · review rates</span>
-                                                    : toCalendarDateInput(quotation.validUntil) <= toCalendarDateInput(new Date(Date.now() + 6 * 86400000))
+                                                    : toCalendarDateInput(quotation.validUntil) <= addCalendarDays(today, 6)
                                                         ? <span className="badge text-bg-warning mt-1">Ends within 7 days</span> : null)}
                                         </td>
 

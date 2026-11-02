@@ -9,8 +9,6 @@ const {
     PDFString,
 } = require("pdf-lib");
 
-let brand = require("../config/brandConfig");
-
 const {
     getDocumentBrandConfig,
 } = require("../utils/documentSettings");
@@ -80,24 +78,24 @@ const yFromTop = (topY, height = 0) => {
     return PAGE.height - topY - height;
 };
 
-const getBrandValue = (key, fallback = "") => {
-    return brand && brand[key] ? brand[key] : fallback;
+const getBrandValue = (state, key, fallback = "") => {
+    return state.brand?.[key] || fallback;
 };
 
-const getMobilesText = () => {
-    if (Array.isArray(brand?.mobiles)) {
-        return brand.mobiles.join(" / ");
+const getMobilesText = (state) => {
+    if (Array.isArray(state.brand?.mobiles)) {
+        return state.brand.mobiles.join(" / ");
     }
 
-    if (typeof brand?.mobiles === "string") {
-        return brand.mobiles;
+    if (typeof state.brand?.mobiles === "string") {
+        return state.brand.mobiles;
     }
 
     return "+94 77 512 4645";
 };
 
-const getWebsite = () => {
-    return getBrandValue("website", "https://www.dreamceylonjourneys.com");
+const getWebsite = (state) => {
+    return getBrandValue(state, "website", "https://www.dreamceylonjourneys.com");
 };
 
 const getSafeUrl = (url) => {
@@ -110,8 +108,8 @@ const getSafeUrl = (url) => {
     return undefined;
 };
 
-const getWhatsAppLink = () => {
-    const whatsapp = getBrandValue("whatsapp", "+94775124645");
+const getWhatsAppLink = (state) => {
+    const whatsapp = getBrandValue(state, "whatsapp", "+94775124645");
     const cleanNumber = String(whatsapp).replace(/\D/g, "");
 
     return cleanNumber ? `https://wa.me/${cleanNumber}` : undefined;
@@ -432,7 +430,7 @@ const checkPageSpace = (state, neededHeight = 80) => {
 };
 
 const drawWatermark = (state) => {
-    const pdfSettings = brand?.pdfSettings || {};
+    const pdfSettings = state.brand?.pdfSettings || {};
 
     if (pdfSettings.showWatermark === false) {
         return;
@@ -469,12 +467,12 @@ const drawWatermark = (state) => {
 };
 
 const drawHeader = (state) => {
-    const companyName = getBrandValue("companyName", "Dream Ceylon Journeys");
-    const tagline = getBrandValue(
+    const companyName = getBrandValue(state, "companyName", "Dream Ceylon Journeys");
+    const tagline = getBrandValue(state,
         "tagline",
         "Sri Lanka Private Tours & Tailor-Made Holidays"
     );
-    const email = getBrandValue("email", "info@dreamceylonjourneys.com");
+    const email = getBrandValue(state, "email", "info@dreamceylonjourneys.com");
 
     drawBox(state, 0, 0, PAGE.width, 88, colors.white);
     drawBox(state, 0, 88, PAGE.width, 4, colors.gold);
@@ -511,7 +509,7 @@ const drawHeader = (state) => {
         width: 245,
     });
 
-    drawText(state, `Mobile: ${getMobilesText()}`, 172, 61, {
+    drawText(state, `Mobile: ${getMobilesText(state)}`, 172, 61, {
         color: colors.primary,
         bold: true,
         size: 7.8,
@@ -525,7 +523,7 @@ const drawHeader = (state) => {
         width: 95,
         align: "right",
         underline: true,
-        link: getWebsite(),
+        link: getWebsite(state),
     });
 
     drawText(state, email, 345, 47, {
@@ -542,12 +540,12 @@ const drawHeader = (state) => {
         width: 95,
         align: "right",
         underline: true,
-        link: getWhatsAppLink(),
+        link: getWhatsAppLink(state),
     });
 };
 
 const drawFooter = (state, pdfPage, pageNumber, totalPages) => {
-    const companyName = getBrandValue("companyName", "Dream Ceylon Journeys");
+    const companyName = getBrandValue(state, "companyName", "Dream Ceylon Journeys");
 
     const footerState = {
         ...state,
@@ -568,7 +566,7 @@ const drawFooter = (state, pdfPage, pageNumber, totalPages) => {
         size: 7.2,
         width: 60,
         underline: true,
-        link: getWebsite(),
+        link: getWebsite(state),
     });
 
     drawText(footerState, "WhatsApp", 305, 775, {
@@ -577,7 +575,7 @@ const drawFooter = (state, pdfPage, pageNumber, totalPages) => {
         size: 7.2,
         width: 70,
         underline: true,
-        link: getWhatsAppLink(),
+        link: getWhatsAppLink(state),
     });
 
     drawText(footerState, `Page ${pageNumber} of ${totalPages}`, 430, 775, {
@@ -589,8 +587,8 @@ const drawFooter = (state, pdfPage, pageNumber, totalPages) => {
 };
 
 const drawCover = (state, data) => {
-    const companyName = getBrandValue("companyName", "Dream Ceylon Journeys");
-    const tagline = getBrandValue(
+    const companyName = getBrandValue(state, "companyName", "Dream Ceylon Journeys");
+    const tagline = getBrandValue(state,
         "tagline",
         "Sri Lanka Private Tours & Tailor-Made Holidays"
     );
@@ -729,7 +727,7 @@ const drawCover = (state, data) => {
         align: "center",
     });
 
-    drawText(state, `${getMobilesText()} | ${getWebsite()}`, 50, 742, {
+    drawText(state, `${getMobilesText(state)} | ${getWebsite(state)}`, 50, 742, {
         color: colors.muted,
         size: 8,
         width: PAGE.contentWidth,
@@ -1053,10 +1051,10 @@ const drawImportantNotes = (state) => {
 const drawContactSection = (state) => {
     drawSectionTitle(state, "Contact & Social Media", 215);
 
-    const companyName = getBrandValue("companyName", "Dream Ceylon Journeys");
-    const address = getBrandValue("address", "Sri Lanka");
-    const email = getBrandValue("email", "info@dreamceylonjourneys.com");
-    const socialLinks = Array.isArray(brand?.socialLinks) ? brand.socialLinks : [];
+    const companyName = getBrandValue(state, "companyName", "Dream Ceylon Journeys");
+    const address = getBrandValue(state, "address", "Sri Lanka");
+    const email = getBrandValue(state, "email", "info@dreamceylonjourneys.com");
+    const socialLinks = Array.isArray(state.brand?.socialLinks) ? state.brand.socialLinks : [];
 
     const y = state.cursorY;
 
@@ -1091,7 +1089,7 @@ const drawContactSection = (state) => {
         align: "center",
     });
 
-    drawText(state, `Mobile: ${getMobilesText()}`, 80, y + 112, {
+    drawText(state, `Mobile: ${getMobilesText(state)}`, 80, y + 112, {
         color: colors.white,
         bold: true,
         size: 8.8,
@@ -1113,7 +1111,7 @@ const drawContactSection = (state) => {
         width: 175,
         align: "center",
         underline: true,
-        link: getWebsite(),
+        link: getWebsite(state),
     });
 
     let socialX = 95;
@@ -1139,7 +1137,7 @@ const drawContactSection = (state) => {
 
 const generateItineraryPdf = async (req, res) => {
     try {
-        brand = await getDocumentBrandConfig();
+        const brand = await getDocumentBrandConfig();
         const {
             generatedItinerary,
             clientName,
@@ -1193,6 +1191,7 @@ const generateItineraryPdf = async (req, res) => {
 
         const state = {
             pdfDoc,
+            brand,
             page: coverPage,
             pages: [coverPage],
             cursorY: PAGE.top,
@@ -1225,7 +1224,7 @@ const generateItineraryPdf = async (req, res) => {
         });
 
         pdfDoc.setTitle("Sri Lanka Tour Itinerary");
-        pdfDoc.setAuthor(getBrandValue("companyName", "Dream Ceylon Journeys"));
+        pdfDoc.setAuthor(getBrandValue(state, "companyName", "Dream Ceylon Journeys"));
         pdfDoc.setSubject("Client Tour Itinerary");
 
         const pdfBytes = await pdfDoc.save();
@@ -1237,12 +1236,7 @@ const generateItineraryPdf = async (req, res) => {
             action: "GENERATE",
             module: "PDF",
             description: `Itinerary PDF was generated for ${data.clientName || "client"}`,
-            relatedRecordId: req.body.booking || req.body.inquiry || null,
-            relatedModel: req.body.booking
-                ? "Booking"
-                : req.body.inquiry
-                    ? "Inquiry"
-                    : "",
+            relatedModel: "PDF",
             referenceNo: filename,
             customerName: data.clientName,
             metadata: {
@@ -1272,12 +1266,7 @@ const generateItineraryPdf = async (req, res) => {
             action: "GENERATE",
             module: "PDF",
             description: `Itinerary PDF generation failed for ${safeText(req.body?.clientName) || "client"}`,
-            relatedRecordId: req.body?.booking || req.body?.inquiry || null,
-            relatedModel: req.body?.booking
-                ? "Booking"
-                : req.body?.inquiry
-                    ? "Inquiry"
-                    : "",
+            relatedModel: "PDF",
             customerName: safeText(req.body?.clientName),
             status: "Failed",
             metadata: {

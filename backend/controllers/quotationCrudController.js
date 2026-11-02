@@ -5,6 +5,7 @@ const CostEntry = require("../models/CostEntry");
 const { PERMISSIONS } = require("../config/permissions");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { VALIDITY_FILTERS, parseQuotationValidUntil, getValidityQuery } = require("../utils/quotationValidity");
+const { calculateQuotationTotals } = require("../utils/quotationTotals");
 
 const safeText = (value) => {
     if (value === null || value === undefined) {
@@ -62,51 +63,6 @@ const parseList = (value) => {
     }
 
     return [];
-};
-
-const calculateQuotationTotals = (body) => {
-    const durationDays = Math.max(toNumber(body.durationDays), 0);
-    const vehicleDays = Math.max(
-        toNumber(body.vehicleDays || durationDays),
-        0
-    );
-    const vehicleDailyRate = Math.max(toNumber(body.vehicleDailyRate), 0);
-    const hotelTotal = Math.max(toNumber(body.hotelCost), 0);
-    const activitiesTotal = Math.max(toNumber(body.activitiesCost), 0);
-    const entranceFeesTotal = Math.max(toNumber(body.entranceFeesCost), 0);
-    const otherTotal = Math.max(toNumber(body.otherCost), 0);
-
-    const vehicleTotal = vehicleDays * vehicleDailyRate;
-    const subtotal =
-        vehicleTotal +
-        hotelTotal +
-        activitiesTotal +
-        entranceFeesTotal +
-        otherTotal;
-
-    const discount = Math.min(Math.max(toNumber(body.discount), 0), subtotal);
-    const grandTotal = Math.max(subtotal - discount, 0);
-    const advancePayment = Math.min(
-        Math.max(toNumber(body.advancePayment), 0),
-        grandTotal
-    );
-    const balancePayment = Math.max(grandTotal - advancePayment, 0);
-
-    return {
-        durationDays,
-        vehicleDays,
-        vehicleDailyRate,
-        vehicleTotal,
-        hotelTotal,
-        activitiesTotal,
-        entranceFeesTotal,
-        otherTotal,
-        subtotal,
-        discount,
-        grandTotal,
-        advancePayment,
-        balancePayment,
-    };
 };
 
 const generateQuotationNo = async () => {

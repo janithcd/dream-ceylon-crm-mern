@@ -7,6 +7,7 @@ process.env.AUTH_RATE_LIMIT_MAX = "1000";
 
 const app = require("../app");
 const Admin = require("../models/Admin");
+const Quotation = require("../models/Quotation");
 const ActivityLog = require("../models/ActivityLog");
 const CompanySetting = require("../models/CompanySetting");
 const { PDFDocument } = require("pdf-lib");
@@ -31,7 +32,7 @@ test("quotation validity uses Colombo calendar days and only flags sent offers",
     assert.deepEqual(getValidityQuery("noDate", now), { status: "Sent", validUntil: null });
 });
 
-test("quotation PDF prints saved identity and validity without changing absent dates", async (t) => {
+test("quotation preview is visibly a draft and preserves the requested validity date", async (t) => {
     const adminId = "507f1f77bcf86cd799439601";
     t.mock.method(Admin, "findById", (id) => ({ select: async () => ({
         _id: id, role: "Sales", status: "Active", tokenVersion: 0,
@@ -58,7 +59,9 @@ test("quotation PDF prints saved identity and validity without changing absent d
         const page = await document.getPage(1);
         const content = await page.getTextContent();
         const printed = content.items.map(({ str }) => str).join(" ");
-        assert.match(printed, /Quotation No: DCJ-Q-2026-123456/);
+        assert.match(printed, /DRAFT - NOT SAVED/);
+        assert.match(printed, /Quotation No: DRAFT/);
+        assert.doesNotMatch(printed, /DCJ-Q-2026-123456/);
         assert.match(printed, /Date: October 22, 2026/);
         assert.match(printed, /Valid until: March 14, 2027/);
     } finally {
@@ -73,6 +76,66 @@ test("quotation PDF prints saved identity and validity without changing absent d
     } finally {
         await legacyPdf.destroy();
     }
+});
+
+test("official quotation PDF uses saved prices and identity, never browser overrides", async (t) => {
+    const id = "507f1f77bcf86cd799439091";
+    const adminId = "507f1f77bcf86cd799439092";
+    const quotation = { _id: id, quotationNo: "DCJ-Q-2026-123456", status: "Sent",
+        clientName: "Saved Guest", country: "UK", tourTitle: "Saved Tour",
+        createdAt: new Date("2026-10-22"), validUntil: new Date("2027-03-14"),
+        travelStartDate: new Date("2027-02-27"), travelEndDate: new Date("2027-03-13"),
+        travelers: 2, durationDays: 15, vehicleType: "Car", vehicleDays: 15,
+        vehicleDailyRate: 86, hotelCost: 1326, activitiesCost: 0,
+        entranceFeesCost: 0, otherCost: 0, discount: 0, advancePayment: 663,
+        currency: "USD", totals: { grandTotal: 2616, advancePayment: 663, balancePayment: 1953 },
+        inclusions: ["Airport transfers"], exclusions: ["Entrance fees"],
+        notes: "Saved note", adminNotes: "PRIVATE NOTE" };
+    t.mock.method(Admin, "findById", () => ({ select: async () => ({
+        _id: adminId, status: "Active", role: "Super Admin", email: "admin@example.invalid",
+    }) }));
+    t.mock.method(Quotation, "findById", () => ({ lean: async () => quotation }));
+    t.mock.method(CompanySetting, "findOne", async () => null);
+    t.mock.method(ActivityLog, "create", async () => ({}));
+    const server = app.listen(0, "127.0.0.1");
+    await new Promise((resolve) => server.once("listening", resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const url = `http://127.0.0.1:${server.address().port}/api/quotations/${id}/pdf`;
+    assert.equal((await fetch(url, { method: "POST" })).status, 401);
+    assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/api/quotations/bad/pdf`, {
+        method: "POST", headers: { Authorization: `Bearer ${jwt.sign({ id: adminId }, process.env.JWT_SECRET)}` },
+    })).status, 400);
+    const response = await fetch(url, { method: "POST",
+        headers: { Authorization: `Bearer ${jwt.sign({ id: adminId }, process.env.JWT_SECRET)}`,
+            "Content-Type": "application/json" },
+        body: JSON.stringify({ clientName: "Forged Guest", vehicleDailyRate: 1,
+            hotelCost: 0, quotationNo: "DCJ-Q-2026-999999" }),
+    });
+    if (response.status !== 200) assert.fail(await response.text());
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const task = getDocument({ data: new Uint8Array(await response.arrayBuffer()), disableFontFace: true, useSystemFonts: false });
+    try {
+        const document = await task.promise;
+        const contents = [];
+        for (let page = 1; page <= document.numPages; page += 1) {
+            const content = await (await document.getPage(page)).getTextContent();
+            contents.push(...content.items.map(({ str }) => str));
+        }
+        const printed = contents.join(" ");
+        for (const value of ["Saved Guest", "DCJ-Q-2026-123456", "USD 2,616.00", "Saved note"]) {
+            assert.ok(printed.includes(value), value);
+        }
+        assert.doesNotMatch(printed, /Forged Guest|999999|PRIVATE NOTE|DRAFT - NOT SAVED/);
+    } finally { await task.destroy(); }
+    quotation.totals.grandTotal = 100;
+    const stale = await fetch(url, { method: "POST",
+        headers: { Authorization: `Bearer ${jwt.sign({ id: adminId }, process.env.JWT_SECRET)}` } });
+    assert.equal(stale.status, 409);
+    quotation.totals.grandTotal = 2616;
+    quotation.totals.advancePayment = 999;
+    const wrongAdvance = await fetch(url, { method: "POST",
+        headers: { Authorization: `Bearer ${jwt.sign({ id: adminId }, process.env.JWT_SECRET)}` } });
+    assert.equal(wrongAdvance.status, 409);
 });
 
 test("quotation PDF retains international client text, pricing and long inclusions across pages", async () => {

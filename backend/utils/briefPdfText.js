@@ -54,6 +54,20 @@ const createBriefText = (pdf) => {
     const width = (value, weight, size) => runs(value, weight)
         .reduce((sum, run) => sum + pdf.font(run.font).fontSize(size).widthOfString(run.text), 0);
 
+    const fit = (value, weight, size, maxWidth) => {
+        const cleaned = cleanPdfText(value);
+        if (width(cleaned, weight, size) <= maxWidth) return cleaned;
+        const graphemes = Array.from(segmenter.segment(cleaned), ({ segment }) => segment);
+        let left = 0;
+        let right = graphemes.length;
+        while (left < right) {
+            const middle = Math.ceil((left + right) / 2);
+            if (width(`${graphemes.slice(0, middle).join("").trimEnd()}...`, weight, size) <= maxWidth) left = middle;
+            else right = middle - 1;
+        }
+        return `${graphemes.slice(0, left).join("").trimEnd()}...`;
+    };
+
     const wrap = (value, weight, size, maxWidth) => {
         const words = cleanPdfText(value).split(/\s+/u).filter(Boolean);
         const lines = [];
@@ -92,7 +106,7 @@ const createBriefText = (pdf) => {
         }
     };
 
-    return { draw, wrap };
+    return { draw, wrap, fit };
 };
 
 module.exports = { cleanPdfText, createBriefText };

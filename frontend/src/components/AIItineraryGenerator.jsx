@@ -145,7 +145,7 @@ const AIItineraryGenerator = ({ onUseItinerary }) => {
                 try {
                     const errorJson = JSON.parse(errorText);
                     message = errorJson.error || errorJson.message || message;
-                } catch (parseError) {
+                } catch {
                     message = errorText || message;
                 }
             }
@@ -164,7 +164,7 @@ const AIItineraryGenerator = ({ onUseItinerary }) => {
             setTimeout(() => {
                 setCopied(false);
             }, 2000);
-        } catch (error) {
+        } catch {
             alert("Failed to copy itinerary");
         }
     };

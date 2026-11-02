@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { useAuth } from "../context/AuthContext";
@@ -28,8 +28,8 @@ const TripIssuesModal = ({ bookingId, onClose, onChanged }) => {
     const [assignTo, setAssignTo] = useState("");
     const dialogRef = useRef(null);
     const closeRef = useRef(onClose);
-    const close = () => { if (!busy) onClose(); };
-    closeRef.current = close;
+    const close = useCallback(() => { if (!busy) onClose(); }, [busy, onClose]);
+    useEffect(() => { closeRef.current = close; }, [close]);
 
     useEffect(() => {
         let active = true;

@@ -93,7 +93,7 @@ const AIReplyGenerator = ({ onUseReply }) => {
             setTimeout(() => {
                 setCopied(false);
             }, 2000);
-        } catch (error) {
+        } catch {
             alert("Failed to copy reply");
         }
     };

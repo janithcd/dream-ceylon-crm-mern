@@ -59,12 +59,16 @@ const createInvoicePdf = async (booking, company = defaultBrandConfig, issuedAt 
     };
     const detail = (label, value) => {
         const lines = text.wrap(value, "bold", 9, CONTENT - 165);
-        ensureSpace(lines.length * 16 + 6);
-        draw(label, MARGIN, y, 9, "regular", muted);
-        for (const line of lines) {
+        ensureSpace(22);
+        lines.forEach((line, index) => {
+            const page = pdf.bufferedPageRange().count;
+            ensureSpace(16);
+            if (index === 0 || pdf.bufferedPageRange().count !== page) {
+                draw(index === 0 ? label : `${label} (continued)`, MARGIN, y, 9, "regular", muted);
+            }
             draw(line, MARGIN + 165, y, 9, "bold");
             y += 16;
-        }
+        });
         y += 5;
     };
     const paragraph = (value, color = ink) => {
@@ -108,7 +112,8 @@ const createInvoicePdf = async (booking, company = defaultBrandConfig, issuedAt 
     for (let index = 0; index < count; index += 1) {
         pdf.switchToPage(index);
         pdf.moveTo(MARGIN, HEIGHT - 61).lineTo(WIDTH - MARGIN, HEIGHT - 61).strokeColor(pale).stroke();
-        draw(company.pdfSettings?.footerText || "Thank you for choosing Dream Ceylon Journeys.",
+        draw(text.fit(company.pdfSettings?.footerText || "Thank you for choosing Dream Ceylon Journeys.",
+            "regular", 8, CONTENT - 50),
             MARGIN, HEIGHT - 48, 8, "regular", muted);
         const contact = [company.address, company.mobiles?.[0], company.email, company.website]
             .filter(Boolean).join(" | ");

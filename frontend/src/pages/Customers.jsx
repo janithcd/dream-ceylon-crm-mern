@@ -466,6 +466,13 @@ const Customers = () => {
                                         </>
                                     )}
 
+                                    <PermissionGuard permission="report.export">
+                                        <button className="btn btn-outline-success" onClick={handleExportProfileCsv}>
+                                            <FaFileCsv className="me-2" />
+                                            Export Profile CSV
+                                        </button>
+                                    </PermissionGuard>
+
                                     <button
                                         className="btn btn-outline-dark"
                                         onClick={() => navigate("/bookings")}
@@ -951,9 +958,9 @@ const Customers = () => {
                             <h5 className="fw-bold mb-0">Search Results</h5>
                         </div>
                         <PermissionGuard permission="report.export">
-                            <button className="btn btn-success mb-1" onClick={handleExportProfileCsv}>
+                            <button className="btn btn-success mb-1" onClick={handleExportSearchResultsCsv}>
                                 <FaFileCsv className="me-2" />
-                                Export Profile CSV
+                                Export Search Results CSV
                             </button>
                         </PermissionGuard>
                         <div className="table-responsive">

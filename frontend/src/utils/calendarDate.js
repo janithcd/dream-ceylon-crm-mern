@@ -19,6 +19,14 @@ export const toCalendarDateInput = (value) => {
 
 export const todayCalendarDate = (now = new Date()) => toCalendarDateInput(now);
 
+export const addCalendarDays = (calendarDay, days) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(calendarDay) || !Number.isInteger(days)) return "";
+    const date = new Date(`${calendarDay}T00:00:00Z`);
+    if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== calendarDay) return "";
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+};
+
 export const formatCalendarDate = (value, { month = "short" } = {}) => {
     if (!value) return "-";
     const date = new Date(value);

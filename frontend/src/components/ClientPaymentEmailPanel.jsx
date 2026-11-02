@@ -9,7 +9,7 @@ const ClientPaymentEmailPanel = ({ payment, onClose, onSent, canSend }) => {
     const [chargedAmount, setChargedAmount] = useState("");
     const [preview, setPreview] = useState(null);
     const [confirmed, setConfirmed] = useState(false);
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
     const [sending, setSending] = useState(false);
     const [error, setError] = useState("");
     const [copied, setCopied] = useState(false);
@@ -30,10 +30,14 @@ const ClientPaymentEmailPanel = ({ payment, onClose, onSent, canSend }) => {
     };
 
     useEffect(() => {
-        loadPreview();
-        // The panel is recreated for each selected payment.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [payment._id]);
+        let active = true;
+        api.post(`/booking-pdf/payment-email/${payment._id}/preview`, {
+            chargedAmount: payment.paymentMethod === "PayHere" ? "" : undefined,
+        }).then(({ data }) => { if (active) setPreview(data); })
+            .catch((err) => { if (active) setError(err.response?.data?.message || "Could not prepare the email preview."); })
+            .finally(() => { if (active) setLoading(false); });
+        return () => { active = false; };
+    }, [payment._id, payment.paymentMethod]);
 
     const copyEmail = async () => {
         try {

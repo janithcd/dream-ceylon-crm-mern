@@ -1,11 +1,14 @@
 const fs = require("node:fs");
+const mongoose = require("mongoose");
 const PDFDocument = require("pdfkit");
+const Quotation = require("../models/Quotation");
 const defaultBrandConfig = require("../config/brandConfig");
 const { getDocumentBrandConfig } = require("../utils/documentSettings");
 const { formatDocumentDate } = require("../utils/documentDate");
-const { parseQuotationValidUntil } = require("../utils/quotationValidity");
+const { parseQuotationValidUntil, getQuotationValidityState } = require("../utils/quotationValidity");
 const { createBriefText } = require("../utils/briefPdfText");
 const { createActivityLog } = require("../utils/createActivityLog");
+const { calculateQuotationTotals } = require("../utils/quotationTotals");
 
 const WIDTH = 595.28;
 const HEIGHT = 841.89;
@@ -19,10 +22,6 @@ const muted = "#586874";
 const pale = "#f0fdfa";
 
 const safeText = (value) => String(value ?? "").trim();
-const number = (value) => {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
-};
 const money = (amount, currency) => `${currency} ${Number(amount).toLocaleString("en-US", {
     minimumFractionDigits: 2, maximumFractionDigits: 2,
 })}`;
@@ -37,28 +36,10 @@ const parseList = (value, fallback) => {
     return fallback;
 };
 
-const calculateQuotationTotals = (body) => {
-    const durationDays = Math.max(number(body.durationDays), 0);
-    const vehicleDays = Math.max(number(body.vehicleDays || durationDays), 0);
-    const vehicleDailyRate = Math.max(number(body.vehicleDailyRate), 0);
-    const vehicleTotal = vehicleDays * vehicleDailyRate;
-    const hotelTotal = Math.max(number(body.hotelCost), 0);
-    const activitiesTotal = Math.max(number(body.activitiesCost), 0);
-    const entranceFeesTotal = Math.max(number(body.entranceFeesCost), 0);
-    const otherTotal = Math.max(number(body.otherCost), 0);
-    const subtotal = vehicleTotal + hotelTotal + activitiesTotal + entranceFeesTotal + otherTotal;
-    const discount = Math.min(Math.max(number(body.discount), 0), subtotal);
-    const grandTotal = Math.max(subtotal - discount, 0);
-    const advancePayment = Math.min(Math.max(number(body.advancePayment), 0), grandTotal);
-    return { durationDays, vehicleDays, vehicleDailyRate, vehicleTotal, hotelTotal,
-        activitiesTotal, entranceFeesTotal, otherTotal, subtotal, discount, grandTotal,
-        advancePayment, balancePayment: Math.max(grandTotal - advancePayment, 0) };
-};
-
 const createQuotationPdf = async (data, totals, company = defaultBrandConfig) => {
     const pdf = new PDFDocument({ autoFirstPage: false, bufferPages: true,
         size: [WIDTH, HEIGHT], margin: 0 });
-    pdf.info.Title = `Tour quotation ${data.quotationNo}`;
+    pdf.info.Title = `${data.previewLabel || "Tour quotation"} ${data.quotationNo}`;
     pdf.info.Author = company.companyName || "Dream Ceylon Journeys";
     const chunks = [];
     pdf.on("data", (chunk) => chunks.push(chunk));
@@ -91,6 +72,7 @@ const createQuotationPdf = async (data, totals, company = defaultBrandConfig) =>
             .forEach((line, index) => draw(line, 168, 17 + index * 17, 14, "bold", green));
         draw(company.tagline || "Sri Lanka Private Tours", 168, 51, 8, "regular", muted);
         draw((company.mobiles || []).join(" / "), 168, 66, 8, "bold", teal);
+        if (data.previewLabel) draw(data.previewLabel, MARGIN, 77, 8, "bold", teal);
         y = 113;
     };
     const ensureSpace = (height) => { if (y + height > HEIGHT - 80) addPage(); };
@@ -110,7 +92,9 @@ const createQuotationPdf = async (data, totals, company = defaultBrandConfig) =>
         draw(label, MARGIN, y, 9, "regular", muted);
         const lines = text.wrap(value || "Not provided", "bold", 9, CONTENT - 154);
         for (const line of lines) {
+            const page = pdf.bufferedPageRange().count;
             ensureSpace(17);
+            if (pdf.bufferedPageRange().count !== page) draw(`${label} (continued)`, MARGIN, y, 9, "regular", muted);
             draw(line, MARGIN + 154, y, 9, "bold");
             y += 16;
         }
@@ -147,7 +131,7 @@ const createQuotationPdf = async (data, totals, company = defaultBrandConfig) =>
     addPage();
     pdf.rect(MARGIN, y, CONTENT, 90).fill(pale);
     pdf.rect(MARGIN, y, 6, 90).fill(gold);
-    draw("TOUR QUOTATION", MARGIN + 17, y + 14, 21, "bold", green);
+    draw(data.isDraft ? "DRAFT QUOTATION" : "TOUR QUOTATION", MARGIN + 17, y + 14, 21, "bold", green);
     draw(`Quotation No: ${data.quotationNo}`, MARGIN + 17, y + 48, 9, "regular", muted);
     draw(`Date: ${date(data.quotationDate)}`, MARGIN + 17, y + 65, 8, "regular", muted);
     if (data.validUntil) draw(`Valid until: ${date(data.validUntil)}`,
@@ -222,7 +206,8 @@ const createQuotationPdf = async (data, totals, company = defaultBrandConfig) =>
     for (let index = 0; index < count; index += 1) {
         pdf.switchToPage(index);
         pdf.moveTo(MARGIN, HEIGHT - 65).lineTo(WIDTH - MARGIN, HEIGHT - 65).strokeColor(pale).stroke();
-        draw(company.pdfSettings?.footerText || "Thank you for choosing Dream Ceylon Journeys.",
+        draw(text.fit(company.pdfSettings?.footerText || "Thank you for choosing Dream Ceylon Journeys.",
+            "regular", 8, CONTENT - 50),
             MARGIN, HEIGHT - 50, 8, "regular", muted);
         draw(`${index + 1} / ${count}`, WIDTH - MARGIN - 34, HEIGHT - 50, 8, "regular", muted);
     }
@@ -233,20 +218,21 @@ const createQuotationPdf = async (data, totals, company = defaultBrandConfig) =>
 const generateQuotationPdf = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     try {
-        const { clientName, tourTitle, quotationNo, validUntil } = req.body || {};
+        const { clientName, tourTitle, validUntil } = req.body || {};
         if (!safeText(clientName) || !safeText(tourTitle)) {
             return res.status(400).json({ message: "Client name and tour title are required" });
         }
         const validity = parseQuotationValidUntil(validUntil);
         if (validity.error) return res.status(400).json({ message: validity.error });
         const totals = calculateQuotationTotals(req.body);
+        const travelers = Number(req.body.travelers);
         const data = {
-            quotationNo: typeof quotationNo === "string" && /^DCJ-Q-\d{4}-\d{6,8}$/.test(quotationNo)
-                ? quotationNo : `DCJ-Q-${Date.now().toString().slice(-6)}`,
+            // An unsaved browser payload is a preview, never an official numbered quotation.
+            quotationNo: "DRAFT", previewLabel: "DRAFT - NOT SAVED", isDraft: true,
             clientName: safeText(clientName), country: safeText(req.body.country || "Not provided"),
             quotationDate: req.body.quotationDate || new Date(), validUntil: validity.value,
             tourTitle: safeText(tourTitle), travelStartDate: req.body.travelStartDate,
-            travelEndDate: req.body.travelEndDate, travelers: number(req.body.travelers),
+            travelEndDate: req.body.travelEndDate, travelers: Number.isFinite(travelers) ? travelers : 0,
             durationDays: totals.durationDays, vehicleType: safeText(req.body.vehicleType || "Private Vehicle"),
             currency: safeText(req.body.currency || "USD"),
             inclusions: parseList(req.body.inclusions, ["Private air-conditioned vehicle", "Professional chauffeur guide",
@@ -257,14 +243,13 @@ const generateQuotationPdf = async (req, res) => {
         };
         const company = await getDocumentBrandConfig();
         const bytes = await createQuotationPdf(data, totals, company);
-        const filename = `dream-ceylon-quotation-${cleanFileName(clientName)}.pdf`;
+        const filename = `dream-ceylon-draft-quotation-${cleanFileName(clientName)}.pdf`;
         await createActivityLog({
             req, action: "GENERATE", module: "PDF",
-            description: `Quotation PDF ${data.quotationNo} was generated for ${data.clientName}`,
-            relatedRecordId: req.body.booking || req.body.inquiry || null,
-            relatedModel: req.body.booking ? "Booking" : req.body.inquiry ? "Inquiry" : "Quotation",
+            description: `Draft quotation PDF was generated for ${data.clientName}`,
+            relatedModel: "Quotation",
             referenceNo: data.quotationNo, customerName: data.clientName,
-            metadata: { documentType: "Quotation", filename, tourTitle: data.tourTitle,
+            metadata: { documentType: "Draft Quotation", filename, tourTitle: data.tourTitle,
                 currency: data.currency, grandTotal: totals.grandTotal,
                 advancePayment: totals.advancePayment, balancePayment: totals.balancePayment,
                 validUntil: data.validUntil, pageCount: (bytes.toString("latin1").match(/\/Type \/Page\b/g) || []).length },
@@ -278,8 +263,7 @@ const generateQuotationPdf = async (req, res) => {
         await createActivityLog({
             req, action: "GENERATE", module: "PDF",
             description: `Quotation PDF generation failed for ${safeText(req.body?.clientName) || "client"}`,
-            relatedRecordId: req.body?.booking || req.body?.inquiry || null,
-            relatedModel: req.body?.booking ? "Booking" : req.body?.inquiry ? "Inquiry" : "Quotation",
+            relatedModel: "Quotation",
             customerName: safeText(req.body?.clientName), status: "Failed",
             metadata: { documentType: "Quotation", tourTitle: safeText(req.body?.tourTitle), error: error.message },
         });
@@ -287,4 +271,62 @@ const generateQuotationPdf = async (req, res) => {
     }
 };
 
-module.exports = { generateQuotationPdf, createQuotationPdf, calculateQuotationTotals };
+const generateSavedQuotationPdf = async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ message: "Invalid quotation ID" });
+    }
+    try {
+        const quotation = await Quotation.findById(req.params.id).lean();
+        if (!quotation) return res.status(404).json({ message: "Quotation not found" });
+        const totals = calculateQuotationTotals(quotation);
+        const pricingMismatch = ["grandTotal", "advancePayment", "balancePayment"].some((key) => {
+            const saved = Number(quotation.totals?.[key]);
+            return !Number.isFinite(saved) || Math.abs(saved - totals[key]) > 0.009;
+        });
+        if (pricingMismatch ||
+            !["USD", "LKR", "EUR", "GBP"].includes(quotation.currency)) {
+            return res.status(409).json({ message: "Saved quotation pricing needs review before issuing a PDF." });
+        }
+        const isDraft = quotation.status === "Draft";
+        const previewLabel = isDraft ? "DRAFT - FOR REVIEW" :
+            quotation.status === "Expired" || quotation.status === "Rejected" ?
+                `${quotation.status.toUpperCase()} - DO NOT SEND` :
+                getQuotationValidityState(quotation) === "pastDue" ? "VALIDITY PASSED - REVIEW RATES" : "";
+        const data = {
+            quotationNo: quotation.quotationNo,
+            quotationDate: quotation.createdAt,
+            validUntil: quotation.validUntil,
+            clientName: quotation.clientName,
+            country: quotation.country,
+            tourTitle: quotation.tourTitle,
+            travelStartDate: quotation.travelStartDate,
+            travelEndDate: quotation.travelEndDate,
+            travelers: quotation.travelers,
+            durationDays: quotation.durationDays,
+            vehicleType: quotation.vehicleType,
+            currency: quotation.currency,
+            previewLabel, isDraft,
+            inclusions: parseList(quotation.inclusions, []),
+            exclusions: parseList(quotation.exclusions, []),
+            notes: safeText(quotation.notes).replace(/\*\*/gu, "").replace(/^\s*#{1,6}\s*/gmu, ""),
+        };
+        const company = await getDocumentBrandConfig();
+        const bytes = await createQuotationPdf(data, totals, company);
+        const filename = `dream-ceylon-${isDraft ? "draft-quotation" : "quotation"}-${cleanFileName(quotation.clientName)}.pdf`;
+        await createActivityLog({ req, action: "GENERATE", module: "PDF",
+            description: `Saved quotation PDF ${quotation.quotationNo} was generated`,
+            relatedRecordId: quotation._id, relatedModel: "Quotation",
+            referenceNo: quotation.quotationNo, customerName: quotation.clientName,
+            metadata: { documentType: "Quotation", filename, currency: quotation.currency,
+                grandTotal: totals.grandTotal, status: quotation.status } });
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+        return res.send(bytes);
+    } catch (error) {
+        console.error("Saved quotation PDF generation failed:", error.message);
+        return res.status(500).json({ message: "Failed to generate saved quotation PDF" });
+    }
+};
+
+module.exports = { generateQuotationPdf, generateSavedQuotationPdf, createQuotationPdf, calculateQuotationTotals };
