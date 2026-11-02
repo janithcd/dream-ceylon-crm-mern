@@ -40,6 +40,7 @@ const corsOptions = {
         "Content-Type",
         "Authorization",
         "X-Requested-With",
+        "X-File-Name",
     ],
     exposedHeaders: [
         "Content-Disposition",

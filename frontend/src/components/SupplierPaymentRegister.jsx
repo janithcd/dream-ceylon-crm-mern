@@ -4,7 +4,7 @@ import PermissionGuard from "./PermissionGuard";
 import { formatCalendarDate, todayCalendarDate } from "../utils/calendarDate";
 
 const today = todayCalendarDate();
-const initialFilters = { from: `${today.slice(0, 7)}-01`, to: today, reference: "", status: "all" };
+const initialFilters = { from: `${today.slice(0, 7)}-01`, to: today, reference: "", status: "all", acknowledgement: "all" };
 const emptyRegister = { items: [], total: 0, page: 1, limit: 25, pages: 0, totalsByCurrency: [] };
 const statuses = [{ value: "all", label: "All" }, { value: "unreconciled", label: "To match" }, { value: "reconciled", label: "Matched" }];
 const money = (amount, currency) => `${currency} ${Number(amount).toLocaleString("en-US", {
@@ -14,7 +14,7 @@ const localTime = (value) => new Date(value).toLocaleString("en-US", {
     timeZone: "Asia/Colombo", dateStyle: "medium", timeStyle: "short",
 });
 
-const SupplierPaymentRegister = ({ onSelectBooking, onChanged, reloadKey }) => {
+const SupplierPaymentRegister = ({ onSelectBooking, onOpenEvidence, onChanged, reloadKey }) => {
     const [filters, setFilters] = useState(initialFilters);
     const [applied, setApplied] = useState(initialFilters);
     const [page, setPage] = useState(1);
@@ -150,6 +150,13 @@ const SupplierPaymentRegister = ({ onSelectBooking, onChanged, reloadKey }) => {
                         className={`btn btn-sm ${applied.status === value ? "btn-primary" : "btn-outline-primary"}`}
                         aria-pressed={applied.status === value} onClick={() => selectStatus(value)}>{label}</button>)}
                 </div>
+                <div className="mb-3"><label htmlFor="register-acknowledgement" className="form-label">Supplier acknowledgement</label>
+                    <select id="register-acknowledgement" className="form-select" value={applied.acknowledgement} onChange={(event) => {
+                        const acknowledgement = event.target.value;
+                        setFilters((current) => ({ ...current, acknowledgement })); setApplied((current) => ({ ...current, acknowledgement }));
+                        setPage(1); setEditor(null); setSuccess("");
+                    }}><option value="all">All payments</option><option value="awaiting">Awaiting acknowledgement</option><option value="acknowledged">Acknowledged by supplier</option></select>
+                </div>
                 <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
                     <span className="small text-muted">Showing {applied.status === "all" ? "all" : applied.status} payments dated {applied.from} through {applied.to} (Sri Lanka).</span>
                     <div className="d-flex gap-2">
@@ -171,7 +178,7 @@ const SupplierPaymentRegister = ({ onSelectBooking, onChanged, reloadKey }) => {
                 {!error && !loading && register.total > 0 && <>
                     <p className="small mb-2"><strong>Total recorded payments:</strong> {register.totalsByCurrency.map(({ currency, amount }) => money(amount, currency)).join(" · ")}</p>
                     <div className="table-responsive"><table className="table table-hover align-middle mb-0">
-                        <thead><tr><th>Date</th><th>Booking</th><th>Supplier / cost</th><th>Amount</th><th>Method / reference</th><th>Recorded by</th><th>Reconciliation</th></tr></thead>
+                        <thead><tr><th>Date</th><th>Booking</th><th>Supplier / cost</th><th>Amount</th><th>Method / reference</th><th>Recorded by</th><th>Reconciliation</th><th>Supplier acknowledgement</th></tr></thead>
                         <tbody>{register.items.map((item) => <tr key={item.paymentId}>
                             <td>{formatCalendarDate(item.paymentDate)}</td>
                             <td><button type="button" className="btn btn-link p-0" onClick={() => onSelectBooking(item.recordId)}>{item.bookingCode}</button>
@@ -195,6 +202,8 @@ const SupplierPaymentRegister = ({ onSelectBooking, onChanged, reloadKey }) => {
                                     </button>
                                 </PermissionGuard>
                             </td>
+                            <td><span className={item.supplierAcknowledgedDate ? "text-success" : "text-warning-emphasis"}>{item.supplierAcknowledgedDate ? `Acknowledged · ${formatCalendarDate(item.supplierAcknowledgedDate)}` : "Awaiting acknowledgement"}</span>
+                                <button type="button" className="btn btn-sm btn-link p-0 mt-1 d-block" onClick={() => onOpenEvidence(item)}>Receipts / acknowledgement</button></td>
                         </tr>)}</tbody>
                     </table></div>
                     {editor && <PermissionGuard permission="cost.manage"><form className="border rounded p-3 mt-3" onSubmit={(event) => void saveReconciliation(event)}>

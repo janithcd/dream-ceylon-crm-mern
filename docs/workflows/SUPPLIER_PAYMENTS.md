@@ -11,6 +11,7 @@ Track supplier costs separately from guest selling prices, record payments and p
 - [Payment schedule and alerts](#payment-schedule-and-alerts)
 - [Payment register and bank matching](#payment-register-and-bank-matching)
 - [Payment vouchers and remittance emails](#payment-vouchers-and-remittance-emails)
+- [Bank receipts and supplier acknowledgement](#bank-receipts-and-supplier-acknowledgement)
 
 ## Costs and profitability
 
@@ -90,7 +91,7 @@ Download the branded **Supplier Payment Voucher / Remittance Advice** PDF, then 
 Zoho Mail or open the configured email app. Attach the bank confirmation and downloaded voucher yourself and
 ask the hotel to acknowledge allocation and send its receipt. Email drafts contain the reviewed
 supplier/invoice/payment references, without cost descriptions, private payment notes, margins, correction
-reasons or staff names. No email is sent automatically, no attachments are uploaded, and preparing a draft
+reasons or staff names. No email is sent automatically, files are attached to the email manually, and preparing a draft
 does not mark it sent. Guest hotel vouchers remain separate reservation documents.
 
 Corrections require a reason and append a numbered revision with staff and time; previous details remain in
@@ -100,3 +101,44 @@ require the revision currently displayed. Reload after a conflict. `GET` and `PU
 and `{ expectedVersion, confirmed: true, ...details }`. `POST` to the same path plus `/pdf` requires
 `cost.view`, `pdf.generate` and `{ revision }`. Advice responses use `Cache-Control: no-store`. General
 booking activity records saves/downloads without private supplier details.
+
+## Bank receipts and supplier acknowledgement
+
+Open **Cost & Profit → Booking → Payments → Receipts / acknowledgement**, or use the same button in the
+supplier payment register. This belongs to one recorded supplier payment, not the whole invoice or booking.
+
+1. Upload the bank transfer proof after payment. PDF, PNG and JPEG files are supported, up to 5 MB each and
+   five active files per payment. Choose **Supplier receipt** when saving the hotel's receipt later.
+2. Download the bank proof and the payment voucher, then attach both to your reviewed business email to the
+   hotel. Uploading a file does not send an email or mark payment as acknowledged.
+3. When the hotel confirms receipt/allocation, record its contact name, confirmation date and channel
+   (Email, WhatsApp, Phone or Other). Add its receipt/reference and an internal note if useful. Check the
+   confirmation box only after receiving an actual acknowledgement.
+4. Filter the register by **Awaiting acknowledgement** to follow up on payments. The status and date also
+   appear in the CSV export. This filter combines with the selected payment dates and bank matching status.
+
+Withdraw an incorrect attachment with a reason; its metadata and original bytes remain stored for audit,
+but it is no longer offered for download. Reopen a mistaken acknowledgement with a reason, then record the
+correct confirmation. Previous details, staff names and timestamps remain in the private history. Stale
+acknowledgement edits are rejected; reload and review the current record before trying again. These actions
+do not change the payment amount, paid balance, bank matching or voucher revisions.
+
+Files require authenticated `cost.view` access to list/download, and `cost.view` plus `cost.manage` to
+upload/withdraw or change acknowledgement. Files are stored privately in MongoDB, outside public uploads;
+include the database in backups and allow for receipt storage growth. Downloads use attachment disposition
+and `Cache-Control: no-store`. File size, signatures and extensions are checked; this is not virus scanning.
+General booking activity omits filenames and private confirmation details.
+
+All endpoints start with `/api/finance/costs/:id/payments/:paymentId`:
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /attachments?historyPage=1` | Active files and paged withdrawal history (10 per page). |
+| `POST /attachments?kind=bank-proof` | Raw PDF/image bytes; set its MIME `Content-Type` and URL-encoded filename in `X-File-Name`. Kind can also be `supplier-receipt`. |
+| `GET /attachments/:attachmentId` | Download an active file belonging to this payment. |
+| `PATCH /attachments/:attachmentId/withdraw` | Withdraw with `{ reason }`. |
+| `GET /acknowledgement` | Current confirmation, history and cost document version. |
+| `PATCH /acknowledgement` | Save `{ action: "acknowledge", expectedVersion, acknowledgedDate, channel, contactName, reference, note, confirmed: true }` or reopen with `{ action: "reopen", expectedVersion, reason }`. |
+
+The register and CSV endpoints accept `acknowledgement=all|awaiting|acknowledged`. Older individual payments
+start as awaiting acknowledgement. Opening balances and paid-total corrections remain excluded.

@@ -49,6 +49,7 @@ Use this page to find a module and its operating instructions. The detailed guid
 - Private profit and margin summaries.
 - Individual supplier payments, due schedules, bank matching and payment register exports.
 - Payment vouchers/remittance advice with actual transfer currency, revision history and reviewed email drafts.
+- Private bank proofs and supplier receipts, acknowledgement history and filters for supplier follow-up.
 
 [Supplier payment workflow](docs/workflows/SUPPLIER_PAYMENTS.md)
 

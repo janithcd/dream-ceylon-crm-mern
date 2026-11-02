@@ -156,7 +156,7 @@ const getSupplierSchedule = async (req, res) => {
 const getSupplierPaymentRegister = async (req, res) => {
     const parsed = parseSupplierPaymentRegisterQuery(req.query);
     if (parsed.error) return res.status(400).json({ message: parsed.error });
-    const { from, to, reference, status, page, limit, stages } = parsed.value;
+    const { from, to, reference, status, acknowledgement, page, limit, stages } = parsed.value;
     try {
         const [result] = await CostEntry.aggregate([
             ...stages,
@@ -174,7 +174,7 @@ const getSupplierPaymentRegister = async (req, res) => {
             } },
         ]);
         const total = result.count[0]?.total || 0;
-        return res.json({ from, to, reference, status, page, limit, total, pages: Math.ceil(total / limit),
+        return res.json({ from, to, reference, status, acknowledgement, page, limit, total, pages: Math.ceil(total / limit),
             totalsByCurrency: result.totalsByCurrency, items: result.items });
     } catch (error) {
         console.error("Supplier payment register failed:", error);

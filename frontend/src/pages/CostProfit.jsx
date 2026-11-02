@@ -5,6 +5,7 @@ import api from "../api/axios";
 import PermissionGuard from "../components/PermissionGuard";
 import SupplierPaymentRegister from "../components/SupplierPaymentRegister";
 import SupplierPaymentVoucherModal from "../components/SupplierPaymentVoucherModal";
+import SupplierPaymentEvidenceModal from "../components/SupplierPaymentEvidenceModal";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { notifySupplierPayablesChanged } from "../utils/supplierPayableEvents";
 
@@ -43,6 +44,7 @@ const CostProfit = () => {
     const [paymentForm, setPaymentForm] = useState(blankPayment);
     const [paymentSaving, setPaymentSaving] = useState(false);
     const [voucherPayment, setVoucherPayment] = useState(null);
+    const [evidencePayment, setEvidencePayment] = useState(null);
     const [listBusy, setListBusy] = useState(false);
     const [saving, setSaving] = useState(false);
     const [reloadKey, setReloadKey] = useState(0);
@@ -137,6 +139,7 @@ const CostProfit = () => {
         setEditingId("");
         setPaymentCostId("");
         setVoucherPayment(null);
+        setEvidencePayment(null);
         if (nextType !== type) setRecords([]);
         setSearchInput("");
         setSearchParams(nextId ? { type: nextType, id: nextId } : { type: nextType });
@@ -302,6 +305,7 @@ const CostProfit = () => {
             )}
 
             {type === "booking" && <SupplierPaymentRegister onSelectBooking={(id) => selectRecord("booking", id)}
+                onOpenEvidence={(item) => setEvidencePayment({ costId: item.costId, paymentId: item.paymentId })}
                 onChanged={() => setReloadKey((value) => value + 1)} reloadKey={reloadKey} />}
 
             {busy && <p className="text-muted">Loading cost details...</p>}
@@ -465,6 +469,10 @@ const CostProfit = () => {
                                             {entry.kind === "payment" && <button type="button" className="btn btn-sm btn-outline-primary mt-2 mb-1" onClick={() => setVoucherPayment({ costId: paymentCost._id, paymentId: entry._id })}>
                                                 Payment voucher / email{entry.remittanceRevisions?.length > 0 ? ` · r${entry.remittanceRevisions.at(-1).revision}` : ""}
                                             </button>}
+                                            {entry.kind === "payment" && <div className="small mt-1">
+                                                <span className={entry.supplierAcknowledgement ? "text-success" : "text-warning-emphasis"}>{entry.supplierAcknowledgement ? `Supplier acknowledged · ${formatCalendarDate(entry.supplierAcknowledgement.acknowledgedDate)}` : "Awaiting supplier acknowledgement"}</span>
+                                                <button type="button" className="btn btn-sm btn-outline-secondary ms-2" onClick={() => setEvidencePayment({ costId: paymentCost._id, paymentId: entry._id })}>Receipts / acknowledgement</button>
+                                            </div>}
                                             {(entry.reconciliationHistory || []).length > 0 && <details className="small"><summary>Match history ({entry.reconciliationHistory.length})</summary>
                                                 <ul className="list-unstyled mt-1 mb-0">{entry.reconciliationHistory.map((change) => <li key={change._id}>
                                                     {change.action === "reconciled" ? `Matched to ${change.statementReference}` : `Reopened: ${change.reason}`} · {change.recordedByName} · {formatRecordedAt(change.recordedAt)}
@@ -477,6 +485,8 @@ const CostProfit = () => {
             )}
             {voucherPayment && <SupplierPaymentVoucherModal key={`${voucherPayment.costId}/${voucherPayment.paymentId}`} {...voucherPayment}
                 onClose={() => setVoucherPayment(null)} onSaved={() => setReloadKey((value) => value + 1)} />}
+            {evidencePayment && <SupplierPaymentEvidenceModal key={`${evidencePayment.costId}/${evidencePayment.paymentId}`} {...evidencePayment}
+                onClose={() => setEvidencePayment(null)} onSaved={() => setReloadKey((value) => value + 1)} />}
         </div>
     );
 };

@@ -1,5 +1,24 @@
 const mongoose = require("mongoose");
 
+const acknowledgementSchema = new mongoose.Schema({
+    acknowledgedDate: { type: Date, required: true },
+    channel: { type: String, enum: ["Email", "WhatsApp", "Phone", "Other"], required: true },
+    contactName: { type: String, required: true, maxlength: 100 },
+    reference: { type: String, default: "", maxlength: 100 },
+    note: { type: String, default: "", maxlength: 500 },
+    recordedAt: { type: Date, required: true },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+    recordedByName: { type: String, required: true, maxlength: 100 },
+}, { _id: false });
+const acknowledgementEventSchema = new mongoose.Schema({
+    action: { type: String, enum: ["acknowledged", "reopened"], required: true },
+    acknowledgement: { type: acknowledgementSchema, required: true },
+    reason: { type: String, default: "", maxlength: 300 },
+    recordedAt: { type: Date, required: true },
+    recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+    recordedByName: { type: String, required: true, maxlength: 100 },
+});
+
 const remittanceRevisionSchema = new mongoose.Schema({
     revision: { type: Number, required: true, min: 1 },
     supplierName: { type: String, required: true, maxlength: 160 },
@@ -45,6 +64,8 @@ const paymentHistorySchema = new mongoose.Schema({
     reconciliationHistory: { type: [reconciliationEventSchema], default: [] },
     // Append-only, reviewed advice details. Does not change the cost ledger or send mail.
     remittanceRevisions: { type: [remittanceRevisionSchema], default: [] },
+    supplierAcknowledgement: { type: acknowledgementSchema, default: null },
+    acknowledgementHistory: { type: [acknowledgementEventSchema], default: [] },
 });
 
 const costEntrySchema = new mongoose.Schema(

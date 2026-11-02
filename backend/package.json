@@ -6,8 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage",
+    "test": "node --test --test-concurrency=2",
+    "test:coverage": "node --test --test-concurrency=2 --experimental-test-coverage",
     "check": "node scripts/check-syntax.js"
   },
   "keywords": [],
