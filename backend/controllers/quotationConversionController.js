@@ -44,21 +44,6 @@ const generateBookingCode = async () => {
     return `DCJ-${year}-${Date.now().toString().slice(-8)}`;
 };
 
-const calculatePaymentStatus = (totalPrice, advancePayment) => {
-    const total = Math.max(toNumber(totalPrice), 0);
-    const advance = Math.max(toNumber(advancePayment), 0);
-
-    if (total > 0 && advance >= total) {
-        return "Paid";
-    }
-
-    if (advance > 0) {
-        return "Partially Paid";
-    }
-
-    return "Pending";
-};
-
 const populateBooking = (query) => {
     return query
         .populate("inquiry", "fullName email whatsappNumber country status")
@@ -105,16 +90,6 @@ const convertQuotationToBooking = async (req, res) => {
             toNumber(quotation.totals?.grandTotal),
             0
         );
-        const advancePayment = Math.min(
-            Math.max(
-                toNumber(
-                    quotation.totals?.advancePayment ?? quotation.advancePayment
-                ),
-                0
-            ),
-            totalPrice
-        );
-
         const customer = {
             fullName:
                 safeText(req.body.fullName) ||
@@ -162,10 +137,10 @@ const convertQuotationToBooking = async (req, res) => {
             totalPrice,
             currency:
                 safeText(req.body.currency) || safeText(quotation.currency) || "USD",
-            advancePayment,
-            paymentStatus:
-                safeText(req.body.paymentStatus) ||
-                calculatePaymentStatus(totalPrice, advancePayment),
+            // The quotation's advance is an amount requested, not evidence of a received payment.
+            // Record actual receipts through the booking payment ledger after conversion.
+            advancePayment: 0,
+            paymentStatus: "Pending",
             bookingStatus: safeText(req.body.bookingStatus) || "Confirmed",
             specialRequests: safeText(req.body.specialRequests),
             adminNotes:

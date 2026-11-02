@@ -364,15 +364,12 @@ const QuotationHistory = () => {
                     email,
                     whatsappNumber,
                     bookingStatus: "Confirmed",
-                    specialRequests:
-                        quotation.notes ||
-                        `Client accepted quotation ${quotation.quotationNo}.`,
                     adminNotes: `Booking created from quotation ${quotation.quotationNo}.`,
                 }
             );
 
             setSuccess(
-                `Quotation converted successfully. Booking Code: ${response.data.booking.bookingCode}`
+                `Quotation converted successfully. Booking Code: ${response.data.booking.bookingCode}. Record any money actually received in Bookings → Payments.`
             );
 
             fetchQuotations();

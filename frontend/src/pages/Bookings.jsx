@@ -114,7 +114,7 @@ const Bookings = () => {
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
 
-    const vehicleOptions = ["Car", "SUV", "Van", "Mini Bus", "Other"];
+    const vehicleOptions = ["Car", "SUV", "Van", "Mini Bus", "Bus", "Private Vehicle", "Other"];
 
     const bookingStatusOptions = [
         "Pending",

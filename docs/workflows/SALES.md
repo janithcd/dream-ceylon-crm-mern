@@ -136,4 +136,16 @@ identical fields. The comparison reads both saved quotations when opened, so it 
 record. It displays different currencies as recorded without converting them. If the source was deleted, its
 saved number remains visible, but comparison is unavailable.
 
-Convert accepted quotations into bookings
+From **Quotation History**, use the calendar-check **Convert to booking** button on the accepted quotation.
+Review the saved guest details, travel dates, currency, total and requested advance first. Confirm the
+conversion; if the linked inquiry has no email or WhatsApp number, the CRM asks for them. The button needs
+`quotation.convert` and is disabled after conversion. The quotation becomes Accepted and links to the new
+Confirmed booking; its linked inquiry becomes Converted.
+
+The requested advance on a quotation is a payment term, not money received. The booking therefore starts
+with **Paid 0** and **Payment Pending** even when the quotation requests a deposit. In **Bookings →
+Payments**, record each real receipt with its actual date, method, currency and reference after checking the
+bank or PayHere transaction. Recheck the booking balance and generate its invoice/receipt from saved payment
+records. Additional Notes stay on the quotation; add genuine guest requests separately in the booking's
+Special Requests field. Add hotel stays, transport, itinerary and private supplier costs in the booking as
+needed; these operational records are not created from quotation text.
