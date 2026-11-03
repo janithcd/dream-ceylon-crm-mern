@@ -46,6 +46,7 @@ Use this page to find a module and its operating instructions. The detailed guid
 ## Supplier costs and payments
 
 - Searchable supplier directory for hotels, guides, safari jeep providers and other partners, with private contacts, terms and active status.
+- Dated supplier rate cards with meal plans, occupancy, source references, deactivation and prior revisions; rates never change saved quote or booking prices automatically.
 - Hotel stay form copies current directory details while keeping the booking's saved contact snapshot.
 - Estimated quotation costs and actual booking costs with entered conversion rates.
 - Private profit and margin summaries.

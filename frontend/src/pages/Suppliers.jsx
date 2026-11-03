@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { FaAddressBook, FaPlus } from "react-icons/fa";
 import api from "../api/axios";
 import PermissionGuard from "../components/PermissionGuard";
+import SupplierRatesPanel from "../components/SupplierRatesPanel";
 
 const categories = ["Hotel", "Guide", "Safari jeep", "Transport", "Activity", "Other"];
 const blank = () => ({ category: "Hotel", name: "", location: "", contactName: "", email: "", phone: "",
@@ -24,6 +25,7 @@ const Suppliers = () => {
     const [formError, setFormError] = useState("");
     const [success, setSuccess] = useState("");
     const [refreshKey, setRefreshKey] = useState(0);
+    const [rateSupplier, setRateSupplier] = useState(null);
     const formRef = useRef(null);
 
     useEffect(() => {
@@ -131,14 +133,15 @@ const Suppliers = () => {
                             {item.whatsapp && <div>WhatsApp: {item.whatsapp}</div>}
                             {!item.email && !item.phone && !item.whatsapp && <span className="text-muted">No contact details</span>}</td>
                         <td className="small" style={{ whiteSpace: "pre-wrap", maxWidth: 350 }}>{item.terms && <div>{item.terms}</div>}{item.notes && <div className="text-muted">{item.notes}</div>}</td>
-                        <td>{item.status}</td><td><PermissionGuard permission="supplier.manage"><div className="d-flex gap-2 justify-content-end">
+                        <td>{item.status}</td><td><div className="d-flex gap-2 justify-content-end"><button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setRateSupplier(item)}>Rates</button><PermissionGuard permission="supplier.manage"><div className="d-flex gap-2">
                             <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => open(item)}>Edit</button>
                             <button type="button" className="btn btn-sm btn-outline-secondary" disabled={saving} onClick={() => toggleStatus(item)}>{item.status === "Active" ? "Deactivate" : "Reactivate"}</button>
-                        </div></PermissionGuard></td></tr>)}</tbody></table></div>
+                        </div></PermissionGuard></div></td></tr>)}</tbody></table></div>
                 {pages > 1 && <div className="d-flex align-items-center gap-2"><button type="button" className="btn btn-sm btn-outline-secondary" disabled={page === 1} onClick={() => setPage(page - 1)}>Previous</button>
                     <span>Page {page} of {pages}</span><button type="button" className="btn btn-sm btn-outline-secondary" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</button></div>}
             </>}
         </div></div>
+        {rateSupplier && <SupplierRatesPanel key={rateSupplier._id} supplier={rateSupplier} onClose={() => setRateSupplier(null)} />}
     </div>;
 };
 

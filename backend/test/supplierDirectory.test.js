@@ -6,6 +6,7 @@ process.env.JWT_SECRET = "synthetic-ci-secret-never-use-in-production";
 const app = require("../app");
 const Admin = require("../models/Admin");
 const Supplier = require("../models/Supplier");
+const SupplierRate = require("../models/SupplierRate");
 const ActivityLog = require("../models/ActivityLog");
 const { parseSupplier, parseSupplierList } = require("../utils/supplierDirectory");
 
@@ -46,6 +47,7 @@ test("supplier API permits scoped edits and rejects stale versions and untrusted
         return doc;
     });
     t.mock.method(ActivityLog, "create", async (entry) => { logs.push(entry); return entry; });
+    t.mock.method(SupplierRate, "exists", async () => ({ _id: "rate" }));
     const server = app.listen(0, "127.0.0.1");
     await new Promise((resolve) => server.once("listening", resolve));
     t.after(() => new Promise((resolve) => server.close(resolve)));
@@ -65,6 +67,7 @@ test("supplier API permits scoped edits and rejects stale versions and untrusted
     assert.equal(stored.nameKey, "laluna resort");
     assert.equal((await request(`/${ids.supplier}`, "PUT", { ...details(), expectedVersion: 0 }, ids.viewer)).status, 403);
     assert.equal((await request(`/${ids.supplier}`, "PUT", { ...details(), expectedVersion: 5 })).status, 409);
+    assert.equal((await request(`/${ids.supplier}`, "PUT", { ...details(), category: "Guide", expectedVersion: 0 })).status, 409);
     const updated = await request(`/${ids.supplier}`, "PUT", { ...details(), name: "Laluna Ayurveda", status: "Inactive", expectedVersion: 0 });
     assert.equal(updated.status, 200, await updated.clone().text());
     assert.equal((await updated.json()).status, "Inactive");

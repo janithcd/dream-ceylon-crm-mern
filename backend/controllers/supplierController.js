@@ -1,4 +1,5 @@
 const Supplier = require("../models/Supplier");
+const SupplierRate = require("../models/SupplierRate");
 const { parseSupplier, parseSupplierList } = require("../utils/supplierDirectory");
 const { createActivityLog } = require("../utils/createActivityLog");
 
@@ -55,6 +56,9 @@ const updateSupplier = async (req, res) => {
         const supplier = await Supplier.findById(req.params.id);
         if (!supplier) return res.status(404).json({ message: "Supplier not found." });
         if (supplier.__v !== req.body.expectedVersion) return res.status(409).json({ message: "This supplier changed. Reload and review the latest details." });
+        if (supplier.category !== parsed.value.category && await SupplierRate.exists({ supplier: supplier._id })) {
+            return res.status(409).json({ message: "This supplier has rate history. Create a separate supplier for a different category." });
+        }
         Object.assign(supplier, parsed.value, { updatedBy: req.admin._id });
         await supplier.save();
         await log(req, "UPDATE", supplier);
