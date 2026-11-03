@@ -14,7 +14,7 @@ const localTime = (value) => new Date(value).toLocaleString("en-US", {
     timeZone: "Asia/Colombo", dateStyle: "medium", timeStyle: "short",
 });
 
-const SupplierPaymentRegister = ({ onSelectBooking, onOpenEvidence, onChanged, reloadKey }) => {
+const SupplierPaymentRegister = ({ onSelectBooking, onOpenEvidence, onOpenVoucher, onChanged, reloadKey }) => {
     const [filters, setFilters] = useState(initialFilters);
     const [applied, setApplied] = useState(initialFilters);
     const [page, setPage] = useState(1);
@@ -120,7 +120,7 @@ const SupplierPaymentRegister = ({ onSelectBooking, onOpenEvidence, onChanged, r
         <div className="card border-0 shadow-sm mb-4">
             <div className="card-body">
                 <h4 className="fw-bold mb-1">Supplier payment register</h4>
-                <p className="text-muted small mb-3">Match recorded booking payments to a bank statement or cashbook by date and reference. Opening balances and manual paid total corrections are excluded.</p>
+                <p className="text-muted small mb-3">Find a recorded payment by date or reference, then open its payment voucher or match it to a bank statement. Change the date range to find older payments. Opening balances and manual paid total corrections are excluded.</p>
                 <form className="row g-2 align-items-end mb-3" onSubmit={(event) => {
                     event.preventDefault();
                     setPage(1);
@@ -178,7 +178,7 @@ const SupplierPaymentRegister = ({ onSelectBooking, onOpenEvidence, onChanged, r
                 {!error && !loading && register.total > 0 && <>
                     <p className="small mb-2"><strong>Total recorded payments:</strong> {register.totalsByCurrency.map(({ currency, amount }) => money(amount, currency)).join(" · ")}</p>
                     <div className="table-responsive"><table className="table table-hover align-middle mb-0">
-                        <thead><tr><th>Date</th><th>Booking</th><th>Supplier / cost</th><th>Amount</th><th>Method / reference</th><th>Recorded by</th><th>Reconciliation</th><th>Supplier acknowledgement</th></tr></thead>
+                        <thead><tr><th>Date</th><th>Booking</th><th>Supplier / cost</th><th>Amount</th><th>Method / reference</th><th>Recorded by</th><th>Reconciliation</th><th>Supplier follow-up</th></tr></thead>
                         <tbody>{register.items.map((item) => <tr key={item.paymentId}>
                             <td>{formatCalendarDate(item.paymentDate)}</td>
                             <td><button type="button" className="btn btn-link p-0" onClick={() => onSelectBooking(item.recordId)}>{item.bookingCode}</button>
@@ -203,6 +203,7 @@ const SupplierPaymentRegister = ({ onSelectBooking, onOpenEvidence, onChanged, r
                                 </PermissionGuard>
                             </td>
                             <td><span className={item.supplierAcknowledgedDate ? "text-success" : "text-warning-emphasis"}>{item.supplierAcknowledgedDate ? `Acknowledged · ${formatCalendarDate(item.supplierAcknowledgedDate)}` : "Awaiting acknowledgement"}</span>
+                                <button type="button" className="btn btn-sm btn-outline-primary mt-2 d-block" onClick={() => onOpenVoucher(item)}>Payment voucher / email</button>
                                 <button type="button" className="btn btn-sm btn-link p-0 mt-1 d-block" onClick={() => onOpenEvidence(item)}>Receipts / acknowledgement</button></td>
                         </tr>)}</tbody>
                     </table></div>

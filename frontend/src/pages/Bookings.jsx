@@ -1184,7 +1184,8 @@ const Bookings = () => {
                                                     <button
                                                         className="btn btn-sm btn-outline-secondary"
                                                         onClick={() => navigate(`/cost-profit?type=booking&id=${booking._id}`)}
-                                                        title="Actual costs and booked profit"
+                                                        title="Supplier costs, payment vouchers and booked profit"
+                                                        aria-label={`Supplier costs and payment vouchers for ${booking.bookingCode}`}
                                                     >
                                                         <FaCoins />
                                                     </button>

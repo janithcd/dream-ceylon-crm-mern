@@ -227,6 +227,7 @@ const CostProfit = () => {
             <div className="mb-4">
                 <h2 className="fw-bold mb-1">Cost &amp; Profit</h2>
                 <p className="text-muted mb-0">Private supplier costs for quotations and bookings. Client PDFs show selling prices only.</p>
+                <p className="small text-muted mt-2 mb-0">Need a supplier payment voucher? Choose <strong>Booking actual costs</strong>, select the booking, then open a cost's <strong>Payments</strong> and choose <strong>Payment voucher / email</strong> beside a recorded payment. Recent payments also appear in the register below.</p>
             </div>
 
             {error && <div className="alert alert-danger" role="alert">{error}</div>}
@@ -306,6 +307,7 @@ const CostProfit = () => {
 
             {type === "booking" && <SupplierPaymentRegister onSelectBooking={(id) => selectRecord("booking", id)}
                 onOpenEvidence={(item) => setEvidencePayment({ costId: item.costId, paymentId: item.paymentId })}
+                onOpenVoucher={(item) => setVoucherPayment({ costId: item.costId, paymentId: item.paymentId })}
                 onChanged={() => setReloadKey((value) => value + 1)} reloadKey={reloadKey} />}
 
             {busy && <p className="text-muted">Loading cost details...</p>}

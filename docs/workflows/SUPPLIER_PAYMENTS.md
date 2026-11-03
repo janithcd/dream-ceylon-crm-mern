@@ -75,8 +75,10 @@ reviewed. CSV exports respect the selected status filter.
 
 ## Payment vouchers and remittance emails
 
-Open **Cost & Profit → Booking → a cost's Payments → Payment voucher / email** on an individual recorded
-payment. Enter the supplier name, invoice/pro forma reference, optional supplier email and guest/stay
+Open **Cost & Profit → Booking actual costs → select a booking → a cost's Payments → Payment voucher / email**
+on an individual recorded payment. You can also use **Supplier payment register → Payment voucher / email**
+for a recent payment; change the register's date range to find older payments. The action does not appear for
+quotation estimates, opening balances or paid-total corrections. Enter the supplier name, invoice/pro forma reference, optional supplier email and guest/stay
 reference, and the actual amount, currency and transaction reference from the payment confirmation. Check the
 details before saving. The payment date and method come from the selected recorded payment. Each voucher
 covers that payment only; opening balances and paid-total corrections cannot produce vouchers.
