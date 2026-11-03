@@ -23,6 +23,7 @@ const TeamHandovers = lazy(() => import("./pages/TeamHandovers"));
 const MyTasks = lazy(() => import("./pages/MyTasks"));
 const TeamTasks = lazy(() => import("./pages/TeamTasks"));
 const SupplierConfirmations = lazy(() => import("./pages/SupplierConfirmations"));
+const Suppliers = lazy(() => import("./pages/Suppliers"));
 const HotelCancellationDeadlines = lazy(() => import("./pages/HotelCancellationDeadlines"));
 const CancellationReview = lazy(() => import("./pages/CancellationReview"));
 const AirportTransfers = lazy(() => import("./pages/AirportTransfers"));
@@ -217,6 +218,11 @@ const App = () => {
                                 </PermissionRoute>
                             }
                         />
+                        <Route path="suppliers" element={
+                            <PermissionRoute permission={ROUTE_PERMISSIONS.suppliers}>
+                                <Suppliers />
+                            </PermissionRoute>
+                        } />
                         <Route path="hotel-cancellation-deadlines" element={
                             <PermissionRoute permission={ROUTE_PERMISSIONS.hotelDeadlines}>
                                 <HotelCancellationDeadlines />

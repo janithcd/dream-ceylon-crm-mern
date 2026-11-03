@@ -11,6 +11,7 @@ import {
     FaClipboardCheck,
     FaCog,
     FaCoins,
+    FaAddressBook,
     FaEnvelopeOpenText,
     FaFileInvoiceDollar,
     FaGlobeAsia,
@@ -195,6 +196,9 @@ const AdminLayout = () => {
                             <FaClipboardCheck />
                             Supplier Confirmations
                         </NavLink>
+                    </PermissionGuard>
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.suppliers}>
+                        <NavLink to="/suppliers"><FaAddressBook />Supplier Directory</NavLink>
                     </PermissionGuard>
 
                     <PermissionGuard permission={ROUTE_PERMISSIONS.hotelDeadlines}>

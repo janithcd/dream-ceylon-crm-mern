@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { FaEdit, FaEnvelope, FaFilePdf, FaHistory, FaHotel, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
@@ -30,6 +31,7 @@ const emptyForm = () => ({
 const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onPrepareCancellation, onPrepareRooming, onOpenContacts, focusItemId }) => {
     const { hasPermission } = usePermissions();
     const canUpdate = hasPermission("booking.update");
+    const canReadDirectory = hasPermission("supplier.view");
     const canDownloadVoucher = hasPermission("booking.view") && hasPermission("pdf.generate");
     const [trip, setTrip] = useState(booking);
     const [stays, setStays] = useState(booking.hotelStays || []);
@@ -41,6 +43,12 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onPre
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
     const [downloadingStayId, setDownloadingStayId] = useState("");
+    const [hotelSearch, setHotelSearch] = useState("");
+    const [hotelKeyword, setHotelKeyword] = useState("");
+    const [hotelOptions, setHotelOptions] = useState([]);
+    const [hotelLoading, setHotelLoading] = useState(false);
+    const [hotelError, setHotelError] = useState("");
+    const [selectedHotelId, setSelectedHotelId] = useState("");
 
     useEffect(() => {
         let active = true;
@@ -63,6 +71,17 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onPre
     useEffect(() => {
         if (!loading && focusItemId) document.getElementById(`hotel-request-${focusItemId}`)?.scrollIntoView({ block: "nearest" });
     }, [loading, focusItemId]);
+
+    useEffect(() => {
+        if (!showForm || !canReadDirectory) return;
+        let active = true;
+        setHotelLoading(true); setHotelError("");
+        api.get("/suppliers", { params: { category: "Hotel", status: "Active", keyword: hotelKeyword, limit: 50 } })
+            .then(({ data }) => { if (active) setHotelOptions(data.items || []); })
+            .catch((err) => { if (active) setHotelError(err.response?.data?.message || "Could not load the hotel directory."); })
+            .finally(() => { if (active) setHotelLoading(false); });
+        return () => { active = false; };
+    }, [showForm, canReadDirectory, hotelKeyword]);
 
     const confirmedCount = stays.filter((stay) => stay.status === "Confirmed").length;
     const requestedCount = stays.filter((stay) => stay.status === "Requested").length;
@@ -110,6 +129,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onPre
 
     const resetForm = () => {
         setForm(emptyForm());
+        setSelectedHotelId("");
         setEditingId("");
         setShowForm(false);
     };
@@ -134,6 +154,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onPre
             notes: stay.notes || "",
         });
         setEditingId(stay._id);
+        setSelectedHotelId("");
         setShowForm(true);
     };
 
@@ -203,7 +224,7 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onPre
                             <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                                 <h6 className="fw-bold mb-0">{confirmedCount} confirmed · {requestedCount} awaiting confirmation</h6>
                                 {canUpdate && !loading && !showForm && (
-                                    <button className="btn btn-primary btn-sm" type="button" onClick={() => { setForm(emptyForm()); setEditingId(""); setShowForm(true); }} disabled={busy || stays.length >= 50}>
+                                    <button className="btn btn-primary btn-sm" type="button" onClick={() => { setForm(emptyForm()); setEditingId(""); setSelectedHotelId(""); setShowForm(true); }} disabled={busy || stays.length >= 50}>
                                         <FaPlus className="me-2" />Add hotel stay
                                     </button>
                                 )}
@@ -286,6 +307,22 @@ const BookingHotelsModal = ({ booking, onClose, onChanged, onPrepareEmail, onPre
                             {canUpdate && !loading && showForm && (
                                 <form id="hotel-stay-form" onSubmit={saveStay}>
                                     <h6 className="fw-bold mb-3">{editingId ? "Edit hotel stay" : "Add hotel stay"}</h6>
+                                    {canReadDirectory && <div className="border rounded p-3 mb-3">
+                                        <label className="form-label fw-semibold" htmlFor="stay-directory-search">Find a hotel in Supplier Directory</label>
+                                        <div className="d-flex gap-2 mb-2"><input id="stay-directory-search" className="form-control" value={hotelSearch} maxLength={100}
+                                            onChange={(event) => setHotelSearch(event.target.value)} onKeyDown={(event) => {
+                                                if (event.key === "Enter") { event.preventDefault(); setHotelKeyword(hotelSearch.trim()); }
+                                            }} placeholder="Search hotel name or location" />
+                                            <button type="button" className="btn btn-outline-primary" onClick={() => setHotelKeyword(hotelSearch.trim())}>Find</button></div>
+                                        <select className="form-select" aria-label="Select hotel from supplier directory" value={selectedHotelId} disabled={hotelLoading} onChange={(event) => {
+                                            const match = hotelOptions.find((item) => item._id === event.target.value);
+                                            setSelectedHotelId(event.target.value);
+                                            if (match) setForm((current) => ({ ...current, hotelName: match.name, location: match.location || "", supplierEmail: match.email || "" }));
+                                        }}><option value="">{hotelLoading ? "Loading hotels..." : "Choose a hotel to copy its details"}</option>
+                                            {hotelOptions.map((item) => <option key={item._id} value={item._id}>{item.name}{item.location ? ` · ${item.location}` : ""}</option>)}</select>
+                                        {hotelError && <p className="small text-danger mt-2 mb-0" role="alert">{hotelError}</p>}
+                                        <small className="text-muted d-block mt-2">Copies the current name, location and email into this stay. Review them before saving; later directory edits do not change saved bookings. <Link to="/suppliers">Manage suppliers</Link></small>
+                                    </div>}
                                     <div className="row g-3">
                                         <div className="col-md-6">
                                             <label className="form-label" htmlFor="stay-name">Property / hotel *</label>

@@ -45,6 +45,8 @@ Use this page to find a module and its operating instructions. The detailed guid
 
 ## Supplier costs and payments
 
+- Searchable supplier directory for hotels, guides, safari jeep providers and other partners, with private contacts, terms and active status.
+- Hotel stay form copies current directory details while keeping the booking's saved contact snapshot.
 - Estimated quotation costs and actual booking costs with entered conversion rates.
 - Private profit and margin summaries.
 - Individual supplier payments, due schedules, bank matching and payment register exports.
@@ -52,6 +54,8 @@ Use this page to find a module and its operating instructions. The detailed guid
 - Private bank proofs and supplier receipts, acknowledgement history and filters for supplier follow-up.
 
 [Supplier payment workflow](docs/workflows/SUPPLIER_PAYMENTS.md)
+
+[Supplier directory workflow](docs/workflows/SUPPLIER_DIRECTORY.md)
 
 ## Documents and AI
 
