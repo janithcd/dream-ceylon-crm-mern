@@ -50,6 +50,8 @@ const paymentHistorySchema = new mongoose.Schema({
     kind: { type: String, enum: ["payment", "adjustment"], required: true },
     amount: { type: Number, required: true }, // Signed change in the supplier's currency.
     paidAmountAfter: { type: Number, required: true, min: 0 },
+    // A dated payment documented later from a paid total; it does not increase paidAmount.
+    allocatedFromPaidTotal: { type: Boolean, default: false },
     paymentDate: { type: Date, default: null },
     method: { type: String, enum: ["Bank transfer", "Cash", "Card", "Other", null], default: null },
     reference: { type: String, trim: true, maxlength: 100, default: "" },

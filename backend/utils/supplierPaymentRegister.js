@@ -75,6 +75,7 @@ const registerProject = {
     description: 1, currency: 1, amount: "$paymentHistory.amount",
     paymentDate: "$paymentHistory.paymentDate", method: "$paymentHistory.method",
     reference: "$paymentHistory.reference", note: "$paymentHistory.note",
+    allocatedFromPaidTotal: { $ifNull: ["$paymentHistory.allocatedFromPaidTotal", false] },
     recordedByName: "$paymentHistory.recordedByName", recordedAt: "$paymentHistory.recordedAt",
     reconciledAt: "$paymentHistory.reconciledAt", statementReference: "$paymentHistory.statementReference",
     reconciledByName: "$paymentHistory.reconciledByName",
@@ -89,11 +90,11 @@ const csvCell = (value) => {
 };
 
 const supplierPaymentsCsv = (items) => {
-    const headers = ["Payment date", "Booking", "Customer", "Supplier / cost", "Currency", "Amount", "Method", "Reference", "Note", "Recorded by", "Recorded at (UTC)", "Reconciliation status", "Statement reference", "Reconciled by", "Reconciled at (UTC)", "Supplier acknowledgement", "Acknowledgement date"];
+    const headers = ["Payment date", "Booking", "Customer", "Supplier / cost", "Currency", "Amount", "Method", "Reference", "Note", "Documented from paid total", "Recorded by", "Recorded at (UTC)", "Reconciliation status", "Statement reference", "Reconciled by", "Reconciled at (UTC)", "Supplier acknowledgement", "Acknowledgement date"];
     const rows = items.map((item) => [
         item.paymentDate?.toISOString().slice(0, 10), item.bookingCode, item.customerName,
         item.description, item.currency, Number(item.amount).toFixed(2), item.method,
-        item.reference, item.note, item.recordedByName, item.recordedAt?.toISOString(),
+        item.reference, item.note, item.allocatedFromPaidTotal ? "Yes" : "No", item.recordedByName, item.recordedAt?.toISOString(),
         item.reconciledAt ? "Reconciled" : "Unreconciled", item.statementReference,
         item.reconciledByName, item.reconciledAt?.toISOString(),
         item.supplierAcknowledgedDate ? "Acknowledged" : "Awaiting acknowledgement", item.supplierAcknowledgedDate?.toISOString().slice(0, 10),

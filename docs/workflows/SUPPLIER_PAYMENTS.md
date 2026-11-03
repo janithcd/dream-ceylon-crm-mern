@@ -41,6 +41,15 @@ cannot exceed the remaining amount, be dated in the future, or be recorded on qu
 recorded payments cannot be deleted or changed to another currency; reconcile the history with bank records.
 Cost and payment actions appear in booking activity without exposing private supplier amounts there.
 
+If an older booking cost already shows a paid total but no dated payment, use **Document payment for voucher**
+on that supplier's cost row. Enter the actual supplier-currency amount, payment date, method and reference from your
+evidence, then confirm it was already counted. This creates an individual, auditable payment entry **without
+increasing the paid total** and opens the voucher editor. You can document several partial transfers up to the unitemized amount. It
+appears in the register and can have a remittance voucher. The API is
+`POST /api/finance/costs/:id/payments/from-paid-total` with `{ amount, paymentDate, method, reference,
+note, expectedVersion, confirmed: true }`; a stale cost or exhausted unitemized balance is rejected. Do not
+use this action for an unpaid supplier invoice or for a payment already listed in the history.
+
 ## Payment schedule and alerts
 
 The cost table shows what remains in each supplier's currency; it never adds different currencies together.
@@ -60,7 +69,8 @@ The booking tab also has a **Supplier payment register** for matching recorded d
 Filter by inclusive payment dates (Sri Lanka calendar, up to 366 days) and a case-insensitive payment
 reference, then open the linked booking or export all matching payments as CSV. The default view is the
 current Sri Lanka month, with 25 payments per page and separate totals for each supplier currency. Unitemized
-opening balances and manual paid total corrections are excluded because they are not individual cash payments.
+opening balances and manual paid total corrections are excluded because they are not individual cash payments;
+payments documented from a paid total appear after their real dates and references have been entered.
 `GET /api/finance/costs/payment-register` requires `cost.view`; `/payment-register/export` additionally
 requires `report.export` and allows up to 10,000 matching rows per download. Narrow the filter for larger
 exports.

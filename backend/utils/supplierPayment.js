@@ -4,6 +4,10 @@ const { getBusinessDayBounds } = require("./businessDate");
 const METHODS = Object.freeze(["Bank transfer", "Cash", "Card", "Other"]);
 const COLOMBO_OFFSET_MS = 330 * 60 * 1000;
 
+const unitemizedPaidCents = (cost) => Math.round((cost.paidAmount ?? 0) * 100) -
+    (cost.paymentHistory || []).reduce((total, entry) =>
+        total + (entry.kind === "payment" ? Math.round(entry.amount * 100) : 0), 0);
+
 const parseSupplierPayment = (body, remaining, now = new Date()) => {
     const amount = Number(body?.amount);
     const cents = Math.round(amount * 100);
@@ -27,4 +31,4 @@ const parseSupplierPayment = (body, remaining, now = new Date()) => {
     return { value: { amount, paymentDate: date.value, method, reference: reference.trim(), note: note.trim() } };
 };
 
-module.exports = { METHODS, parseSupplierPayment };
+module.exports = { METHODS, parseSupplierPayment, unitemizedPaidCents };

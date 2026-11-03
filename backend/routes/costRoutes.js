@@ -3,7 +3,7 @@ const { protect } = require("../middleware/authMiddleware");
 const { authorizePermissions } = require("../middleware/permissionMiddleware");
 const { PERMISSIONS } = require("../config/permissions");
 const { getCostOverview, getSupplierPayables, getSupplierSchedule, getSupplierPaymentRegister, exportSupplierPaymentRegister,
-    addCost, updateCost, recordSupplierPayment, reconcileSupplierPayment, deleteCost } = require("../controllers/costController");
+    addCost, updateCost, recordSupplierPayment, documentExistingSupplierPayment, reconcileSupplierPayment, deleteCost } = require("../controllers/costController");
 const { getSupplierRemittance, saveSupplierRemittance, downloadSupplierRemittance } = require("../controllers/supplierRemittanceController");
 const { listPaymentAttachments, uploadPaymentAttachment, downloadPaymentAttachment, withdrawPaymentAttachment,
     getPaymentAcknowledgement, updatePaymentAcknowledgement } = require("../controllers/supplierPaymentEvidenceController");
@@ -24,6 +24,7 @@ router.get("/payment-register", authorizePermissions(PERMISSIONS.COST_VIEW), get
 router.get("/payment-register/export", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.REPORT_EXPORT), exportSupplierPaymentRegister);
 router.get("/:type/:id", authorizePermissions(PERMISSIONS.COST_VIEW), getCostOverview);
 router.post("/:id/payments", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), recordSupplierPayment);
+router.post("/:id/payments/from-paid-total", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), documentExistingSupplierPayment);
 router.patch("/:id/payments/:paymentId/reconciliation", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), reconcileSupplierPayment);
 router.get("/:id/payments/:paymentId/remittance", authorizePermissions(PERMISSIONS.COST_VIEW), getSupplierRemittance);
 router.put("/:id/payments/:paymentId/remittance", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), saveSupplierRemittance);

@@ -4,7 +4,7 @@ const CostEntry = require("../models/CostEntry");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { costSummary, parseCostPayload } = require("../utils/costProfit");
 const { getBusinessDayBounds } = require("../utils/businessDate");
-const { parseSupplierPayment } = require("../utils/supplierPayment");
+const { parseSupplierPayment, unitemizedPaidCents } = require("../utils/supplierPayment");
 const { parseSupplierScheduleQuery } = require("../utils/supplierSchedule");
 const { parseSupplierReconciliation } = require("../utils/supplierReconciliation");
 const {
@@ -307,6 +307,55 @@ const recordSupplierPayment = async (req, res) => {
     }
 };
 
+const documentExistingSupplierPayment = async (req, res) => {
+    if (!validId(req.params.id)) return res.status(400).json({ message: "Invalid cost entry." });
+    res.setHeader("Cache-Control", "no-store");
+    try {
+        const item = await CostEntry.findById(req.params.id);
+        if (!item) return res.status(404).json({ message: "Cost entry not found." });
+        if (item.recordType !== "Booking") return res.status(400).json({ message: "Only booking costs can have supplier payments." });
+        const record = await loadRecord("Booking", item.recordId);
+        if (!record) return res.status(404).json({ message: "Booking not found." });
+        if (!Number.isSafeInteger(req.body?.expectedVersion) || req.body.expectedVersion < 0) {
+            return res.status(400).json({ message: "Refresh the cost before documenting this payment." });
+        }
+        if (req.body.expectedVersion !== item.__v) {
+            return res.status(409).json({ message: "This cost changed. Refresh and review the unitemized amount." });
+        }
+        if (req.body.confirmed !== true) {
+            return res.status(400).json({ message: "Confirm that this payment is already included in the paid total and matches your bank record." });
+        }
+        const availableCents = unitemizedPaidCents(item);
+        if (availableCents <= 0) {
+            return res.status(409).json({ message: "There is no unitemized paid amount left on this cost." });
+        }
+        const payment = parseSupplierPayment(req.body, availableCents / 100);
+        if (payment.error) return res.status(400).json({ message: payment.error });
+        if (["Bank transfer", "Card"].includes(payment.value.method) && !payment.value.reference) {
+            return res.status(400).json({ message: "Enter the bank or card transaction reference from the payment confirmation." });
+        }
+
+        item.paymentHistory.push({
+            kind: "payment", allocatedFromPaidTotal: true, ...payment.value,
+            paidAmountAfter: item.paidAmount,
+            recordedBy: req.admin._id, recordedByName: String(req.admin.name || "Staff").slice(0, 100),
+        });
+        await item.save();
+        await createActivityLog({
+            req, action: "UPDATE", module: "Other",
+            description: `Existing supplier paid total itemized for booking ${record.reference}`,
+            relatedRecordId: item.recordId, relatedModel: "Booking", referenceNo: record.reference,
+        });
+        return res.status(201).json({ paidAmount: item.paidAmount, payment: item.paymentHistory.at(-1) });
+    } catch (error) {
+        if (error.name === "VersionError" || error.name === "DocumentNotFoundError") {
+            return res.status(409).json({ message: "This cost changed. Refresh and review the unitemized amount." });
+        }
+        console.error("Supplier payment documentation failed:", error);
+        return res.status(500).json({ message: "Failed to document existing supplier payment." });
+    }
+};
+
 const reconcileSupplierPayment = async (req, res) => {
     if (!validId(req.params.id) || !validId(req.params.paymentId)) {
         return res.status(400).json({ message: "Choose a valid supplier payment." });
@@ -387,4 +436,4 @@ const deleteCost = async (req, res) => {
 };
 
 module.exports = { getCostOverview, getSupplierPayables, getSupplierSchedule, getSupplierPaymentRegister, exportSupplierPaymentRegister,
-    addCost, updateCost, recordSupplierPayment, reconcileSupplierPayment, deleteCost };
+    addCost, updateCost, recordSupplierPayment, documentExistingSupplierPayment, reconcileSupplierPayment, deleteCost };

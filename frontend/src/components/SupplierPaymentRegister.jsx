@@ -183,7 +183,7 @@ const SupplierPaymentRegister = ({ onSelectBooking, onOpenEvidence, onOpenVouche
                             <td>{formatCalendarDate(item.paymentDate)}</td>
                             <td><button type="button" className="btn btn-link p-0" onClick={() => onSelectBooking(item.recordId)}>{item.bookingCode}</button>
                                 <div className="small text-muted">{item.customerName}</div></td>
-                            <td>{item.description}{item.note && <div className="small text-muted">{item.note}</div>}</td>
+                            <td>{item.description}{item.allocatedFromPaidTotal && <div className="small text-muted">Documented from existing paid total</div>}{item.note && <div className="small text-muted">{item.note}</div>}</td>
                             <td>{money(item.amount, item.currency)}</td>
                             <td>{item.method}{item.reference && <div className="small text-muted">{item.reference}</div>}</td>
                             <td>{item.recordedByName}</td>
