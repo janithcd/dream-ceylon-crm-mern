@@ -44,11 +44,20 @@ const main = async () => {
         assert.equal(unlinked.status, "Converted");
         const legacy = await Inquiry.create({ ...guest, source: "Instagram", status: "Cancelled" });
         ids.push(legacy._id);
+        const websiteCountBefore = await Inquiry.countDocuments({ email: guest.email, source: "Website" });
+        const trapped = await request("", "POST", { ...guest, websiteUrl: "https://spam.example" }, null);
+        assert.equal(trapped.status, 200);
+        assert.equal((await trapped.json()).inquiry, null);
         const websiteResponse = await request("", "POST", { ...guest, source: "Referral", status: "Cancelled", lossReason: "Other" }, null);
         assert.equal(websiteResponse.status, 201, await websiteResponse.clone().text());
         const website = (await websiteResponse.json()).inquiry;
         ids.push(website._id);
         assert.equal(website.source, "Website");
+        assert.equal(website.publicFingerprint, undefined);
+        const repeated = await request("", "POST", { ...guest, email: guest.email.toUpperCase(), message: "CI   inquiry" }, null);
+        assert.equal(repeated.status, 200);
+        assert.equal((await repeated.json()).inquiry, null);
+        assert.equal(await Inquiry.countDocuments({ email: guest.email, source: "Website" }), websiteCountBefore + 1);
 
         booking = await Booking.create({
             inquiry: referral._id,
@@ -98,7 +107,7 @@ const main = async () => {
         assert.equal(updated.summary.lost, 1);
         assert.equal(updated.summary.firstContacts, 2);
         assert.equal(updated.summary.waiting24h, 1);
-        console.log("Lead insights smoke passed: manual attribution, public isolation, real booking links, legacy reasons, access control.");
+        console.log("Lead insights smoke passed: manual attribution, public spam protection, real booking links, legacy reasons, access control.");
     } finally {
         if (booking) await Booking.deleteOne({ _id: booking._id });
         if (ids.length) {

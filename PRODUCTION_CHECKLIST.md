@@ -14,6 +14,8 @@ This checklist is a gate for each release. A checked box must refer to evidence 
 - [ ] Verify the production `MONGO_URI`, `JWT_SECRET`, allowed frontend origins and API base URL in the deployment environment. Keep secrets out of Git and build artifacts.
 - [ ] Make and restore-test a production database backup. Record its timestamp, retention and restore owner.
 - [ ] Confirm HTTPS, login/logout, inactive-user rejection and role restrictions with non-admin test accounts.
+- [ ] Submit a synthetic inquiry from the public website and verify it appears once in the CRM. Check that the website sends an empty `websiteUrl` field, a filled honeypot does not create a lead, and an immediate identical retry shows a confirmation without another lead.
+- [ ] Confirm public inquiry rate limiting uses the actual visitor IP behind the deployed proxy chain, separates different visitors, and rejects forged forwarded IP headers.
 - [ ] Confirm the sender domain and API key in Zoho CPaaS; send a test email to an owned mailbox and verify delivery, attachments and duplicate-send handling. A Zoho Mail mailbox alone does not configure CPaaS.
 - [ ] Exercise a complete test booking from quotation through supplier confirmation and guest payment using synthetic data. Verify no test data or messages go to real guests.
 - [ ] Check the deployed health endpoint, application logs and PDF generation after deployment.

@@ -62,6 +62,8 @@ docker compose down
 
 The frontend proxies `/api` and `/uploads` to the backend and supports React Router page refreshes. Screens are loaded as separate JavaScript chunks; the sidebar remains in place while a screen loads. Nginx serves hashed `/assets/` files with immutable caching, serves `index.html` with `no-cache`, and returns 404 for a missing chunk. The container smoke check verifies those responses. MongoDB and the API have no published host ports. Only the frontend is exposed, bound to local loopback. Both application images run as non-root users. Uploads use a named volume.
 
+Public inquiry submissions are limited per client IP (five per 15 minutes by default). When placing another proxy or load balancer in front of Nginx, review Express `trust proxy` and forwarded headers against the actual chain; in staging, confirm different visitors have independent limits and a spoofed forwarded header cannot evade them. The short duplicate check is stored in MongoDB and applies across API instances, though concurrent identical requests can still race; it is not a substitute for a challenge if bot traffic becomes persistent.
+
 AI features require a separately injected OpenAI key; they are not exercised by these checks. Compose is a local/CI lab with unauthenticated private MongoDB, HTTP and one API replica. It is not a production deployment manifest.
 
 ## Configuration and health probes
@@ -76,7 +78,7 @@ CRM forms, lists, CSV exports and the booking calendar now use the same calendar
 
 ## Next milestones
 
-1. Expand database-backed business-flow coverage, resolve the remaining frontend lint debt and monitor the remaining route/chart chunk sizes. Complete the public-inquiry anti-spam requirement.
+1. Expand database-backed business-flow coverage, resolve the remaining frontend lint debt and monitor the remaining route/chart chunk sizes. Add the `websiteUrl` honeypot field to the separate public website form and verify inquiry responses on staging; the API rate and duplicate checks already apply.
 2. Set an AWS budget, region and target architecture; provision a staging environment and container registry with infrastructure as code. Keep the Namecheap domain registration and plan DNS/email migration separately.
 3. Add AWS deployment using short-lived GitHub OIDC credentials, a staging environment, health checks and a rollback path. Review database backups and upload persistence before cutover.
 4. Build a Jenkins pipeline using the same checks and containers. Run it on a dedicated learning agent; do not expose a Jenkins server to production traffic.

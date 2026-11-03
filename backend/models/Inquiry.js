@@ -49,6 +49,9 @@ const inquirySchema = new mongoose.Schema(
             trim: true,
         },
 
+        // Only set for public submissions; never return this internal deduplication key.
+        publicFingerprint: { type: String, select: false },
+
         status: {
             type: String,
             enum: ["New", "Contacted", "Follow Up", "Converted", "Cancelled"],
@@ -110,6 +113,9 @@ const inquirySchema = new mongoose.Schema(
 
 inquirySchema.index({ status: 1, assignedTo: 1, createdAt: 1 });
 inquirySchema.index({ email: 1 });
+inquirySchema.index({ publicFingerprint: 1, createdAt: -1 }, {
+    partialFilterExpression: { publicFingerprint: { $type: "string" } },
+});
 
 const Inquiry = mongoose.model("Inquiry", inquirySchema);
 

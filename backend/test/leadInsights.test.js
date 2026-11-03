@@ -61,6 +61,7 @@ test("public and manual inquiry submissions keep source and loss details private
         stored.set(String(inquiry._id), inquiry);
         return inquiry;
     });
+    t.mock.method(Inquiry, "exists", async () => null);
     t.mock.method(Inquiry, "findById", (id) => ({
         populate() { return this; },
         then(resolve, reject) { return Promise.resolve(stored.get(String(id)) || null).then(resolve, reject); },

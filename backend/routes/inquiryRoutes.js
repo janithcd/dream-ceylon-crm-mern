@@ -19,6 +19,7 @@ const {
 const { authorizePermissions } = require("../middleware/permissionMiddleware");
 const { PERMISSIONS } = require("../config/permissions");
 const { publicInquiryLimiter } = require("../config/security");
+const { validatePublicInquiry } = require("../utils/publicInquiryProtection");
 
 const router = express.Router();
 
@@ -31,6 +32,7 @@ const router = express.Router();
 router.post(
     "/",
     publicInquiryLimiter,
+    validatePublicInquiry,
     createInquiry
 );
 

@@ -81,6 +81,21 @@ PUT    /inquiries/:id
 DELETE /inquiries/:id
 ```
 
+`POST /inquiries` and `POST /public/inquiries` accept public website submissions without a JWT. Send
+`fullName`, `email`, `whatsappNumber`, `country`, and `message`; optional fields include `travelDate`,
+`numberOfTravelers`, `interestedPackage`, and `chatConversationId`. The server sets status, source, priority,
+and private notes regardless of values sent by a visitor. Staff should use the authenticated
+`POST /inquiries/manual` route for manually entered leads.
+
+The public form should also send an empty `websiteUrl` text field, visually hidden and removed from keyboard
+navigation. A filled field is treated as a bot submission. The API caps text lengths (name/country 120,
+email 254, WhatsApp 40, message 5000 characters), limits submissions per IP, and acknowledges a repeated
+inquiry with the same guest and trip details within 15 minutes without creating a second record. A saved inquiry returns `201` with
+`inquiry`; a trapped or repeated submission returns `200` with the same confirmation message and
+`inquiry: null`. Show the confirmation message to the visitor rather than depending on an inquiry ID.
+Excessive submissions return `429`. The hidden field must be added to the separate public website form for
+that layer to work; the duplicate and rate checks already apply to both API paths.
+
 ## Quotations
 
 ```http

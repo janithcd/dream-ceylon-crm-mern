@@ -16,6 +16,7 @@ const {
 const {
     publicInquiryLimiter,
 } = require("../config/security");
+const { validatePublicInquiry } = require("../utils/publicInquiryProtection");
 
 const router = express.Router();
 
@@ -32,6 +33,7 @@ router.get("/vehicles", getPublicVehicles);
 router.post(
     "/inquiries",
     publicInquiryLimiter,
+    validatePublicInquiry,
     createInquiry
 );
 

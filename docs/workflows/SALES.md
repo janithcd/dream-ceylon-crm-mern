@@ -42,8 +42,12 @@ the CRM are counted; manually changing status does not supply a contact time. Ol
 invalid contact times show no response metric. Bookings and first contacts may occur after the inquiry period,
 so these are current cohort results rather than events made during that period. `GET
 /api/inquiries/insights?window=30|90|365|all` requires `inquiry.view`; manual entry at `POST
-/api/inquiries/manual` requires `inquiry.create`. The public `POST /api/inquiries` remains available with rate
-limiting and resets submitted source, status, priority and internal fields.
+/api/inquiries/manual` requires `inquiry.create`. The public `POST /api/inquiries` (also available at
+`POST /api/public/inquiries`) remains available with rate limiting, a form honeypot, text size limits,
+and 15-minute duplicate suppression for the same guest and trip details. It resets submitted source, status,
+priority and internal fields. Trapped or repeated submissions receive a generic success response with
+`inquiry: null`; they do not appear in the lead queue. Add the empty `websiteUrl` field to the separate
+website form before relying on the honeypot there.
 
 **New Lead Queue** lists New inquiries oldest first, with filters for all, unassigned, and mine. Staff with
 `inquiry.update` can assign an active admin who also has that permission; inactive or read-only admins cannot

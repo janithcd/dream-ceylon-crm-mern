@@ -1,6 +1,12 @@
 const mongoose = require("mongoose");
 const Inquiry = require("../models/Inquiry");
 const { createActivityLog } = require("../utils/createActivityLog");
+const {
+    PUBLIC_INQUIRY_CONFIRMATION,
+    DUPLICATE_WINDOW_MS,
+    acknowledgeWithoutRecord,
+    publicInquiryFingerprint,
+} = require("../utils/publicInquiryProtection");
 const LOSS_REASONS = Object.freeze(["Budget", "Travel plans changed", "No response", "Booked elsewhere", "Dates unavailable", "Other"]);
 
 const safeText = (value) => {
@@ -260,6 +266,14 @@ const createInquiryRecord = async (req, res, manual = false) => {
             payload.adminNotes = "";
             payload.lossReason = null;
             payload.lossNote = "";
+
+            const fingerprint = publicInquiryFingerprint(payload);
+            const duplicate = await Inquiry.exists({
+                publicFingerprint: fingerprint,
+                createdAt: { $gte: new Date(Date.now() - DUPLICATE_WINDOW_MS) },
+            });
+            if (duplicate) return acknowledgeWithoutRecord(res);
+            payload.publicFingerprint = fingerprint;
         }
 
         const inquiry =
@@ -358,7 +372,7 @@ const createInquiryRecord = async (req, res, manual = false) => {
             .status(201)
             .json({
                 message:
-                    manual ? "Inquiry created successfully." : "Thank you. Your inquiry has been submitted successfully.",
+                    manual ? "Inquiry created successfully." : PUBLIC_INQUIRY_CONFIRMATION,
                 inquiry:
                 populatedInquiry,
 
