@@ -6,6 +6,7 @@ import PermissionGuard from "../components/PermissionGuard";
 import SupplierPaymentRegister from "../components/SupplierPaymentRegister";
 import SupplierPaymentVoucherModal from "../components/SupplierPaymentVoucherModal";
 import SupplierPaymentEvidenceModal from "../components/SupplierPaymentEvidenceModal";
+import QuotationRateEstimate from "../components/QuotationRateEstimate";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { notifySupplierPayablesChanged } from "../utils/supplierPayableEvents";
 
@@ -370,6 +371,10 @@ const CostProfit = () => {
                     </div>
 
                     <PermissionGuard permission="cost.manage">
+                        {type === "quotation" && <PermissionGuard permission="supplier.view">
+                            <QuotationRateEstimate key={recordId} quotation={overview.record}
+                                onSaved={() => { setSuccess("Estimate added from the selected supplier rate."); setReloadKey((value) => value + 1); }} />
+                        </PermissionGuard>}
                         <div className="card border-0 shadow-sm mb-4">
                             <div className="card-body">
                                 <h5 className="fw-bold mb-3">{editingId ? "Edit supplier cost" : `Add ${type === "quotation" ? "estimated" : "actual"} supplier cost`}</h5>
@@ -441,7 +446,14 @@ const CostProfit = () => {
                                 <div className="table-responsive"><table className="table align-middle">
                                     <thead><tr><th>Category</th><th>Description</th><th>Supplier amount</th>{type === "booking" && <><th>Paid / remaining</th><th>Payment due</th></>}<th>Rate to {saleCurrency}</th><th>In {saleCurrency}</th><th className="text-end">Actions</th></tr></thead>
                                     <tbody>{overview.items.map((item) => <tr key={item._id}>
-                                        <td>{item.category}</td><td>{item.description}</td>
+                                        <td>{item.category}</td><td>{item.description}
+                                            {item.rateSource && <div className="small text-muted mt-1">
+                                                Rate card r{item.rateSource.rateRevision} · {formatMoney(item.rateSource.rateAmount, item.rateSource.rateCurrency)} / {item.rateSource.unit}
+                                                {` × ${item.rateSource.quantity}`} · {formatCalendarDate(item.rateSource.serviceFrom)}–{formatCalendarDate(item.rateSource.serviceTo)}
+                                                <br />Source: {item.rateSource.sourceReference}
+                                                {item.rateSource.manuallyEdited && <span className="text-warning-emphasis"> · Cost edited after applying rate</span>}
+                                            </div>}
+                                        </td>
                                         <td>{formatMoney(item.amount, item.currency)}</td>
                                         {type === "booking" && <>
                                             <td>{formatMoney(item.paidAmount ?? 0, item.currency)} paid

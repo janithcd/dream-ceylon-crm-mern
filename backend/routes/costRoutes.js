@@ -3,7 +3,7 @@ const { protect } = require("../middleware/authMiddleware");
 const { authorizePermissions } = require("../middleware/permissionMiddleware");
 const { PERMISSIONS } = require("../config/permissions");
 const { getCostOverview, getSupplierPayables, getSupplierSchedule, getSupplierPaymentRegister, exportSupplierPaymentRegister,
-    addCost, updateCost, recordSupplierPayment, documentExistingSupplierPayment, reconcileSupplierPayment, deleteCost } = require("../controllers/costController");
+    addCost, addQuotationCostFromRate, updateCost, recordSupplierPayment, documentExistingSupplierPayment, reconcileSupplierPayment, deleteCost } = require("../controllers/costController");
 const { getSupplierRemittance, saveSupplierRemittance, downloadSupplierRemittance } = require("../controllers/supplierRemittanceController");
 const { listPaymentAttachments, uploadPaymentAttachment, downloadPaymentAttachment, withdrawPaymentAttachment,
     getPaymentAcknowledgement, updatePaymentAcknowledgement } = require("../controllers/supplierPaymentEvidenceController");
@@ -35,6 +35,7 @@ router.get("/:id/payments/:paymentId/attachments/:attachmentId", authorizePermis
 router.patch("/:id/payments/:paymentId/attachments/:attachmentId/withdraw", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), privateResponse, withdrawPaymentAttachment);
 router.get("/:id/payments/:paymentId/acknowledgement", authorizePermissions(PERMISSIONS.COST_VIEW), privateResponse, getPaymentAcknowledgement);
 router.patch("/:id/payments/:paymentId/acknowledgement", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), privateResponse, updatePaymentAcknowledgement);
+router.post("/quotation/:id/from-rate", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE, PERMISSIONS.SUPPLIER_VIEW), addQuotationCostFromRate);
 router.post("/:type/:id", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), addCost);
 router.put("/:id", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), updateCost);
 router.delete("/:id", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), deleteCost);

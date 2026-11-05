@@ -4,13 +4,15 @@ const jwt = require("jsonwebtoken");
 const Admin = require("../models/Admin");
 const Supplier = require("../models/Supplier");
 const SupplierRate = require("../models/SupplierRate");
+const Quotation = require("../models/Quotation");
+const CostEntry = require("../models/CostEntry");
 const ActivityLog = require("../models/ActivityLog");
 const { getBusinessDayBounds } = require("../utils/businessDate");
 
 const main = async () => {
     if (process.env.CI_SMOKE_TESTS !== "true") throw new Error("Enable disposable CI smoke tests explicitly.");
     await mongoose.connect(process.env.MONGO_URI);
-    let admin, supplier, rate;
+    let admin, supplier, rate, quotation, estimate;
     try {
         admin = await Admin.create({ name: "CI Rate Manager", email: `ci-rates-${Date.now()}@example.invalid`,
             password: "disposable-ci-only-password", role: "Finance" });
@@ -39,12 +41,31 @@ const main = async () => {
         const second = await revised.json();
         assert.equal(second.history[0].amount, 130);
         assert.equal((await request(`/${rate._id}`, "PUT", { ...data, amount: 120, expectedVersion: rate.__v })).status, 409);
+        quotation = await Quotation.create({ quotationNo: `DCJ-Q-CI-RATE-${suffix}`, clientName: "CI Rate Guest",
+            tourTitle: "CI Rate Tour", currency: "USD", travelStartDate: new Date(from), travelEndDate: new Date(to),
+            totals: { grandTotal: 1000 } });
+        const apply = (body) => fetch(`http://127.0.0.1:5000/api/finance/costs/quotation/${quotation._id}/from-rate`, {
+            method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        const selection = { supplierId: supplier._id, rateId: rate._id, expectedVersion: second.__v,
+            serviceFrom: from, serviceTo: to, quantity: 2 };
+        assert.equal((await apply({ ...selection, expectedVersion: rate.__v })).status, 409);
+        const applied = await apply({ ...selection, amount: 1, category: "Other" });
+        assert.equal(applied.status, 201, await applied.clone().text());
+        estimate = await applied.json();
+        assert.equal(estimate.amount, 250);
+        assert.equal(estimate.rateSource.rateAmount, 125);
+        assert.equal(estimate.rateSource.rateRevision, 2);
         const archived = await request(`/${rate._id}`, "PUT", { ...data, amount: 125, status: "Inactive", expectedVersion: second.__v });
         assert.equal(archived.status, 200, await archived.clone().text());
+        assert.equal((await apply({ ...selection, expectedVersion: (await archived.clone().json()).__v })).status, 400);
         const active = await (await request("?timing=Current&status=Active")).json();
         assert.ok(!active.items.some((item) => String(item._id) === String(rate._id)));
-        console.log("Supplier rate validity, overlap guard, revision history and inactive filter verified.");
+        console.log("Supplier rate validity, overlap guard, revision history and quotation estimate snapshot verified.");
     } finally {
+        if (estimate) await CostEntry.deleteOne({ _id: estimate._id });
+        if (quotation) { await ActivityLog.deleteMany({ relatedRecordId: quotation._id }); await Quotation.deleteOne({ _id: quotation._id }); }
         if (rate) await SupplierRate.deleteOne({ _id: rate._id });
         if (supplier) { await ActivityLog.deleteMany({ relatedRecordId: supplier._id }); await Supplier.deleteOne({ _id: supplier._id }); }
         if (admin) await Admin.deleteOne({ _id: admin._id });

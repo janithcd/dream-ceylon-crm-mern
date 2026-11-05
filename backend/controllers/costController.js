@@ -1,8 +1,11 @@
 const Quotation = require("../models/Quotation");
 const Booking = require("../models/Booking");
 const CostEntry = require("../models/CostEntry");
+const Supplier = require("../models/Supplier");
+const SupplierRate = require("../models/SupplierRate");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { costSummary, parseCostPayload } = require("../utils/costProfit");
+const { parseRateSelection, buildRateEstimate } = require("../utils/rateEstimate");
 const { getBusinessDayBounds } = require("../utils/businessDate");
 const { parseSupplierPayment, unitemizedPaidCents } = require("../utils/supplierPayment");
 const { parseSupplierScheduleQuery } = require("../utils/supplierSchedule");
@@ -17,7 +20,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const loadRecord = async (recordType, recordId) => {
     if (recordType === "Quotation") {
-        const record = await Quotation.findById(recordId).select("quotationNo clientName tourTitle currency totals booking");
+        const record = await Quotation.findById(recordId).select("quotationNo clientName tourTitle currency totals booking travelStartDate travelEndDate");
         return record && {
             id: record._id,
             reference: record.quotationNo,
@@ -26,6 +29,8 @@ const loadRecord = async (recordType, recordId) => {
             currency: record.currency,
             saleAmount: record.totals?.grandTotal || 0,
             bookingId: record.booking || null,
+            travelStartDate: record.travelStartDate || null,
+            travelEndDate: record.travelEndDate || null,
         };
     }
     const record = await Booking.findById(recordId).select("bookingCode customer currency totalPrice bookingStatus");
@@ -231,6 +236,34 @@ const addCost = async (req, res) => {
     }
 };
 
+const addQuotationCostFromRate = async (req, res) => {
+    if (!validId(req.params.id)) return res.status(400).json({ message: "Choose a valid quotation." });
+    const selection = parseRateSelection(req.body);
+    if (selection.error) return res.status(400).json({ message: selection.error });
+    res.setHeader("Cache-Control", "no-store");
+    try {
+        const quotation = await loadRecord("Quotation", req.params.id);
+        if (!quotation) return res.status(404).json({ message: "Quotation not found." });
+        const supplier = await Supplier.findById(req.body.supplierId).select("name category status");
+        if (!supplier) return res.status(404).json({ message: "Supplier not found." });
+        // The selected version must still be current when staff apply it.
+        const rate = await SupplierRate.findOne({ _id: req.body.rateId, supplier: supplier._id,
+            __v: req.body.expectedVersion });
+        if (!rate) return res.status(409).json({ message: "This supplier rate changed. Refresh and review it before applying." });
+        const estimate = buildRateEstimate(selection.value, supplier, rate, quotation, req.body.conversionRate);
+        if (estimate.error) return res.status(400).json({ message: estimate.error });
+        const item = await CostEntry.create({ ...estimate.value, recordType: "Quotation", recordId: quotation.id,
+            createdBy: req.admin._id });
+        await createActivityLog({ req, action: "CREATE", module: "Other",
+            description: `Supplier rate applied to quotation estimate ${quotation.reference}`,
+            relatedRecordId: quotation.id, relatedModel: "Quotation", referenceNo: quotation.reference });
+        return res.status(201).json(item);
+    } catch (error) {
+        console.error("Quotation rate estimate failed:", error);
+        return res.status(500).json({ message: "Failed to save the quotation estimate." });
+    }
+};
+
 const updateCost = async (req, res) => {
     if (!validId(req.params.id)) return res.status(400).json({ message: "Invalid cost entry." });
     try {
@@ -240,6 +273,9 @@ const updateCost = async (req, res) => {
         if (!record) return res.status(404).json({ message: "Quotation or booking not found." });
         const payload = parseCostPayload(req.body, record.currency, item.recordType, item);
         if (payload.error) return res.status(400).json({ message: payload.error });
+
+        if (item.rateSource && ["category", "description", "amount", "currency", "conversionRate", "targetCurrency"]
+            .some((field) => item[field] !== payload.value[field])) item.rateSource.manuallyEdited = true;
 
         const previousPaid = item.paidAmount ?? 0;
         const deltaCents = item.recordType === "Booking"
@@ -436,4 +472,4 @@ const deleteCost = async (req, res) => {
 };
 
 module.exports = { getCostOverview, getSupplierPayables, getSupplierSchedule, getSupplierPaymentRegister, exportSupplierPaymentRegister,
-    addCost, updateCost, recordSupplierPayment, documentExistingSupplierPayment, reconcileSupplierPayment, deleteCost };
+    addCost, addQuotationCostFromRate, updateCost, recordSupplierPayment, documentExistingSupplierPayment, reconcileSupplierPayment, deleteCost };

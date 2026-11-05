@@ -70,6 +70,29 @@ const paymentHistorySchema = new mongoose.Schema({
     acknowledgementHistory: { type: [acknowledgementEventSchema], default: [] },
 });
 
+// A dated snapshot of the offer used to create a quotation estimate. Subsequent
+// rate revisions cannot change a saved estimate or its original source.
+const rateSourceSchema = new mongoose.Schema({
+    supplier: { type: mongoose.Schema.Types.ObjectId, ref: "Supplier", required: true },
+    rate: { type: mongoose.Schema.Types.ObjectId, ref: "SupplierRate", required: true },
+    supplierName: { type: String, required: true },
+    service: { type: String, required: true },
+    unit: { type: String, required: true },
+    mealPlan: { type: String, default: "" },
+    occupancy: { type: Number, default: null },
+    rateAmount: { type: Number, required: true },
+    rateCurrency: { type: String, enum: ["USD", "LKR", "EUR", "GBP"], required: true },
+    rateRevision: { type: Number, required: true },
+    sourceReference: { type: String, required: true },
+    validFrom: { type: Date, required: true },
+    validTo: { type: Date, required: true },
+    serviceFrom: { type: Date, required: true },
+    serviceTo: { type: Date, required: true },
+    quantity: { type: Number, required: true },
+    appliedAt: { type: Date, default: Date.now },
+    manuallyEdited: { type: Boolean, default: false },
+}, { _id: false });
+
 const costEntrySchema = new mongoose.Schema(
     {
         recordType: { type: String, enum: ["Quotation", "Booking"], required: true },
@@ -85,6 +108,7 @@ const costEntrySchema = new mongoose.Schema(
         // Snapshot: one unit of the supplier currency in the record's sale currency.
         conversionRate: { type: Number, required: true, min: 0.000001 },
         targetCurrency: { type: String, enum: ["USD", "LKR", "EUR", "GBP"], required: true },
+        rateSource: { type: rateSourceSchema, default: null },
         // Actual booking costs only. Both amounts are in the supplier's currency.
         paidAmount: {
             type: Number, default: 0, min: 0,
