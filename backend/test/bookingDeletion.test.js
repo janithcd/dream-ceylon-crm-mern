@@ -9,12 +9,14 @@ const app = require("../app");
 const Admin = require("../models/Admin");
 const Booking = require("../models/Booking");
 const CostEntry = require("../models/CostEntry");
+const SupplierInvoice = require("../models/SupplierInvoice");
 const ActivityLog = require("../models/ActivityLog");
 
 test("booking deletion preserves supplier payment history", async (t) => {
     const adminId = "507f1f77bcf86cd799439011";
     const bookingId = "507f1f77bcf86cd799439012";
     let hasPayments = true;
+    let hasInvoices = false;
     let hasHandoverNotes = false;
     let deleted = false;
     let cleaned = false;
@@ -30,6 +32,7 @@ test("booking deletion preserves supplier payment history", async (t) => {
         return hasHandoverNotes ? { _id: bookingId } : null;
     });
     t.mock.method(CostEntry, "exists", async () => hasPayments ? { _id: "507f1f77bcf86cd799439013" } : null);
+    t.mock.method(SupplierInvoice, "exists", async () => hasInvoices ? { _id: "507f1f77bcf86cd799439014" } : null);
     t.mock.method(CostEntry, "deleteMany", async () => { cleaned = true; });
     t.mock.method(ActivityLog, "create", async () => ({}));
 
@@ -52,6 +55,11 @@ test("booking deletion preserves supplier payment history", async (t) => {
     assert.match((await protectedResponse.json()).message, /handover notes/);
     assert.equal(deleted, false);
     hasHandoverNotes = false;
+    hasInvoices = true;
+    const invoiceProtected = await fetch(url, { method: "DELETE", headers });
+    assert.equal(invoiceProtected.status, 409);
+    assert.match((await invoiceProtected.json()).message, /supplier invoice history/);
+    hasInvoices = false;
     assert.equal((await fetch(url, { method: "DELETE", headers })).status, 200);
     assert.equal(deleted, true);
     assert.equal(cleaned, true);

@@ -9,7 +9,7 @@ const controlCharacters = /[\p{Cc}\u2028\u2029\u202a-\u202e\u2066-\u2069]/u;
 const cleanField = (value, max, min = 0) => typeof value === "string" && !controlCharacters.test(value) &&
     value.trim().length >= min && value.trim().length <= max;
 
-const parsePaymentFile = ({ data, contentType, encodedName, kind }) => {
+const parsePrivateFile = ({ data, contentType, encodedName }) => {
     if (!MIME_TYPES.includes(contentType) || !Buffer.isBuffer(data)) return { status: 415, error: "Choose a PDF, PNG or JPEG file." };
     if (!data.length || data.length > MAX_FILE_BYTES) return { status: 413, error: "Choose a non-empty file of at most 5 MB." };
     let filename;
@@ -28,8 +28,14 @@ const parsePaymentFile = ({ data, contentType, encodedName, kind }) => {
     const jpeg = contentType === "image/jpeg" && /\.jpe?g$/i.test(filename) && data.length >= 4 &&
         data[0] === 255 && data[1] === 216 && data[2] === 255 && data.at(-2) === 255 && data.at(-1) === 217;
     if (!pdf && !png && !jpeg) return { status: 415, error: "The file contents, extension and selected type must match a PDF, PNG or JPEG." };
+    return { value: { filename, contentType, size: data.length, data, sha256: createHash("sha256").update(data).digest("hex") } };
+};
+
+const parsePaymentFile = ({ kind, ...file }) => {
+    const parsed = parsePrivateFile(file);
+    if (parsed.error) return parsed;
     if (!["bank-proof", "supplier-receipt"].includes(kind)) return { status: 400, error: "Choose bank proof or a supplier receipt." };
-    return { value: { filename, contentType, kind, size: data.length, data, sha256: createHash("sha256").update(data).digest("hex") } };
+    return { value: { ...parsed.value, kind } };
 };
 
 const parseAcknowledgement = (body, payment, now = new Date()) => {
@@ -59,4 +65,4 @@ const attachmentMetadata = (doc) => ({ _id: doc._id, kind: doc.kind, filename: d
     contentType: doc.contentType, size: doc.size, uploadedAt: doc.uploadedAt, uploadedByName: doc.uploadedByName,
     withdrawnAt: doc.withdrawnAt, withdrawnByName: doc.withdrawnByName, withdrawalReason: doc.withdrawalReason });
 
-module.exports = { MAX_FILE_BYTES, MIME_TYPES, CHANNELS, cleanField, parsePaymentFile, parseAcknowledgement, attachmentMetadata };
+module.exports = { MAX_FILE_BYTES, MIME_TYPES, CHANNELS, cleanField, parsePrivateFile, parsePaymentFile, parseAcknowledgement, attachmentMetadata };

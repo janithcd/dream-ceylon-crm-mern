@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Booking = require("../models/Booking");
 const CostEntry = require("../models/CostEntry");
+const SupplierInvoice = require("../models/SupplierInvoice");
 const BookingPayment = require("../models/BookingPayment");
 const Inquiry = require("../models/Inquiry");
 const { createActivityLog } = require("../utils/createActivityLog");
@@ -547,6 +548,11 @@ const deleteBooking = async (req, res) => {
         if (hasSupplierPayments) {
             return res.status(409).json({
                 message: "This booking has recorded supplier payments. Cancel it instead of deleting its payment history.",
+            });
+        }
+        if (await SupplierInvoice.exists({ booking: booking._id })) {
+            return res.status(409).json({
+                message: "This booking has supplier invoice history. Cancel it instead of deleting its finance record.",
             });
         }
 

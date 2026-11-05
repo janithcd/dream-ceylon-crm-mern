@@ -3,6 +3,7 @@ const Booking = require("../models/Booking");
 const CostEntry = require("../models/CostEntry");
 const Supplier = require("../models/Supplier");
 const SupplierRate = require("../models/SupplierRate");
+const SupplierInvoice = require("../models/SupplierInvoice");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { costSummary, parseCostPayload } = require("../utils/costProfit");
 const { parseRateSelection, buildRateEstimate } = require("../utils/rateEstimate");
@@ -486,6 +487,9 @@ const deleteCost = async (req, res) => {
         const record = await loadRecord(item.recordType, item.recordId);
         if (!record) return res.status(404).json({ message: "Quotation or booking not found." });
         if (item.recordType === "Booking") {
+            if (await SupplierInvoice.exists({ cost: item._id })) {
+                return res.status(409).json({ message: "This cost has supplier invoice history. Keep it for the booking's finance record." });
+            }
             if ((item.paidAmount ?? 0) > 0 || item.paymentHistory?.length > 0) {
                 return res.status(409).json({ message: "A cost with recorded supplier payments cannot be deleted." });
             }

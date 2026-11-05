@@ -8,6 +8,8 @@ const { getSupplierRemittance, saveSupplierRemittance, downloadSupplierRemittanc
 const { listPaymentAttachments, uploadPaymentAttachment, downloadPaymentAttachment, withdrawPaymentAttachment,
     getPaymentAcknowledgement, updatePaymentAcknowledgement } = require("../controllers/supplierPaymentEvidenceController");
 const { MAX_FILE_BYTES, MIME_TYPES } = require("../utils/supplierPaymentEvidence");
+const { listSupplierInvoices, createSupplierInvoice, uploadSupplierInvoiceFile,
+    downloadSupplierInvoiceFile, reviewSupplierInvoice, voidSupplierInvoice } = require("../controllers/supplierInvoiceController");
 
 const router = express.Router();
 router.use(protect);
@@ -22,6 +24,12 @@ router.get("/payables", authorizePermissions(PERMISSIONS.COST_VIEW), getSupplier
 router.get("/schedule", authorizePermissions(PERMISSIONS.COST_VIEW), getSupplierSchedule);
 router.get("/payment-register", authorizePermissions(PERMISSIONS.COST_VIEW), getSupplierPaymentRegister);
 router.get("/payment-register/export", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.REPORT_EXPORT), exportSupplierPaymentRegister);
+router.get("/:id/invoices", authorizePermissions(PERMISSIONS.COST_VIEW), privateResponse, listSupplierInvoices);
+router.post("/:id/invoices", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), privateResponse, createSupplierInvoice);
+router.post("/:id/invoices/:invoiceId/file", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), privateResponse, readPaymentFile, uploadSupplierInvoiceFile);
+router.get("/:id/invoices/:invoiceId/file", authorizePermissions(PERMISSIONS.COST_VIEW), privateResponse, downloadSupplierInvoiceFile);
+router.patch("/:id/invoices/:invoiceId/review", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), privateResponse, reviewSupplierInvoice);
+router.patch("/:id/invoices/:invoiceId/void", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), privateResponse, voidSupplierInvoice);
 router.get("/:type/:id", authorizePermissions(PERMISSIONS.COST_VIEW), getCostOverview);
 router.post("/:id/payments", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), recordSupplierPayment);
 router.post("/:id/payments/from-paid-total", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), documentExistingSupplierPayment);

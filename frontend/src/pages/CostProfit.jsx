@@ -6,6 +6,7 @@ import PermissionGuard from "../components/PermissionGuard";
 import SupplierPaymentRegister from "../components/SupplierPaymentRegister";
 import SupplierPaymentVoucherModal from "../components/SupplierPaymentVoucherModal";
 import SupplierPaymentEvidenceModal from "../components/SupplierPaymentEvidenceModal";
+import SupplierInvoicesModal from "../components/SupplierInvoicesModal";
 import QuotationRateEstimate from "../components/QuotationRateEstimate";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { notifySupplierPayablesChanged } from "../utils/supplierPayableEvents";
@@ -54,6 +55,7 @@ const CostProfit = () => {
     const [existingPaymentError, setExistingPaymentError] = useState("");
     const [voucherPayment, setVoucherPayment] = useState(null);
     const [evidencePayment, setEvidencePayment] = useState(null);
+    const [invoiceCostId, setInvoiceCostId] = useState("");
     const [listBusy, setListBusy] = useState(false);
     const [saving, setSaving] = useState(false);
     const [reloadKey, setReloadKey] = useState(0);
@@ -153,6 +155,7 @@ const CostProfit = () => {
         setExistingPaymentError("");
         setVoucherPayment(null);
         setEvidencePayment(null);
+        setInvoiceCostId("");
         if (nextType !== type) setRecords([]);
         setSearchInput("");
         setSearchParams(nextId ? { type: nextType, id: nextId } : { type: nextType });
@@ -510,6 +513,7 @@ const CostProfit = () => {
                                         <td>{item.targetCurrency === saleCurrency ? item.conversionRate : `Old target: ${item.targetCurrency}`}</td>
                                         <td>{item.targetCurrency === saleCurrency ? formatMoney(Math.round(item.amount * item.conversionRate * 100) / 100, saleCurrency) : "Revalue required"}</td>
                                         <td className="text-end"><div className="d-flex justify-content-end gap-2">
+                                            {type === "booking" && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setInvoiceCostId(item._id)}>Invoices</button>}
                                             {type === "booking" && <button type="button" className={`btn btn-sm ${unitemizedPaidCents(item) > 0 ? "btn-outline-primary" : "btn-outline-secondary"}`} aria-label={`Payments and vouchers for ${item.description}`} aria-expanded={paymentCostId === item._id} aria-controls="supplier-payment-history" onClick={() => {
                                                 const openingCents = unitemizedPaidCents(item);
                                                 setPaymentCostId(paymentCostId === item._id ? "" : item._id);
@@ -527,6 +531,7 @@ const CostProfit = () => {
                                 </table></div>
                             )}
                             {paymentCost && <div id="supplier-payment-history" ref={paymentPanelRef} className="border rounded p-3 mt-3" role="region" aria-label={`Payments for ${paymentCost.description}`}>
+                                <div className="small alert alert-info">Before recording a supplier transfer, check the pro forma or invoice reference, amount, currency and review status in <button type="button" className="btn btn-sm btn-link p-0 align-baseline" onClick={() => setInvoiceCostId(paymentCost._id)}>Invoices</button>. Invoice approval does not record a payment.</div>
                                 <div className="d-flex justify-content-between align-items-start gap-2">
                                     <div>
                                         <h6 className="fw-bold mb-1">Payments · {paymentCost.description}</h6>
@@ -612,6 +617,8 @@ const CostProfit = () => {
                 onClose={() => setVoucherPayment(null)} onSaved={() => setReloadKey((value) => value + 1)} />}
             {evidencePayment && <SupplierPaymentEvidenceModal key={`${evidencePayment.costId}/${evidencePayment.paymentId}`} {...evidencePayment}
                 onClose={() => setEvidencePayment(null)} onSaved={() => setReloadKey((value) => value + 1)} />}
+            {invoiceCostId && <SupplierInvoicesModal key={invoiceCostId} costId={invoiceCostId}
+                onClose={() => setInvoiceCostId("")} onSaved={() => setReloadKey((value) => value + 1)} />}
         </div>
     );
 };

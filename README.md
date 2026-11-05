@@ -30,7 +30,7 @@ The application includes permissions for different staff roles, branded PDF docu
 | **Bookings and operations** | Plan itineraries, traveler rosters, hotel stays, rooming plans, transport and airport transfers. |
 | **Team coordination** | Assign preparation tasks, review departure readiness, record supplier contact and share private handover notes. |
 | **Guest finance** | Record receipts and refunds, manage collection targets, match bank entries, issue guest payment statements and review payment confirmation emails. |
-| **Supplier finance** | Estimate costs from supplier rates, review quotation estimates into booking costs, track profit and payments, match transfers and generate vouchers with email drafts. |
+| **Supplier finance** | Estimate costs from supplier rates, review booking costs and private supplier invoices, track profit and payments, match transfers and generate vouchers with email drafts. |
 | **Supplier directory** | Search hotels, guides, safari jeep providers and partners; keep contacts, dated rate cards and internal terms, and copy hotel details into booking stays. |
 | **Guest care** | Manage issues during trips, follow up after departure, collect feedback and track service recovery. |
 | **Documents and AI** | Generate branded quotations, invoices, receipts, itineraries and hotel vouchers; draft replies and itineraries with AI. |

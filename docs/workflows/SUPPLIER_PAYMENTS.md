@@ -7,6 +7,7 @@ Track supplier costs separately from guest selling prices, record payments and p
 ## Contents
 
 - [Costs and profitability](#costs-and-profitability)
+- [Supplier pro formas and invoices](#supplier-pro-formas-and-invoices)
 - [Recording supplier payments](#recording-supplier-payments)
 - [Payment schedule and alerts](#payment-schedule-and-alerts)
 - [Payment register and bank matching](#payment-register-and-bank-matching)
@@ -35,11 +36,32 @@ the amount and currency, enter the supplier payment due date if known, and tick 
 Foreign-currency costs require an explicitly entered conversion rate. Saving creates an **unpaid** booking
 cost; it does not record a supplier transfer. The cost keeps the quotation estimate's original amount and
 reference for comparison, while the reviewed booking amount may differ. Each quotation estimate can be
-imported once into that booking, and an imported cost is marked in the table. An unpaid cost can be removed
-and reviewed again. Manual booking costs remain available for new suppliers or costs not in the quotation.
+imported once into that booking, and an imported cost is marked in the table. An unpaid cost without
+invoice history can be removed and reviewed again. Manual booking costs remain available for new suppliers or costs not in the quotation.
 The private API is `POST /api/finance/costs/booking/:id` with the reviewed cost fields plus `estimateId`,
 `estimateVersion` and `confirmedEstimate: true`; it checks the linked quotation and prevents duplicate
 imports. Rates, estimates and booking costs remain private and do not change guest selling prices.
+
+## Supplier pro formas and invoices
+
+In **Cost & Profit → Booking actual costs**, choose a cost's **Invoices** button. Record the supplier name,
+pro forma/invoice reference, invoice date, amount and currency, and the due date if the supplier stated
+one. Attach the supplier's PDF, PNG or JPEG (up to 5 MB). Files are stored privately in MongoDB and
+downloaded only through the authenticated finance API. If the file upload fails after the details are
+saved, choose **Attach file** on that invoice record; a duplicate reference is blocked while it remains
+active. The invoice is initially **Received**. Read the attached document before marking it **Approved**;
+if its amount or currency differs from the booking cost, confirm that the difference was reviewed.
+Use **Disputed** with a reason when the supplier's invoice needs correction. Review changes retain the
+staff member and time. Void an incorrect document with a reason, then add the corrected invoice as a new
+record; voided details remain in history and its file is no longer downloadable.
+
+The supplier's invoice amount and due date do not silently change the booking cost, supplier payment
+schedule, guest price or paid balance. If the invoice gives a new payment deadline, update the cost's
+**Supplier payment due** field separately. Check the invoice status before recording a transfer; payment
+proof and remittance are still kept under an individual recorded payment. A booking cost or booking with
+invoice history cannot be deleted, preserving the private document trail; cancel the booking instead.
+Invoice listing and download require `cost.view`; create, upload, approve, dispute and void additionally
+require `cost.manage`.
 
 ## Recording supplier payments
 
@@ -71,7 +93,7 @@ dates do not appear in the header alert; set a date so Finance can plan payment.
 /api/finance/costs/schedule` requires `cost.view` and accepts `filter`, `page`, and `limit` (up to 50). The
 header's **Supplier dues** alert remains limited to overdue and due soon, up to 50 earliest entries, and
 refreshes after cost and payment edits, when the CRM regains focus, every five minutes, or manually. Fully
-paid costs leave the schedule. Bookings with supplier payments or correction history cannot be deleted; cancel
+paid costs leave the schedule. Bookings with supplier payments, invoice records or correction history cannot be deleted; cancel
 the booking to preserve its payment record.
 
 ## Payment register and bank matching
