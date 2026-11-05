@@ -28,7 +28,18 @@ are revalued. The summary uses `profit = client selling price − recorded costs
 selling price`. No profit is shown before any costs are entered. Booking profit uses the full booked selling
 price, while actual cash received and refunds remain in Payment Reports.
 
-Record private supplier costs and compare estimated quotation profit with booked profit
+After converting a quotation, open **Booking actual costs** and select the booking. The **Quotation
+supplier estimates to review** table shows each estimate from the linked quotation. Choose **Review for
+booking** to fill the actual cost form, then check the current supplier confirmation or invoice, correct
+the amount and currency, enter the supplier payment due date if known, and tick the review confirmation.
+Foreign-currency costs require an explicitly entered conversion rate. Saving creates an **unpaid** booking
+cost; it does not record a supplier transfer. The cost keeps the quotation estimate's original amount and
+reference for comparison, while the reviewed booking amount may differ. Each quotation estimate can be
+imported once into that booking, and an imported cost is marked in the table. An unpaid cost can be removed
+and reviewed again. Manual booking costs remain available for new suppliers or costs not in the quotation.
+The private API is `POST /api/finance/costs/booking/:id` with the reviewed cost fields plus `estimateId`,
+`estimateVersion` and `confirmedEstimate: true`; it checks the linked quotation and prevents duplicate
+imports. Rates, estimates and booking costs remain private and do not change guest selling prices.
 
 ## Recording supplier payments
 

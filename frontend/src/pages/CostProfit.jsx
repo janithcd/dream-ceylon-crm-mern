@@ -43,6 +43,7 @@ const CostProfit = () => {
     const [loadedOverview, setLoadedOverview] = useState({ key: "", data: null });
     const [form, setForm] = useState(blankCost());
     const [editingId, setEditingId] = useState("");
+    const [sourceEstimate, setSourceEstimate] = useState(null);
     const [paymentCostId, setPaymentCostId] = useState("");
     const paymentPanelRef = useRef(null);
     const [paymentForm, setPaymentForm] = useState(blankPayment);
@@ -104,6 +105,7 @@ const CostProfit = () => {
                     setLoadedOverview({ key: `${type}/${recordId}`, data });
                     setForm(blankCost(data.record.currency));
                     setEditingId("");
+                    setSourceEstimate(null);
                     setError("");
                 }
             })
@@ -145,6 +147,7 @@ const CostProfit = () => {
         setError("");
         setSuccess("");
         setEditingId("");
+        setSourceEstimate(null);
         setPaymentCostId("");
         setDocumentingPayment(false);
         setExistingPaymentError("");
@@ -165,10 +168,14 @@ const CostProfit = () => {
             if (editingId) {
                 await api.put(`/finance/costs/${editingId}`, form);
             } else {
-                await api.post(`/finance/costs/${type}/${recordId}`, form);
+                await api.post(`/finance/costs/${type}/${recordId}`, sourceEstimate ? {
+                    ...form, estimateId: sourceEstimate._id, estimateVersion: sourceEstimate.__v,
+                    confirmedEstimate: sourceEstimate.confirmed,
+                } : form);
             }
             setSuccess(editingId ? "Cost updated." : "Cost added.");
             setEditingId("");
+            setSourceEstimate(null);
             setForm(blankCost(overview.record.currency));
             setReloadKey((value) => value + 1);
             if (type === "booking") notifySupplierPayablesChanged();
@@ -251,6 +258,17 @@ const CostProfit = () => {
             return totals;
         }, {})).sort(([a], [b]) => a.localeCompare(b))
         : [];
+
+    const reviewEstimate = (item) => {
+        setEditingId("");
+        setSourceEstimate({ _id: item._id, __v: item.__v, confirmed: false });
+        setForm({ ...blankCost(saleCurrency), category: item.category, description: item.description,
+            amount: String(item.amount), currency: item.currency,
+            conversionRate: item.currency === saleCurrency ? "1" : "",
+        });
+        setError(""); setSuccess("");
+        document.getElementById("cost-description")?.focus();
+    };
 
     return (
         <div>
@@ -370,6 +388,22 @@ const CostProfit = () => {
                         </div>
                     </div>
 
+                    {type === "booking" && overview.linkedEstimate?.items?.length > 0 && <div className="card border-0 shadow-sm mb-4">
+                        <div className="card-body">
+                            <div className="d-flex justify-content-between align-items-center gap-2 flex-wrap"><h5 className="fw-bold mb-1">Quotation supplier estimates to review</h5>
+                                <button type="button" className="btn btn-sm btn-outline-secondary" onClick={() => setReloadKey((value) => value + 1)}>Refresh estimates</button></div>
+                            <p className="small text-muted mb-3">These are estimates from {overview.linkedEstimate.reference}. Review each supplier's current confirmation or invoice before adding an actual booking cost. No cost or payment is copied automatically.</p>
+                            <div className="table-responsive"><table className="table table-hover align-middle mb-0">
+                                <thead><tr><th>Estimate</th><th>Quoted amount</th><th>Booking cost</th></tr></thead>
+                                <tbody>{overview.linkedEstimate.items.map((item) => <tr key={item._id}>
+                                    <td>{item.category} · {item.description}</td><td>{formatMoney(item.amount, item.currency)}</td>
+                                    <td>{item.bookingCostId ? <span className="badge text-bg-success">Recorded as booking cost</span>
+                                        : <PermissionGuard permission="cost.manage"><button type="button" className="btn btn-sm btn-outline-primary" onClick={() => reviewEstimate(item)}>Review for booking</button></PermissionGuard>}</td>
+                                </tr>)}</tbody>
+                            </table></div>
+                        </div>
+                    </div>}
+
                     <PermissionGuard permission="cost.manage">
                         {type === "quotation" && <PermissionGuard permission="supplier.view">
                             <QuotationRateEstimate key={recordId} quotation={overview.record}
@@ -378,6 +412,7 @@ const CostProfit = () => {
                         <div className="card border-0 shadow-sm mb-4">
                             <div className="card-body">
                                 <h5 className="fw-bold mb-3">{editingId ? "Edit supplier cost" : `Add ${type === "quotation" ? "estimated" : "actual"} supplier cost`}</h5>
+                                {sourceEstimate && <div className="alert alert-info">Review the amount against the supplier's current confirmation or invoice. This creates an unpaid booking cost linked to the original estimate; record any transfer separately under Payments.</div>}
                                 <form className="row g-3" onSubmit={saveCost}>
                                     <div className="col-md-3">
                                         <label className="form-label" htmlFor="cost-category">Category</label>
@@ -412,6 +447,11 @@ const CostProfit = () => {
                                         <small className="text-muted">Saved with this entry; existing costs are not recalculated automatically.</small>
                                     </div>}
                                     {type === "booking" && <>
+                                        {sourceEstimate && <div className="col-12"><div className="form-check">
+                                            <input id="estimate-reviewed" className="form-check-input" type="checkbox" required checked={sourceEstimate.confirmed}
+                                                onChange={(event) => setSourceEstimate({ ...sourceEstimate, confirmed: event.target.checked })} />
+                                            <label htmlFor="estimate-reviewed" className="form-check-label">I reviewed this cost against the supplier's current confirmation or invoice.</label>
+                                        </div></div>}
                                         {editingId && <div className="col-md-3">
                                             <label className="form-label" htmlFor="cost-paid">Correct paid total ({form.currency})</label>
                                             <input id="cost-paid" className="form-control" type="number" min="0" max={form.amount || undefined} step="0.01" required
@@ -432,7 +472,7 @@ const CostProfit = () => {
                                     </>}
                                     <div className="col-12 d-flex gap-2">
                                         <button type="submit" className="btn btn-primary" disabled={saving}><FaPlus className="me-2" />{saving ? "Saving..." : editingId ? "Save changes" : "Add cost"}</button>
-                                        {editingId && <button type="button" className="btn btn-outline-secondary" onClick={() => { setEditingId(""); setForm(blankCost(saleCurrency)); }}>Cancel edit</button>}
+                                        {(editingId || sourceEstimate) && <button type="button" className="btn btn-outline-secondary" onClick={() => { setEditingId(""); setSourceEstimate(null); setForm(blankCost(saleCurrency)); }}>{editingId ? "Cancel edit" : "Cancel review"}</button>}
                                     </div>
                                 </form>
                             </div>
@@ -447,6 +487,10 @@ const CostProfit = () => {
                                     <thead><tr><th>Category</th><th>Description</th><th>Supplier amount</th>{type === "booking" && <><th>Paid / remaining</th><th>Payment due</th></>}<th>Rate to {saleCurrency}</th><th>In {saleCurrency}</th><th className="text-end">Actions</th></tr></thead>
                                     <tbody>{overview.items.map((item) => <tr key={item._id}>
                                         <td>{item.category}</td><td>{item.description}
+                                            {item.estimateSource && <div className="small text-muted mt-1">
+                                                From quotation {item.estimateSource.quotationNo} · original {formatMoney(item.estimateSource.amount, item.estimateSource.currency)}
+                                                {item.estimateSource.manuallyEdited && <span className="text-warning-emphasis"> · Booking cost differs from the original estimate</span>}
+                                            </div>}
                                             {item.rateSource && <div className="small text-muted mt-1">
                                                 Rate card r{item.rateSource.rateRevision} · {formatMoney(item.rateSource.rateAmount, item.rateSource.rateCurrency)} / {item.rateSource.unit}
                                                 {` × ${item.rateSource.quantity}`} · {formatCalendarDate(item.rateSource.serviceFrom)}–{formatCalendarDate(item.rateSource.serviceTo)}
@@ -475,7 +519,7 @@ const CostProfit = () => {
                                                 setExistingPaymentError("");
                                             }}><FaHistory className="me-1" />{unitemizedPaidCents(item) > 0 ? "Document payment for voucher" : "Payments / vouchers"}</button>}
                                             <PermissionGuard permission="cost.manage"><div className="d-flex justify-content-end gap-2">
-                                            <button type="button" className="btn btn-sm btn-outline-primary" title="Edit cost" aria-label={`Edit ${item.description}`} onClick={() => { setEditingId(item._id); setForm({ category: item.category, description: item.description, amount: String(item.amount), currency: item.currency, conversionRate: String(item.conversionRate), paidAmount: String(item.paidAmount ?? 0), paymentDueDate: toCalendarDateInput(item.paymentDueDate), adjustmentNote: "" }); document.getElementById("cost-description")?.focus(); }}><FaEdit /></button>
+                                            <button type="button" className="btn btn-sm btn-outline-primary" title="Edit cost" aria-label={`Edit ${item.description}`} onClick={() => { setEditingId(item._id); setSourceEstimate(null); setForm({ category: item.category, description: item.description, amount: String(item.amount), currency: item.currency, conversionRate: String(item.conversionRate), paidAmount: String(item.paidAmount ?? 0), paymentDueDate: toCalendarDateInput(item.paymentDueDate), adjustmentNote: "" }); document.getElementById("cost-description")?.focus(); }}><FaEdit /></button>
                                             <button type="button" className="btn btn-sm btn-outline-danger" title={(item.paidAmount ?? 0) > 0 || item.paymentHistory?.length ? "Costs with recorded supplier payments cannot be deleted" : "Delete cost"} aria-label={`Delete ${item.description}`} disabled={(item.paidAmount ?? 0) > 0 || Boolean(item.paymentHistory?.length)} onClick={() => void deleteCost(item)}><FaTrash /></button>
                                             </div></PermissionGuard>
                                         </div></td>

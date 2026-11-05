@@ -93,6 +93,23 @@ const rateSourceSchema = new mongoose.Schema({
     manuallyEdited: { type: Boolean, default: false },
 }, { _id: false });
 
+// Booking costs explicitly reviewed from a linked quotation estimate keep the
+// original estimate for variance checks even if the payable is edited later.
+const estimateSourceSchema = new mongoose.Schema({
+    quotation: { type: mongoose.Schema.Types.ObjectId, ref: "Quotation", required: true },
+    quotationNo: { type: String, required: true },
+    estimate: { type: mongoose.Schema.Types.ObjectId, ref: "CostEntry", required: true },
+    category: { type: String, required: true },
+    description: { type: String, required: true },
+    amount: { type: Number, required: true },
+    currency: { type: String, required: true },
+    conversionRate: { type: Number, required: true },
+    targetCurrency: { type: String, required: true },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
+    reviewedAt: { type: Date, default: Date.now },
+    manuallyEdited: { type: Boolean, default: false },
+}, { _id: false });
+
 const costEntrySchema = new mongoose.Schema(
     {
         recordType: { type: String, enum: ["Quotation", "Booking"], required: true },
@@ -109,6 +126,7 @@ const costEntrySchema = new mongoose.Schema(
         conversionRate: { type: Number, required: true, min: 0.000001 },
         targetCurrency: { type: String, enum: ["USD", "LKR", "EUR", "GBP"], required: true },
         rateSource: { type: rateSourceSchema, default: null },
+        estimateSource: { type: estimateSourceSchema, default: null },
         // Actual booking costs only. Both amounts are in the supplier's currency.
         paidAmount: {
             type: Number, default: 0, min: 0,
@@ -128,5 +146,8 @@ const costEntrySchema = new mongoose.Schema(
 costEntrySchema.index({ recordType: 1, recordId: 1, createdAt: -1 });
 costEntrySchema.index({ recordType: 1, paymentDueDate: 1 });
 costEntrySchema.index({ recordType: 1, "paymentHistory.paymentDate": -1 });
+costEntrySchema.index({ recordType: 1, recordId: 1, "estimateSource.estimate": 1 }, {
+    unique: true, partialFilterExpression: { recordType: "Booking", "estimateSource.estimate": { $type: "objectId" } },
+});
 
 module.exports = mongoose.model("CostEntry", costEntrySchema);

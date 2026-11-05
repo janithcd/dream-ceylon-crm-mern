@@ -92,6 +92,12 @@ const getCostOverview = async (req, res) => {
                     costDifference: quotation.currency === record.currency && estimate.costTotal !== null && summary.costTotal !== null
                         ? Math.round((summary.costTotal - estimate.costTotal) * 100) / 100
                         : null,
+                    items: estimateItems.map((item) => ({
+                        _id: item._id, __v: item.__v, category: item.category, description: item.description,
+                        amount: item.amount, currency: item.currency, conversionRate: item.conversionRate,
+                        targetCurrency: item.targetCurrency,
+                        bookingCostId: items.find((cost) => String(cost.estimateSource?.estimate) === String(item._id))?._id || null,
+                    })),
                 };
             }
         }
@@ -218,8 +224,38 @@ const addCost = async (req, res) => {
         const payload = parseCostPayload(req.body, record.currency, recordType);
         if (payload.error) return res.status(400).json({ message: payload.error });
 
+        let estimateSource = null;
+        if (req.body?.estimateId !== undefined) {
+            if (recordType !== "Booking" || !validId(req.body.estimateId) ||
+                !Number.isSafeInteger(req.body.estimateVersion) || req.body.estimateVersion < 0 ||
+                req.body.confirmedEstimate !== true || payload.value.paidAmount !== 0) {
+                return res.status(400).json({ message: "Review a linked quotation estimate and confirm its supplier amount before adding an unpaid booking cost." });
+            }
+            const quotation = await Quotation.findOne({ booking: recordId }).select("_id quotationNo");
+            if (!quotation) return res.status(409).json({ message: "No linked quotation was found for this booking." });
+            const estimate = await CostEntry.findOne({ _id: req.body.estimateId,
+                recordType: "Quotation", recordId: quotation._id });
+            if (!estimate) return res.status(404).json({ message: "That estimate is not part of the linked quotation." });
+            if (estimate.__v !== req.body.estimateVersion) {
+                return res.status(409).json({ message: "The quotation estimate changed. Refresh and review it again." });
+            }
+            if (await CostEntry.exists({ recordType: "Booking", recordId,
+                "estimateSource.estimate": estimate._id })) {
+                return res.status(409).json({ message: "This quotation estimate already has a booking cost. Review that cost instead." });
+            }
+            estimateSource = {
+                quotation: quotation._id, quotationNo: quotation.quotationNo, estimate: estimate._id,
+                category: estimate.category, description: estimate.description, amount: estimate.amount,
+                currency: estimate.currency, conversionRate: estimate.conversionRate,
+                targetCurrency: estimate.targetCurrency, reviewedBy: req.admin._id,
+                manuallyEdited: ["category", "description", "amount", "currency", "conversionRate", "targetCurrency"]
+                    .some((field) => payload.value[field] !== estimate[field]),
+            };
+        }
+
         const item = await CostEntry.create({
             ...payload.value,
+            ...(estimateSource ? { estimateSource } : {}),
             recordType,
             recordId,
             createdBy: req.admin._id,
@@ -231,6 +267,7 @@ const addCost = async (req, res) => {
         });
         return res.status(201).json(item);
     } catch (error) {
+        if (error.code === 11000) return res.status(409).json({ message: "This estimate already has a booking cost. Refresh and review it." });
         console.error("Cost entry creation failed:", error);
         return res.status(500).json({ message: "Failed to save cost entry." });
     }
@@ -276,6 +313,8 @@ const updateCost = async (req, res) => {
 
         if (item.rateSource && ["category", "description", "amount", "currency", "conversionRate", "targetCurrency"]
             .some((field) => item[field] !== payload.value[field])) item.rateSource.manuallyEdited = true;
+        if (item.estimateSource && ["category", "description", "amount", "currency", "conversionRate", "targetCurrency"]
+            .some((field) => item[field] !== payload.value[field])) item.estimateSource.manuallyEdited = true;
 
         const previousPaid = item.paidAmount ?? 0;
         const deltaCents = item.recordType === "Booking"
