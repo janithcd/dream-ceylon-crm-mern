@@ -7,6 +7,7 @@ import SupplierPaymentRegister from "../components/SupplierPaymentRegister";
 import SupplierPaymentVoucherModal from "../components/SupplierPaymentVoucherModal";
 import SupplierPaymentEvidenceModal from "../components/SupplierPaymentEvidenceModal";
 import SupplierInvoicesModal from "../components/SupplierInvoicesModal";
+import SupplierInvoiceRegister from "../components/SupplierInvoiceRegister";
 import QuotationRateEstimate from "../components/QuotationRateEstimate";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { notifySupplierPayablesChanged } from "../utils/supplierPayableEvents";
@@ -355,6 +356,9 @@ const CostProfit = () => {
                     </div>
                 </div>
             )}
+
+            {type === "booking" && <SupplierInvoiceRegister reloadKey={reloadKey}
+                onOpenInvoice={(item) => { selectRecord("booking", item.bookingId); setInvoiceCostId(item.costId); }} />}
 
             {type === "booking" && <SupplierPaymentRegister onSelectBooking={(id) => selectRecord("booking", id)}
                 onOpenEvidence={(item) => setEvidencePayment({ costId: item.costId, paymentId: item.paymentId })}

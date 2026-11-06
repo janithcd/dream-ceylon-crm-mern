@@ -50,6 +50,7 @@ Use this page to find a module and its operating instructions. The detailed guid
 - Apply an active supplier rate to a quotation cost estimate with reviewed service dates, quantity and conversion; save its original source and revision.
 - Review linked quotation estimates into unpaid booking costs after checking supplier confirmations; keep the estimate source and block duplicate imports.
 - Store private supplier pro formas and invoices against booking costs, with guarded file downloads, review/dispute status and correction history.
+- Review supplier invoices across bookings in a private register with status filters and Colombo date based due reminders for unpaid costs.
 - Hotel stay form copies current directory details while keeping the booking's saved contact snapshot.
 - Estimated quotation costs and actual booking costs with entered conversion rates.
 - Private profit and margin summaries.

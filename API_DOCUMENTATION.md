@@ -178,6 +178,7 @@ GET    /finance/costs/:type/:id
 POST   /finance/costs/:type/:id
 PUT    /finance/costs/:id
 DELETE /finance/costs/:id
+GET    /finance/costs/invoice-register
 GET    /finance/costs/:id/invoices
 POST   /finance/costs/:id/invoices
 POST   /finance/costs/:id/invoices/:invoiceId/file?expectedVersion=N
@@ -189,6 +190,8 @@ PATCH  /finance/costs/:id/invoices/:invoiceId/void
 POST and PUT take `{ "category": "Hotel", "description": "Two nights", "amount": 30000, "currency": "LKR", "conversionRate": 0.003333 }`. The conversion rate is **one unit of the supplier currency in the quotation or booking currency**; it is set to 1 when currencies match. Each item stores its target currency so that changes to the parent sale currency require a manual revaluation. GET returns cost items and a profit summary, plus the linked quotation's estimated cost when viewing a converted booking. These endpoints are private and separate from public and client document APIs.
 
 Supplier invoices belong to a saved **booking** cost. Create metadata with `{ "supplierName": "Hotel", "invoiceReference": "PF-123", "invoiceDate": "2026-10-16", "dueDate": "2027-03-09", "amount": 130, "currency": "USD" }`; `dueDate` may be empty. Upload one PDF, PNG or JPEG (maximum 5 MB) as the raw request body with `Content-Type`, an encoded `X-File-Name`, and `expectedVersion` from the returned record. Downloads are private attachments with no caching. Review with `PATCH .../review` using `{ "status": "Approved", "confirmed": true, "confirmedDifference": true, "expectedVersion": 1 }` (the extra difference confirmation is required when amount or currency differs from the cost), or `{ "status": "Disputed", "note": "Reason", "expectedVersion": 1 }`. Void with `{ "reason": "Superseded", "expectedVersion": 2 }`. These actions do not record a payment, change cost totals, or send mail.
+
+The private invoice register returns paged invoice metadata and cross-booking attention counts. It accepts `status=needs-review|all|Received|Disputed|Approved|voided`, `due=all|due7|overdue|later|unscheduled`, and `page=1–1000` (25 rows per page). Due filters include only invoice dates on booking costs with an unpaid balance; they do not imply individual invoice payment allocations. `status=voided` only permits `due=all`. The JSON projection excludes private files, hashes and review notes.
 
 ## Follow-Ups
 

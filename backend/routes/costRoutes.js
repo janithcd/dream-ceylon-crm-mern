@@ -8,7 +8,7 @@ const { getSupplierRemittance, saveSupplierRemittance, downloadSupplierRemittanc
 const { listPaymentAttachments, uploadPaymentAttachment, downloadPaymentAttachment, withdrawPaymentAttachment,
     getPaymentAcknowledgement, updatePaymentAcknowledgement } = require("../controllers/supplierPaymentEvidenceController");
 const { MAX_FILE_BYTES, MIME_TYPES } = require("../utils/supplierPaymentEvidence");
-const { listSupplierInvoices, createSupplierInvoice, uploadSupplierInvoiceFile,
+const { getSupplierInvoiceRegister, listSupplierInvoices, createSupplierInvoice, uploadSupplierInvoiceFile,
     downloadSupplierInvoiceFile, reviewSupplierInvoice, voidSupplierInvoice } = require("../controllers/supplierInvoiceController");
 
 const router = express.Router();
@@ -24,6 +24,7 @@ router.get("/payables", authorizePermissions(PERMISSIONS.COST_VIEW), getSupplier
 router.get("/schedule", authorizePermissions(PERMISSIONS.COST_VIEW), getSupplierSchedule);
 router.get("/payment-register", authorizePermissions(PERMISSIONS.COST_VIEW), getSupplierPaymentRegister);
 router.get("/payment-register/export", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.REPORT_EXPORT), exportSupplierPaymentRegister);
+router.get("/invoice-register", authorizePermissions(PERMISSIONS.COST_VIEW), privateResponse, getSupplierInvoiceRegister);
 router.get("/:id/invoices", authorizePermissions(PERMISSIONS.COST_VIEW), privateResponse, listSupplierInvoices);
 router.post("/:id/invoices", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), privateResponse, createSupplierInvoice);
 router.post("/:id/invoices/:invoiceId/file", authorizePermissions(PERMISSIONS.COST_VIEW, PERMISSIONS.COST_MANAGE), privateResponse, readPaymentFile, uploadSupplierInvoiceFile);

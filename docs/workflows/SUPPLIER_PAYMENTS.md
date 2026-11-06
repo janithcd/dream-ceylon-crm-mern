@@ -8,6 +8,7 @@ Track supplier costs separately from guest selling prices, record payments and p
 
 - [Costs and profitability](#costs-and-profitability)
 - [Supplier pro formas and invoices](#supplier-pro-formas-and-invoices)
+- [Invoice register and due reminders](#invoice-register-and-due-reminders)
 - [Recording supplier payments](#recording-supplier-payments)
 - [Payment schedule and alerts](#payment-schedule-and-alerts)
 - [Payment register and bank matching](#payment-register-and-bank-matching)
@@ -62,6 +63,28 @@ proof and remittance are still kept under an individual recorded payment. A book
 invoice history cannot be deleted, preserving the private document trail; cancel the booking instead.
 Invoice listing and download require `cost.view`; create, upload, approve, dispute and void additionally
 require `cost.manage`.
+
+## Invoice register and due reminders
+
+In **Cost & Profit → Booking actual costs**, use the **Supplier invoice register** to review invoices
+across bookings. It opens with **Needs review** (Received and Disputed). Filter by review status and
+the supplier's invoice due date: overdue, due within seven Sri Lanka calendar days (including overdue),
+later, or missing. Due filters include only invoices whose linked booking cost still has an unpaid
+balance; voided invoices are available separately under **Voided**. The counts show active invoices
+needing review, overdue invoices and invoices due today or within six days. Click **Open invoice** to
+load its booking and review the original private document. The register exposes metadata only, not
+file contents or review notes.
+
+The register displays the **booking cost balance**, not a per-invoice balance: several supplier
+documents can belong to one cost, and the CRM records transfers against that cost. Invoice deadlines
+do not set the cost payment due date. Update **Supplier payment due** on the booking cost when the
+supplier's stated deadline should appear in the payment schedule and header alert. Check cancelled
+bookings with invoices manually to confirm whether the supplier still expects payment.
+
+The private paginated endpoint `GET /api/finance/costs/invoice-register` requires `cost.view` and
+accepts `status=needs-review|all|Received|Disputed|Approved|voided`,
+`due=all|due7|overdue|later|unscheduled`, and `page=1–1000` (25 per page). Voided invoices only
+support `due=all` because they have no active due reminder.
 
 ## Recording supplier payments
 

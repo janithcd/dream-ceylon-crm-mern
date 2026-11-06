@@ -6,6 +6,7 @@ const { createActivityLog } = require("../utils/createActivityLog");
 const { validId } = require("../utils/supplierPaymentContext");
 const { parsePrivateFile } = require("../utils/supplierPaymentEvidence");
 const { parseInvoiceDetails, parseInvoiceReview, parseInvoiceVoid, invoiceView } = require("../utils/supplierInvoice");
+const { parseSupplierInvoiceRegisterQuery, buildSupplierInvoiceRegisterPipeline } = require("../utils/supplierInvoiceRegister");
 
 const issue = (status, message) => Object.assign(new Error(message), { status });
 const respond = (res, error) => {
@@ -29,6 +30,18 @@ const audit = (req, { cost, booking }, description) => createActivityLog({ req, 
     description: `${description} for booking ${booking.bookingCode}`,
     relatedRecordId: cost.recordId, relatedModel: "Booking", referenceNo: booking.bookingCode });
 const actor = (req) => ({ reviewedBy: req.admin._id, reviewedByName: String(req.admin.name || "Staff").slice(0, 100), reviewedAt: new Date() });
+
+const getSupplierInvoiceRegister = async (req, res) => {
+    const parsed = parseSupplierInvoiceRegisterQuery(req.query);
+    if (parsed.error) return res.status(400).json({ message: parsed.error });
+    try {
+        const { status, due, page } = parsed.value;
+        const [result] = await SupplierInvoice.aggregate(buildSupplierInvoiceRegisterPipeline(parsed.value));
+        const total = result.count[0]?.total || 0;
+        return res.json({ status, due, page, limit: 25, total, pages: Math.ceil(total / 25),
+            summary: result.summary[0] || { needsReview: 0, overdue: 0, dueSoon: 0 }, items: result.items });
+    } catch (error) { return respond(res, error); }
+};
 
 const listSupplierInvoices = async (req, res) => {
     try {
@@ -145,5 +158,5 @@ const voidSupplierInvoice = async (req, res) => {
     } catch (error) { return respond(res, error); }
 };
 
-module.exports = { listSupplierInvoices, createSupplierInvoice, uploadSupplierInvoiceFile,
+module.exports = { getSupplierInvoiceRegister, listSupplierInvoices, createSupplierInvoice, uploadSupplierInvoiceFile,
     downloadSupplierInvoiceFile, reviewSupplierInvoice, voidSupplierInvoice };

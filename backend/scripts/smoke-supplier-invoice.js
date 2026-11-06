@@ -6,6 +6,7 @@ const Booking = require("../models/Booking");
 const CostEntry = require("../models/CostEntry");
 const SupplierInvoice = require("../models/SupplierInvoice");
 const ActivityLog = require("../models/ActivityLog");
+const { getBusinessDayBounds } = require("../utils/businessDate");
 
 const main = async () => {
     if (process.env.CI_SMOKE_TESTS !== "true") throw new Error("Enable disposable CI smoke tests explicitly.");
@@ -33,6 +34,22 @@ const main = async () => {
         assert.equal(created.status, 201, await created.clone().text());
         const invoice = (await created.json()).invoice;
         assert.equal((await request("/invoices", { method: "POST", body: details })).status, 409);
+        const token = jwt.sign({ id: admin._id, v: 0 }, process.env.JWT_SECRET);
+        const register = (query = "") => fetch(`http://127.0.0.1:5000/api/finance/costs/invoice-register${query}`,
+            { headers: { Authorization: `Bearer ${token}` } });
+        const yesterday = new Date(getBusinessDayBounds().start.getTime() + 330 * 60 * 1000 - 24 * 60 * 60 * 1000)
+            .toISOString().slice(0, 10);
+        const overdueRecord = await request("/invoices", { method: "POST", body: { ...details,
+            invoiceReference: "CI-PRO-FORMA-OVERDUE", invoiceDate: yesterday, dueDate: yesterday } });
+        assert.equal(overdueRecord.status, 201, await overdueRecord.clone().text());
+        const pending = await (await register()).json();
+        assert.equal(pending.summary.needsReview, 2);
+        assert.equal(pending.summary.overdue, 1);
+        assert.equal((await (await register("?due=overdue")).json()).total, 1);
+        assert.equal((await (await register("?due=due7")).json()).total, 1);
+        assert.equal((await (await register("?due=later")).json()).total, 1);
+        assert.equal((await register("?status=voided&due=overdue")).status, 400);
+        assert.doesNotMatch(JSON.stringify(pending), /sha256|reviewHistory|CI PRIVATE SUPPLIER INVOICE/);
         const pdf = Buffer.from("%PDF-1.7\nCI PRIVATE SUPPLIER INVOICE\n%%EOF\n");
         const filePath = `/invoices/${invoice._id}/file`;
         const upload = await request(`${filePath}?expectedVersion=${invoice.__v}`, { method: "POST", raw: pdf,
@@ -51,20 +68,22 @@ const main = async () => {
         } });
         assert.equal(approved.status, 200, await approved.clone().text());
         assert.equal((await approved.json()).invoice.reviewHistory.length, 1);
+        assert.equal((await (await register("?status=Approved")).json()).total, 1);
         assert.equal((await request("", { method: "DELETE" })).status, 409);
         const list = await request("/invoices");
         assert.equal(list.status, 200);
         const result = await list.json();
-        assert.equal(result.items[0].status, "Approved");
+        assert.equal(result.items.find((item) => String(item._id) === String(invoice._id)).status, "Approved");
         assert.doesNotMatch(JSON.stringify(result), /sha256|"data"|CI PRIVATE SUPPLIER INVOICE/);
-        const current = result.items[0];
+        const current = result.items.find((item) => String(item._id) === String(invoice._id));
         const voided = await request(`/invoices/${invoice._id}/void`, { method: "PATCH", body: {
             expectedVersion: current.__v, reason: "Corrected supplier invoice received",
         } });
         assert.equal(voided.status, 200, await voided.clone().text());
         assert.equal((await request(filePath)).status, 410);
+        assert.equal((await (await register("?status=voided")).json()).total, 1);
         assert.equal((await request("/invoices", { method: "POST", body: details })).status, 201);
-        console.log("Supplier invoice private upload, review, duplicate guard, history and cost deletion protection verified.");
+        console.log("Supplier invoice private upload, review, register due filters, duplicate guard, history and cost deletion protection verified.");
     } finally {
         if (cost) { await SupplierInvoice.deleteMany({ cost: cost._id }); await CostEntry.deleteOne({ _id: cost._id }); }
         if (booking) { await ActivityLog.deleteMany({ relatedRecordId: booking._id }); await Booking.deleteOne({ _id: booking._id }); }
