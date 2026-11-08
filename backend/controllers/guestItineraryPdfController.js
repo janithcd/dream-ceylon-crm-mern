@@ -17,7 +17,7 @@ const ink = "#1f2b33";
 const muted = "#586874";
 const pale = "#edf7f5";
 
-const createGuestItineraryPdf = async (itinerary, company) => {
+const createGuestItineraryPdf = async (itinerary, company, { title = "YOUR SRI LANKA ITINERARY", introduction = "" } = {}) => {
     const pdf = new PDFDocument({ autoFirstPage: false, bufferPages: true, size: [WIDTH, HEIGHT], margin: 0 });
     const chunks = [];
     pdf.on("data", (chunk) => chunks.push(chunk));
@@ -50,7 +50,7 @@ const createGuestItineraryPdf = async (itinerary, company) => {
         brandLines.slice(0, 2).forEach((line, index) => {
             text.draw(line, { x: MARGIN, y: 22 + index * 20, size: 15, weight: "bold", color: green });
         });
-        text.draw("YOUR SRI LANKA ITINERARY", { x: MARGIN, y: 88, size: 17, weight: "bold", color: ink });
+        text.draw(title, { x: MARGIN, y: 88, size: 17, weight: "bold", color: ink });
         text.draw(`${itinerary.bookingCode}${itinerary.isDraft ? " | DRAFT" : ""}`, {
             x: MARGIN, y: 116, size: 9, color: muted,
         });
@@ -61,6 +61,7 @@ const createGuestItineraryPdf = async (itinerary, company) => {
     draw(`Prepared for ${itinerary.guestName}`, { size: 13, weight: "bold", lineHeight: 21 });
     draw(`Travel dates: ${formatDocumentDate(itinerary.travelStartDate)} to ${formatDocumentDate(itinerary.travelEndDate)}`, { color: muted });
     draw(`Travelers: ${itinerary.numberOfTravelers}`, { color: muted });
+    if (introduction) { y += 8; draw(introduction, { size: 9, color: muted, lineHeight: 14 }); }
     if (itinerary.isDraft) {
         y += 6;
         draw("Draft itinerary - arrangements may change until your booking is confirmed.", { color: green });
@@ -69,18 +70,26 @@ const createGuestItineraryPdf = async (itinerary, company) => {
 
     let lastDate = "";
     for (const entry of itinerary.entries) {
+        const entryHeight = text.wrap(entry.title, "bold", 11, CONTENT_WIDTH).length * 19 +
+            (entry.plan ? text.wrap(entry.plan, "regular", 10, CONTENT_WIDTH - 10).length * 15 : 0) +
+            (entry.details || []).reduce((height, detail) => height + text.wrap(detail, "regular", 10, CONTENT_WIDTH - 10).length * 15, 0) +
+            (entry.overnightLocation ? text.wrap(`Overnight: ${entry.overnightLocation}`, "regular", 10, CONTENT_WIDTH - 10).length * 16 : 0) + 15;
+        // Keep ordinary reservation blocks together with their date heading.
+        // Oversized prose can flow, with at least its title and first line kept.
+        const keepHeight = entryHeight <= HEIGHT - 72 - 163 - 46 ? entryHeight : 45;
         const day = formatDocumentDate(entry.date);
         if (day !== lastDate) {
-            if (y + 65 > HEIGHT - 72) addPage();
+            if (y + 46 + keepHeight > HEIGHT - 72) addPage();
             y += 9;
             pdf.rect(MARGIN, y, CONTENT_WIDTH, 27).fill(pale);
             text.draw(day, { x: MARGIN + 10, y: y + 7, size: 11, weight: "bold", color: green });
             y += 37;
             lastDate = day;
         }
-        if (y + 45 > HEIGHT - 72) addPage();
+        if (y + keepHeight > HEIGHT - 72) addPage();
         draw(entry.title, { size: 11, weight: "bold", lineHeight: 19 });
         if (entry.plan) draw(entry.plan, { indent: 10, lineHeight: 15 });
+        for (const detail of entry.details || []) draw(detail, { indent: 10, lineHeight: 15 });
         if (entry.overnightLocation) draw(`Overnight: ${entry.overnightLocation}`, { indent: 10, color: muted });
         y += 15;
     }

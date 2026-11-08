@@ -26,6 +26,7 @@ import BookingPreparationModal from "../components/BookingPreparationModal";
 import BookingHotelsModal from "../components/BookingHotelsModal";
 import HotelSupplierEmailModal from "../components/HotelSupplierEmailModal";
 import BookingItineraryModal from "../components/BookingItineraryModal";
+import GuestTravelPackModal from "../components/GuestTravelPackModal";
 import BookingActivityModal from "../components/BookingActivityModal";
 import BookingTransportModal from "../components/BookingTransportModal";
 import SupplierContactModal from "../components/SupplierContactModal";
@@ -89,6 +90,7 @@ const Bookings = () => {
     const [selectedHotelEmail, setSelectedHotelEmail] = useState(null);
     const [selectedSupplierContact, setSelectedSupplierContact] = useState(null);
     const [selectedItineraryBooking, setSelectedItineraryBooking] = useState(null);
+    const [selectedTravelPackBooking, setSelectedTravelPackBooking] = useState(null);
     const [selectedActivityBooking, setSelectedActivityBooking] = useState(null);
     const [selectedTransportBooking, setSelectedTransportBooking] = useState(null);
     const [selectedReadinessBooking, setSelectedReadinessBooking] = useState(null);
@@ -1090,6 +1092,11 @@ const Bookings = () => {
                                                     aria-label={`Activities and excursions for ${booking.bookingCode}`}>
                                                     <FaClipboardCheck className="me-1" />Activities &amp; Excursions
                                                 </button>
+                                                <PermissionGuard permission="pdf.generate">
+                                                    <button type="button" className="btn btn-link btn-sm p-0 text-start d-block mt-1"
+                                                        onClick={() => setSelectedTravelPackBooking(booking)}
+                                                        aria-label={`Guest travel pack for ${booking.bookingCode}`}><FaPrint className="me-1" />Guest travel pack</button>
+                                                </PermissionGuard>
                                             </div>
                                         </td>
 
@@ -1380,6 +1387,12 @@ const Bookings = () => {
                 onClose={() => { setSelectedSupplierContact(null); fetchBookings(); }}
                 onChanged={fetchBookings}
             />}
+            {selectedTravelPackBooking && <GuestTravelPackModal key={selectedTravelPackBooking._id} booking={selectedTravelPackBooking}
+                onClose={() => setSelectedTravelPackBooking(null)}
+                onOpenItinerary={() => { setSelectedItineraryBooking(selectedTravelPackBooking); setSelectedTravelPackBooking(null); }}
+                onOpenHotels={() => { setSelectedHotelBooking(selectedTravelPackBooking); setSelectedTravelPackBooking(null); }}
+                onOpenTransport={() => { setSelectedTransportBooking(selectedTravelPackBooking); setSelectedTravelPackBooking(null); }}
+                onOpenActivities={() => navigate(`/excursions?booking=${selectedTravelPackBooking._id}`)} />}
             {selectedItineraryBooking && (
                 <BookingItineraryModal
                     booking={selectedItineraryBooking}

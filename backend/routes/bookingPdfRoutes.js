@@ -6,6 +6,7 @@ const {
 } = require("../controllers/bookingPdfController");
 const { generateOperationsBriefPdf } = require("../controllers/bookingBriefPdfController");
 const { generateGuestItineraryPdf } = require("../controllers/guestItineraryPdfController");
+const { previewGuestTravelPack, generateGuestTravelPack } = require("../controllers/guestTravelPackController");
 const { generateHotelVoucherPdf } = require("../controllers/hotelVoucherPdfController");
 const { generateGuestPaymentStatementPdf, getGuestPaymentStatementReadiness } = require("../controllers/guestPaymentStatementPdfController");
 const { previewClientPaymentEmail, sendClientPaymentEmail } = require("../controllers/clientPaymentEmailController");
@@ -17,6 +18,11 @@ const {
 const { PERMISSIONS } = require("../config/permissions");
 
 const router = express.Router();
+
+router.get("/travel-pack/:id/preview", protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.PDF_GENERATE), previewGuestTravelPack);
+router.post("/travel-pack/:id", protect,
+    authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.PDF_GENERATE), generateGuestTravelPack);
 
 router.post(
     "/invoice/:id",

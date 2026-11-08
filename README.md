@@ -34,7 +34,7 @@ The application includes permissions for different staff roles, branded PDF docu
 | **Supplier directory** | Search hotels, guides, safari jeep providers and partners; keep contacts, dated rate cards and internal terms, and copy hotel details into booking stays. |
 | **Activities & excursions** | Reserve safaris, guides, trains and experiences; track confirmations, cancellations and follow-ups, view the operations schedule and prepare supplier/guest messages. |
 | **Guest care** | Manage issues during trips, follow up after departure, collect feedback and track service recovery. |
-| **Documents and AI** | Generate branded quotations, invoices, receipts, itineraries and hotel vouchers; draft replies and itineraries with AI. |
+| **Documents and AI** | Generate branded quotations, invoices, receipts, itineraries, hotel vouchers and reviewed guest travel packs; draft replies and itineraries with AI. |
 | **Administration** | Manage staff access, company branding, destinations, packages, vehicles, reports and activity history. |
 
 See the [feature guide](PROJECT_FEATURES.md) for module details and links to operating instructions.

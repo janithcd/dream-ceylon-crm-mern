@@ -47,7 +47,7 @@ Filters apply within the selected **activity date range**, including the follow-
 - Up to 60 activity records per booking. The latest 50 events per activity show actor, date, state and reason. Activity records cannot be deleted through this workflow.
 - Every write checks `expectedVersion` plus current trip dates, headcount and booking state. Conflicts require a reload. General booking edits cannot shrink dates/headcount past an active activity, and conflicting changes fail safely.
 - Supplier costs, invoices, payments and refunds remain in **Cost & Profit**; activity status never creates a financial transaction.
-- This module has reviewed text/email drafts. It does not add activities to existing itinerary/PDF outputs or send emails automatically.
+- This module has reviewed text/email drafts. Confirmed and completed activities also appear in the [Guest Travel Pack](GUEST_TRAVEL_PACK.md); the original itinerary-only PDF is unchanged. Emails are not sent automatically.
 - No migration is required: existing bookings start with an empty activity list and revision zero.
 
 ## API

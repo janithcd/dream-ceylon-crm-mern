@@ -20,12 +20,15 @@ Use this page to find a module and its operating instructions. The detailed guid
 - Saved rooming plans, hotel vouchers and reviewed rooming emails.
 - Transport assignments, airport transfer schedules, flight details and guest pickup drafts.
 - Activities and excursions with supplier snapshots, confirmation references, cancellation history, daily schedules and reviewed supplier/guest message drafts.
+- Reviewed guest travel pack PDF combining the daily itinerary with confirmed hotels, transport and activities, with missing-detail warnings and stale-preview protection.
 - Preparation tasks, My Tasks, Team Tasks, departure readiness and pre-arrival contact tracking.
 - Private handover journals, unread team worklists, operations PDFs and cancellation review.
 
 [Booking and operations workflow](docs/workflows/BOOKINGS.md)
 
 [Activities and excursions workflow](docs/workflows/EXCURSIONS.md)
+
+[Guest travel pack workflow](docs/workflows/GUEST_TRAVEL_PACK.md)
 
 ## Trip support and guest care
 
@@ -74,6 +77,7 @@ Use this page to find a module and its operating instructions. The detailed guid
 | Payment receipt / refund confirmation | Document one recorded guest transaction. |
 | Guest payment statement | Show the validated booking ledger and balance. |
 | Guest itinerary / hotel voucher | Share saved travel or confirmed reservation details. |
+| Guest travel pack | Review one PDF of the daily itinerary and confirmed hotels, transport and activities. |
 | Operations / departure handover PDF | Support authorized staff and supplier handoffs. |
 | Supplier payment voucher | Identify a payment and its invoice reference for the supplier. |
 | AI tools | Prepare client replies and itinerary content for review. |
