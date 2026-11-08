@@ -7,6 +7,7 @@ const app = require("../app");
 const Admin = require("../models/Admin");
 const Booking = require("../models/Booking");
 const CostEntry = require("../models/CostEntry");
+const SupplierInvoice = require("../models/SupplierInvoice");
 const ActivityLog = require("../models/ActivityLog");
 const { unitemizedPaidCents } = require("../utils/supplierPayment");
 
@@ -45,6 +46,11 @@ test("documenting a historical bank transfer leaves paid totals unchanged and en
         return doc;
     });
     t.mock.method(ActivityLog, "create", async (entry) => { logs.push(entry); return entry; });
+    t.mock.method(SupplierInvoice, "find", (filter) => {
+        assert.equal(String(filter.cost), ids.cost);
+        const query = { select: () => query, sort: () => query, limit: () => query, lean: async () => [] };
+        return query;
+    });
 
     const server = app.listen(0, "127.0.0.1");
     await new Promise((resolve) => server.once("listening", resolve));
@@ -82,5 +88,7 @@ test("documenting a historical bank transfer leaves paid totals unchanged and en
         headers: { Authorization: `Bearer ${jwt.sign({ id: ids.finance }, process.env.JWT_SECRET)}` },
     });
     assert.equal(voucher.status, 200);
-    assert.equal((await voucher.json()).payment.amount, 16000);
+    const voucherDetails = await voucher.json();
+    assert.equal(voucherDetails.payment.amount, 16000);
+    assert.deepEqual(voucherDetails.approvedInvoices, []);
 });
