@@ -55,7 +55,7 @@ Use this page to find a module and its operating instructions. The detailed guid
 - Estimated quotation costs and actual booking costs with entered conversion rates.
 - Private profit and margin summaries.
 - Individual supplier payments, due schedules, bank matching and payment register exports.
-- Payment vouchers/remittance advice with actual transfer currency, revision history and reviewed email drafts.
+- Payment vouchers/remittance advice with approved supplier invoice selection, actual transfer currency, revision history and reviewed email drafts.
 - Private bank proofs and supplier receipts, acknowledgement history and filters for supplier follow-up.
 
 [Supplier payment workflow](docs/workflows/SUPPLIER_PAYMENTS.md)

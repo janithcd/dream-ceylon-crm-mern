@@ -8,6 +8,7 @@ const app = require("../app");
 const Admin = require("../models/Admin");
 const Booking = require("../models/Booking");
 const CostEntry = require("../models/CostEntry");
+const SupplierInvoice = require("../models/SupplierInvoice");
 const CompanySetting = require("../models/CompanySetting");
 const ActivityLog = require("../models/ActivityLog");
 const { getRemittancePayment, parseRemittanceDetails, publicRemittance, buildRemittanceEmail } = require("../utils/supplierRemittance");
@@ -15,7 +16,7 @@ const { createSupplierRemittancePdf } = require("../controllers/supplierRemittan
 
 const ids = { cost: "507f1f77bcf86cd799439061", payment: "507f1f77bcf86cd799439062", booking: "507f1f77bcf86cd799439063",
     finance: "507f1f77bcf86cd799439064", sales: "507f1f77bcf86cd799439065", readOnly: "507f1f77bcf86cd799439066",
-    pdfOnly: "507f1f77bcf86cd799439067", missing: "507f1f77bcf86cd799439068" };
+    pdfOnly: "507f1f77bcf86cd799439067", missing: "507f1f77bcf86cd799439068", invoice: "507f1f77bcf86cd799439069" };
 const exampleCost = () => new CostEntry({ _id: ids.cost, __v: 0, recordType: "Booking", recordId: ids.booking,
     category: "Hotel", description: "PRIVATE COST DESCRIPTION", amount: 200, currency: "USD", conversionRate: 1,
     targetCurrency: "USD", paidAmount: 130, createdBy: ids.finance,
@@ -72,7 +73,7 @@ test("remittance rejects injected recipients, multiline fields, oversized detail
         assert.ok(parseRemittanceDetails({ ...details(), supplierEmail }, summary).error);
     }
     for (const changes of [{ supplierName: "" }, { invoiceReference: "" }, { supplierName: "x".repeat(161) },
-        { invoiceReference: "hello\nSubject: injected" }, { guestReference: "x".repeat(201) },
+        { invoiceReference: "hello\nSubject: injected" }, { invoiceReference: "x".repeat(101) }, { guestReference: "x".repeat(201) },
         { transferReference: "x".repeat(101) }, { changeReason: "x".repeat(301) }]) {
         assert.ok(parseRemittanceDetails({ ...details(), ...changes }, summary).error);
     }
@@ -84,7 +85,8 @@ test("supplier PDF and email use only reviewed fields, support multilingual name
     const revision = { ...details(), revision: 1, transferAmount: 39000, bookingCode: "DCJ-TEST-1",
         paymentDate: new Date("2026-01-15"), method: "Bank transfer", issuedAt: new Date("2026-01-16"),
         supplierName: "Example Hotel / සිංහල / தமிழ் / Жанна", changeReason: "PRIVATE CORRECTION", recordedByName: "PRIVATE STAFF",
-        costDescription: "PRIVATE COST", note: "PRIVATE NOTE", paidAmountAfter: 999, sellingPrice: 5555 };
+        costDescription: "PRIVATE COST", note: "PRIVATE NOTE", paidAmountAfter: 999, sellingPrice: 5555,
+        sourceInvoice: ids.invoice };
     const voucher = publicRemittance(ids.payment, revision);
     const draft = buildRemittanceEmail(voucher, company);
     assert.equal(draft.recipient, details().supplierEmail);
@@ -99,6 +101,7 @@ test("supplier PDF and email use only reviewed fields, support multilingual name
     for (const name of ["සිංහල", "தமிழ்", "Жанна"]) assert.ok(printed.replace(/\s+/gu, "").includes(name), name);
     assert.doesNotMatch(printed, /PRIVATE|999|5555|USD 130/);
     assert.doesNotMatch(JSON.stringify(voucher), /PRIVATE|999|5555/);
+    assert.equal(voucher.sourceInvoiceId, undefined);
     const longBytes = await createSupplierRemittancePdf({ ...voucher, supplierName: "Long hotel name ".repeat(10),
         supplierEmail: "x".repeat(235) + "@example.invalid", invoiceReference: "PF".repeat(40),
         guestReference: "Long guest reservation ".repeat(60) + "FINAL GUEST", transferReference: "REF".repeat(33) }, company);
@@ -111,6 +114,7 @@ test("voucher API enforces permissions, preserves ledger and revisions, rejects 
     let persisted = exampleCost().toObject();
     let race = false;
     let bookingExists = true;
+    let invoiceStatus = "Approved";
     const logs = [];
     t.mock.method(Admin, "findById", (id) => ({ select: async () => ({ _id: id, name: "Internal Staff", status: "Active",
         role: String(id) === ids.finance ? "Finance" : String(id) === ids.sales ? "Sales" : "Unknown Role",
@@ -129,6 +133,20 @@ test("voucher API enforces permissions, preserves ledger and revisions, rejects 
         return doc;
     });
     t.mock.method(Booking, "findById", () => ({ select: async () => bookingExists ? { _id: ids.booking, bookingCode: "DCJ-TEST-1" } : null }));
+    const approvedInvoice = { _id: ids.invoice, __v: 2, supplierName: details().supplierName,
+        invoiceReference: details().invoiceReference, amount: 200, currency: "USD", invoiceDate: new Date("2026-01-10") };
+    t.mock.method(SupplierInvoice, "find", (filter) => {
+        assert.equal(String(filter.cost), ids.cost);
+        assert.equal(filter.status, "Approved");
+        assert.equal(filter.voidedAt, null);
+        assert.deepEqual(filter.filename, { $ne: "" });
+        const query = { select: () => query, sort: () => query, limit: () => query,
+            lean: async () => invoiceStatus === "Approved" ? [approvedInvoice] : [] };
+        return query;
+    });
+    t.mock.method(SupplierInvoice, "findOne", (query) => ({ select: async () =>
+        String(query._id) === ids.invoice && String(query.cost) === ids.cost && invoiceStatus === "Approved"
+            ? approvedInvoice : null }));
     t.mock.method(CompanySetting, "findOne", async () => null);
     t.mock.method(ActivityLog, "create", async (entry) => { logs.push(entry); return entry; });
     const server = app.listen(0, "127.0.0.1");
@@ -155,11 +173,23 @@ test("voucher API enforces permissions, preserves ledger and revisions, rejects 
     const initial = await (await request()).json();
     assert.equal(initial.current, null);
     assert.equal(initial.draft, null);
+    assert.equal(initial.approvedInvoices.length, 1);
+    assert.equal(initial.approvedInvoices[0].supplierName, details().supplierName);
+    assert.equal(initial.approvedInvoices[0].data, undefined);
     assert.equal((await request({ method: "POST", url: `${endpoint}/pdf`, body: { revision: 1 } })).status, 409);
     assert.equal((await request({ method: "PUT", body: details() })).status, 400);
     assert.equal((await request({ method: "PUT", body: { ...details(), expectedVersion: 9 } })).status, 409);
+    assert.equal((await request({ method: "PUT", body: { ...details(), expectedVersion: 0,
+        sourceInvoiceId: "bad", sourceInvoiceVersion: 2 } })).status, 400);
+    assert.equal((await request({ method: "PUT", body: { ...details(), expectedVersion: 0,
+        sourceInvoiceId: ids.missing, sourceInvoiceVersion: 2 } })).status, 409);
+    assert.equal((await request({ method: "PUT", body: { ...details(), expectedVersion: 0,
+        sourceInvoiceId: ids.invoice, sourceInvoiceVersion: 1 } })).status, 409);
+    assert.equal((await request({ method: "PUT", body: { ...details(), expectedVersion: 0,
+        supplierName: "Another Hotel", sourceInvoiceId: ids.invoice, sourceInvoiceVersion: 2 } })).status, 400);
     assert.equal(logs.length, 0);
-    const saved = await request({ method: "PUT", body: { ...details(), expectedVersion: 0 } });
+    const saved = await request({ method: "PUT", body: { ...details(), expectedVersion: 0,
+        sourceInvoiceId: ids.invoice, sourceInvoiceVersion: 2 } });
     assert.equal(saved.status, 201);
     assert.equal(saved.headers.get("cache-control"), "no-store");
     const first = await saved.json();
@@ -170,6 +200,13 @@ test("voucher API enforces permissions, preserves ledger and revisions, rejects 
     assert.equal(persisted.paymentHistory.length, 1);
     assert.equal(persisted.paymentHistory[0].amount, 130);
     assert.equal(first.current.transferAmount, 39000);
+    assert.equal(first.current.sourceInvoiceId, ids.invoice);
+    assert.equal(String(persisted.paymentHistory[0].remittanceRevisions[0].sourceInvoice), ids.invoice);
+    invoiceStatus = "Disputed";
+    assert.equal((await (await request()).json()).approvedInvoices.length, 0);
+    assert.equal((await request({ method: "PUT", body: { ...details(), expectedVersion: 1,
+        changeReason: "Invoice disputed", sourceInvoiceId: ids.invoice, sourceInvoiceVersion: 2 } })).status, 409);
+    invoiceStatus = "Approved";
     assert.equal((await request({ method: "PUT", body: { ...details(), expectedVersion: 0, changeReason: "Stale tab" } })).status, 409);
     assert.equal((await request({ method: "PUT", body: { ...details(), expectedVersion: 1 } })).status, 400);
     race = true;
@@ -181,7 +218,9 @@ test("voucher API enforces permissions, preserves ledger and revisions, rejects 
     const second = await corrected.json();
     assert.equal(second.current.revision, 2);
     assert.equal(second.current.invoiceReference, "PF-CORRECTED-123");
+    assert.equal(second.current.sourceInvoiceId, null);
     assert.equal(second.history[0].invoiceReference, "PF-EXAMPLE-123");
+    assert.equal(second.history[0].sourceInvoiceId, ids.invoice);
     assert.equal(second.history[1].changeReason, "PRIVATE CORRECTION");
     assert.equal((await request({ method: "POST", url: `${endpoint}/pdf`, body: { revision: 1 } })).status, 409);
     const pdf = await request({ method: "POST", url: `${endpoint}/pdf`, body: { revision: 2 } });

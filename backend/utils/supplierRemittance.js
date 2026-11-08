@@ -2,7 +2,7 @@ const { parseSupplierPayment } = require("./supplierPayment");
 const { formatDocumentDate } = require("./documentDate");
 
 const CURRENCIES = Object.freeze(["USD", "LKR", "EUR", "GBP"]);
-const fields = Object.freeze({ supplierName: 160, supplierEmail: 254, invoiceReference: 80,
+const fields = Object.freeze({ supplierName: 160, supplierEmail: 254, invoiceReference: 100,
     guestReference: 200, transferReference: 100, changeReason: 300 });
 const labels = { supplierName: "Supplier name", supplierEmail: "Supplier email", invoiceReference: "Invoice reference",
     guestReference: "Guest / reservation reference", transferReference: "Transfer reference", changeReason: "Reason for correction" };

@@ -1,5 +1,6 @@
 const CostEntry = require("../models/CostEntry");
 const Booking = require("../models/Booking");
+const SupplierInvoice = require("../models/SupplierInvoice");
 const { getDocumentBrandConfig } = require("../utils/documentSettings");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { getRemittancePayment, parseRemittanceDetails, voucherNumber, publicRemittance,
@@ -22,17 +23,41 @@ const loadPayment = async (req) => {
     return { cost, payment, booking, summary: parsed.value };
 };
 
+const approvedInvoicesFor = (cost) => SupplierInvoice.find({ cost: cost._id, status: "Approved", voidedAt: null,
+    filename: { $ne: "" } }).select("_id supplierName invoiceReference amount currency invoiceDate __v")
+    .sort({ createdAt: -1, _id: -1 }).limit(20).lean();
+
 const present = async ({ cost, payment, booking, summary }) => {
     const revisions = payment.remittanceRevisions || [];
     const latest = revisions.at(-1);
-    const current = latest ? publicRemittance(payment._id, latest) : null;
+    const current = latest ? { ...publicRemittance(payment._id, latest), sourceInvoiceId: latest.sourceInvoice || null } : null;
     return {
         version: cost.__v ?? 0, bookingCode: booking.bookingCode, costDescription: cost.description,
         payment: summary, voucherNumber: voucherNumber(payment._id), current,
         history: revisions.map((revision) => ({ ...publicRemittance(payment._id, revision),
+            sourceInvoiceId: revision.sourceInvoice || null,
             recordedByName: revision.recordedByName, changeReason: revision.changeReason })),
+        approvedInvoices: await approvedInvoicesFor(cost),
         draft: current ? buildRemittanceEmail(current, await getDocumentBrandConfig()) : null,
     };
+};
+
+const chosenInvoice = async (body, cost, details) => {
+    const id = body?.sourceInvoiceId;
+    if (id === undefined || id === null || id === "") return null;
+    if (typeof id !== "string" || !/^[a-f\d]{24}$/i.test(id) ||
+        !Number.isSafeInteger(body.sourceInvoiceVersion) || body.sourceInvoiceVersion < 0) {
+        throw fail(400, "Select an approved invoice from this booking cost again.");
+    }
+    const invoice = await SupplierInvoice.findOne({ _id: id, cost: cost._id, status: "Approved",
+        voidedAt: null, filename: { $ne: "" } }).select("supplierName invoiceReference __v");
+    if (!invoice || invoice.__v !== body.sourceInvoiceVersion) {
+        throw fail(409, "The selected invoice changed or is no longer approved. Reload the voucher before saving.");
+    }
+    if (details.supplierName !== invoice.supplierName || details.invoiceReference !== invoice.invoiceReference) {
+        throw fail(400, "The supplier and invoice reference must match the selected approved invoice. Clear the selection to enter them manually.");
+    }
+    return invoice._id;
 };
 
 const handleError = (res, error) => {
@@ -64,7 +89,8 @@ const saveSupplierRemittance = async (req, res) => {
         const revisions = payment.remittanceRevisions;
         const parsed = parseRemittanceDetails(req.body, summary, revisions.length > 0);
         if (parsed.error) throw fail(400, parsed.error);
-        revisions.push({ ...parsed.value, revision: revisions.length + 1,
+        const sourceInvoice = await chosenInvoice(req.body, cost, parsed.value);
+        revisions.push({ ...parsed.value, sourceInvoice, revision: revisions.length + 1,
             bookingCode: String(booking.bookingCode || booking._id), paymentDate: summary.paymentDate,
             method: summary.method, issuedAt: new Date(), recordedBy: req.admin._id,
             recordedByName: String(req.admin.name || "Staff").slice(0, 100) });

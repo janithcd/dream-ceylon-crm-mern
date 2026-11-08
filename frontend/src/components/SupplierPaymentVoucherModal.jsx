@@ -10,6 +10,8 @@ const formFrom = (data) => ({
     invoiceReference: data.current?.invoiceReference || "", guestReference: data.current?.guestReference || "",
     transferAmount: data.current?.transferAmount ?? "", transferCurrency: data.current?.transferCurrency || data.payment.currency,
     transferReference: data.current?.transferReference ?? data.payment.reference ?? "", changeReason: "", confirmed: false,
+    sourceInvoiceId: data.approvedInvoices?.find((invoice) => invoice._id === data.current?.sourceInvoiceId)?._id || "",
+    sourceInvoiceVersion: data.approvedInvoices?.find((invoice) => invoice._id === data.current?.sourceInvoiceId)?.__v ?? null,
 });
 
 const SupplierPaymentVoucherModal = ({ costId, paymentId, onClose, onSaved }) => {
@@ -81,7 +83,14 @@ const SupplierPaymentVoucherModal = ({ costId, paymentId, onClose, onSaved }) =>
         setError(""); setStatus(""); setReloadKey((value) => value + 1);
     };
     const edit = (field, value) => {
-        setForm((current) => ({ ...current, [field]: value, ...(field !== "confirmed" ? { confirmed: false } : {}) }));
+        setForm((current) => ({ ...current, [field]: value, ...(field !== "confirmed" ? { confirmed: false } : {}),
+            ...(["supplierName", "invoiceReference"].includes(field) ? { sourceInvoiceId: "", sourceInvoiceVersion: null } : {}) }));
+        setError(""); setStatus("");
+    };
+    const selectInvoice = (id) => {
+        const invoice = data.approvedInvoices.find((item) => item._id === id);
+        setForm((current) => ({ ...current, sourceInvoiceId: invoice?._id || "", sourceInvoiceVersion: invoice?.__v ?? null,
+            ...(invoice ? { supplierName: invoice.supplierName, invoiceReference: invoice.invoiceReference } : {}), confirmed: false }));
         setError(""); setStatus("");
     };
     const save = async (event) => {
@@ -144,15 +153,25 @@ const SupplierPaymentVoucherModal = ({ costId, paymentId, onClose, onSaved }) =>
                         <p className="small text-muted">Recorded payment: {money(data.payment.amount, data.payment.currency)} · {formatCalendarDate(data.payment.paymentDate)} · {data.payment.method}</p>
                         <p className="small">Create remittance advice for this payment. Enter the amount actually sent to the supplier, excluding bank charges. For a different currency, use the agreed amount from the bank confirmation.</p>
                         {data.current && <p className="small text-break"><strong>{data.voucherNumber}</strong> · Revision {data.current.revision} · {formatCalendarDate(data.current.issuedAt)}</p>}
+                        {data.current?.sourceInvoiceId && <p className="small text-muted">This revision records the approved invoice selected when it was saved. The invoice may have changed since then; review any correction again.</p>}
                         <form onSubmit={save}>
                             <fieldset disabled={saving || !editing || !canManage}>
                                 <div className="row g-3">
+                                    <div className="col-12"><label className="form-label" htmlFor="voucher-approved-invoice">Use approved supplier invoice (optional)</label>
+                                        <select id="voucher-approved-invoice" className="form-select" value={form.sourceInvoiceId} onChange={(e) => selectInvoice(e.target.value)}>
+                                            <option value="">Enter supplier and reference manually</option>
+                                            {(data.approvedInvoices || []).map((invoice) => <option key={invoice._id} value={invoice._id}>
+                                                {invoice.supplierName} · {invoice.invoiceReference} · {money(invoice.amount, invoice.currency)}
+                                            </option>)}
+                                        </select><small className="text-muted">Choosing one copies its supplier and reference and records the invoice link in this voucher revision. It does not fill the transfer amount or certify payment. Editing those copied fields clears the link.</small>
+                                        {data.approvedInvoices?.length === 0 && <div className="small text-warning-emphasis">No approved invoice is available on this cost. Review it under Invoices, or enter the supplier details manually.</div>}
+                                    </div>
                                     <div className="col-md-6"><label className="form-label" htmlFor="voucher-supplier">Supplier / hotel name</label>
                                         <input id="voucher-supplier" className="form-control" maxLength={160} required value={form.supplierName} onChange={(e) => edit("supplierName", e.target.value)} /></div>
                                     <div className="col-md-6"><label className="form-label" htmlFor="voucher-email">Supplier email (optional)</label>
                                         <input id="voucher-email" className="form-control" type="email" maxLength={254} value={form.supplierEmail} onChange={(e) => edit("supplierEmail", e.target.value)} /></div>
                                     <div className="col-md-6"><label className="form-label" htmlFor="voucher-invoice">Invoice / pro forma reference</label>
-                                        <input id="voucher-invoice" className="form-control" maxLength={80} required value={form.invoiceReference} onChange={(e) => edit("invoiceReference", e.target.value)} /></div>
+                                        <input id="voucher-invoice" className="form-control" maxLength={100} required value={form.invoiceReference} onChange={(e) => edit("invoiceReference", e.target.value)} /></div>
                                     <div className="col-md-6"><label className="form-label" htmlFor="voucher-guest">Guest / reservation reference (optional)</label>
                                         <input id="voucher-guest" className="form-control" maxLength={200} value={form.guestReference} onChange={(e) => edit("guestReference", e.target.value)} placeholder="Guest name, stay dates or hotel reference" /></div>
                                     <div className="col-md-4"><label className="form-label" htmlFor="voucher-amount">Actual amount sent</label>
@@ -183,6 +202,7 @@ const SupplierPaymentVoucherModal = ({ costId, paymentId, onClose, onSaved }) =>
                             <ul className="list-unstyled mt-2">{data.history.slice().reverse().map((revision) => <li className="border-bottom py-2" key={revision.revision}>
                                 <strong>Revision {revision.revision}</strong> · {revision.recordedByName} · {formatCalendarDate(revision.issuedAt)}
                                 <div>{revision.supplierName} · {revision.invoiceReference} · {money(revision.transferAmount, revision.transferCurrency)}</div>
+                                {revision.sourceInvoiceId && <div className="text-muted">Selected from an approved supplier invoice</div>}
                                 <div>{revision.supplierEmail} {revision.guestReference && `· ${revision.guestReference}`}</div>
                                 {revision.transferReference && <div>Transaction reference: {revision.transferReference}</div>}
                                 {revision.changeReason && <div>Reason: {revision.changeReason}</div>}

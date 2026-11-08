@@ -69,6 +69,26 @@ const main = async () => {
         assert.equal(approved.status, 200, await approved.clone().text());
         assert.equal((await approved.json()).invoice.reviewHistory.length, 1);
         assert.equal((await (await register("?status=Approved")).json()).total, 1);
+        const paymentDay = new Date(getBusinessDayBounds().start.getTime() + 330 * 60 * 1000).toISOString().slice(0, 10);
+        cost.paymentHistory.push({ kind: "payment", amount: 50, paidAmountAfter: 50, paymentDate: new Date(paymentDay),
+            method: "Bank transfer", reference: "CI-BANK-INVOICE-50", recordedBy: admin._id, recordedByName: admin.name });
+        cost.paidAmount = 50;
+        await cost.save();
+        const voucherPath = `/payments/${cost.paymentHistory[0]._id}/remittance`;
+        const preview = await request(voucherPath);
+        assert.equal(preview.status, 200, await preview.clone().text());
+        const voucherDetails = await preview.json();
+        assert.equal(voucherDetails.approvedInvoices.length, 1);
+        assert.equal(String(voucherDetails.approvedInvoices[0]._id), String(invoice._id));
+        const savedVoucher = await request(voucherPath, { method: "PUT", body: {
+            supplierName: details.supplierName, invoiceReference: details.invoiceReference,
+            sourceInvoiceId: String(invoice._id), sourceInvoiceVersion: voucherDetails.approvedInvoices[0].__v,
+            transferAmount: 50, transferCurrency: "USD", transferReference: "CI-BANK-INVOICE-50",
+            expectedVersion: voucherDetails.version, confirmed: true,
+        } });
+        assert.equal(savedVoucher.status, 201, await savedVoucher.clone().text());
+        assert.equal((await savedVoucher.json()).current.sourceInvoiceId, String(invoice._id));
+        assert.equal((await CostEntry.findById(cost._id)).paidAmount, 50);
         assert.equal((await request("", { method: "DELETE" })).status, 409);
         const list = await request("/invoices");
         assert.equal(list.status, 200);
@@ -81,9 +101,12 @@ const main = async () => {
         } });
         assert.equal(voided.status, 200, await voided.clone().text());
         assert.equal((await request(filePath)).status, 410);
+        const afterVoid = await (await request(voucherPath)).json();
+        assert.equal(afterVoid.approvedInvoices.length, 0);
+        assert.equal(afterVoid.current.sourceInvoiceId, String(invoice._id));
         assert.equal((await (await register("?status=voided")).json()).total, 1);
         assert.equal((await request("/invoices", { method: "POST", body: details })).status, 201);
-        console.log("Supplier invoice private upload, review, register due filters, duplicate guard, history and cost deletion protection verified.");
+        console.log("Supplier invoice upload, approval, voucher source, register filters and history verified without altering the payment total.");
     } finally {
         if (cost) { await SupplierInvoice.deleteMany({ cost: cost._id }); await CostEntry.deleteOne({ _id: cost._id }); }
         if (booking) { await ActivityLog.deleteMany({ relatedRecordId: booking._id }); await Booking.deleteOne({ _id: booking._id }); }

@@ -193,6 +193,8 @@ Supplier invoices belong to a saved **booking** cost. Create metadata with `{ "s
 
 The private invoice register returns paged invoice metadata and cross-booking attention counts. It accepts `status=needs-review|all|Received|Disputed|Approved|voided`, `due=all|due7|overdue|later|unscheduled`, and `page=1–1000` (25 rows per page). Due filters include only invoice dates on booking costs with an unpaid balance; they do not imply individual invoice payment allocations. `status=voided` only permits `due=all`. The JSON projection excludes private files, hashes and review notes.
 
+For an individual recorded supplier payment, `GET /finance/costs/:id/payments/:paymentId/remittance` now includes `approvedInvoices` (up to 20 attached, approved and non-voided invoices on the same cost). On `PUT` to the same path, optionally submit `sourceInvoiceId` and `sourceInvoiceVersion` from a suggestion along with the manually verified payment details. The server checks the invoice state, version, cost ownership and supplier/reference before saving the source link in the private voucher revision. The link is not rendered in the supplier-facing PDF or email. Existing manual voucher entry remains available.
+
 ## Follow-Ups
 
 ```http

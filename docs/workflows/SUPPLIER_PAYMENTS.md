@@ -149,6 +149,15 @@ reference, and the actual amount, currency and transaction reference from the pa
 details before saving. The payment date and method come from the selected recorded payment. Each voucher
 covers that payment only; opening balances and paid-total corrections cannot produce vouchers.
 
+If an invoice on this booking cost has an attached file and was marked **Approved**, choose it under
+**Use approved supplier invoice** to copy its supplier name and invoice reference. The voucher revision
+keeps an internal link to the selected invoice. This is a snapshot of what was approved when the revision
+was saved; an invoice may subsequently be disputed or voided. Editing the copied supplier or reference
+clears the link so the details can be entered manually. Only the invoice's supplier and reference are
+copied: enter the actual transfer amount, currency, transaction reference and supplier email from the bank
+confirmation and correspondence. A partial payment can be less than the invoice amount. Saving still
+requires deliberate confirmation and never records a new transfer or sends mail.
+
 A payment recorded against a USD cost can have an LKR transfer amount. Enter the actual agreed amount sent,
 excluding bank charges; the CRM does not infer an exchange rate or change the cost ledger. If the transfer and
 cost use the same currency, the amounts must match. Bank transfers and card payments require a transaction
@@ -166,7 +175,12 @@ Corrections require a reason and append a numbered revision with staff and time;
 the private revision history. Saving uses the cost document version to reject stale updates. PDF downloads
 require the revision currently displayed. Reload after a conflict. `GET` and `PUT
 /api/finance/costs/:id/payments/:paymentId/remittance` require `cost.view`; saving also requires `cost.manage`
-and `{ expectedVersion, confirmed: true, ...details }`. `POST` to the same path plus `/pdf` requires
+and `{ expectedVersion, confirmed: true, ...details }`. The GET includes at most 20 recent approved,
+non-voided invoice suggestions on the same cost, without files or review notes. A PUT may include
+`sourceInvoiceId` and `sourceInvoiceVersion` from that list; the server checks that the selected invoice
+is still approved, attached, unchanged, and matches the entered supplier/reference. Leave these fields
+empty for a manual voucher. The source ID remains private revision metadata; it is excluded from the
+supplier-facing PDF and email. `POST` to the same path plus `/pdf` requires
 `cost.view`, `pdf.generate` and `{ revision }`. Advice responses use `Cache-Control: no-store`. General
 booking activity records saves/downloads without private supplier details.
 

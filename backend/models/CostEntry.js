@@ -23,7 +23,9 @@ const remittanceRevisionSchema = new mongoose.Schema({
     revision: { type: Number, required: true, min: 1 },
     supplierName: { type: String, required: true, maxlength: 160 },
     supplierEmail: { type: String, default: "", maxlength: 254 },
-    invoiceReference: { type: String, required: true, maxlength: 80 },
+    invoiceReference: { type: String, required: true, maxlength: 100 },
+    // Internal source for this revision. Never included in the supplier-facing PDF or email.
+    sourceInvoice: { type: mongoose.Schema.Types.ObjectId, ref: "SupplierInvoice", default: null },
     guestReference: { type: String, default: "", maxlength: 200 },
     transferAmount: { type: Number, required: true, min: 0.01, max: 1000000000 },
     transferCurrency: { type: String, enum: ["USD", "LKR", "EUR", "GBP"], required: true },
