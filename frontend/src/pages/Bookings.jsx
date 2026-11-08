@@ -1085,6 +1085,11 @@ const Bookings = () => {
                                                     <FaHotel className="me-1" />
                                                     {(booking.hotelStays || []).filter((stay) => stay.status === "Confirmed").length} confirmed / {(booking.hotelStays || []).filter((stay) => stay.status !== "Cancelled").length} active stays
                                                 </button>
+                                                <button type="button" className="btn btn-link btn-sm p-0 text-start d-block mt-1"
+                                                    onClick={() => navigate(`/excursions?booking=${booking._id}`)}
+                                                    aria-label={`Activities and excursions for ${booking.bookingCode}`}>
+                                                    <FaClipboardCheck className="me-1" />Activities &amp; Excursions
+                                                </button>
                                             </div>
                                         </td>
 

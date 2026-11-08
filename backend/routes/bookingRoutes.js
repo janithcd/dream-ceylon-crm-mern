@@ -39,6 +39,7 @@ const { getPostTripCareQueue, getRecoveryAlerts, getPostTripCare, getPostTripMes
 const { getTripSupportQueue, getTripSupportAlerts, getTripSupportAttention,
     getTripIssues, addTripIssue, updateTripIssue, assignTripIssue } = require("../controllers/tripSupportController");
 const { getGuestTransferMessage } = require("../controllers/guestTransferMessageController");
+const { getExcursions, saveExcursion, setExcursionStatus, getExcursionMessage, getExcursionSchedule } = require("../controllers/excursionController");
 const { getPreArrivalMessage, recordPreArrivalContact } = require("../controllers/preArrivalMessageController");
 const { getHotelConfirmationDraft } = require("../controllers/hotelConfirmationDraftController");
 const { getHotelCancellationDraft } = require("../controllers/hotelCancellationDraftController");
@@ -59,6 +60,13 @@ const {
 const { PERMISSIONS } = require("../config/permissions");
 
 const router = express.Router();
+const privateExcursion = (req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); };
+router.get("/excursion-schedule", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), privateExcursion, getExcursionSchedule);
+router.get("/:id/excursions", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), privateExcursion, getExcursions);
+router.post("/:id/excursions", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), privateExcursion, saveExcursion);
+router.put("/:id/excursions/:excursionId", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), privateExcursion, saveExcursion);
+router.patch("/:id/excursions/:excursionId/status", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), privateExcursion, setExcursionStatus);
+router.get("/:id/excursions/:excursionId/message", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.BOOKING_UPDATE), privateExcursion, getExcursionMessage);
 
 router.get(
     "/my-tasks",

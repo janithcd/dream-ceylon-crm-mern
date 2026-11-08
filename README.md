@@ -32,6 +32,7 @@ The application includes permissions for different staff roles, branded PDF docu
 | **Guest finance** | Record receipts and refunds, manage collection targets, match bank entries, issue guest payment statements and review payment confirmation emails. |
 | **Supplier finance** | Estimate costs from supplier rates, review booking costs and private supplier invoices across bookings, track due dates, profit and payments, match transfers and generate vouchers with email drafts. |
 | **Supplier directory** | Search hotels, guides, safari jeep providers and partners; keep contacts, dated rate cards and internal terms, and copy hotel details into booking stays. |
+| **Activities & excursions** | Reserve safaris, guides, trains and experiences; track confirmations, cancellations and follow-ups, view the operations schedule and prepare supplier/guest messages. |
 | **Guest care** | Manage issues during trips, follow up after departure, collect feedback and track service recovery. |
 | **Documents and AI** | Generate branded quotations, invoices, receipts, itineraries and hotel vouchers; draft replies and itineraries with AI. |
 | **Administration** | Manage staff access, company branding, destinations, packages, vehicles, reports and activity history. |

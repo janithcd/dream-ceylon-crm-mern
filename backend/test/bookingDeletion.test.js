@@ -18,6 +18,8 @@ test("booking deletion preserves supplier payment history", async (t) => {
     let hasPayments = true;
     let hasInvoices = false;
     let hasHandoverNotes = false;
+    let hasExcursions = false;
+    let deleteRace = false;
     let deleted = false;
     let cleaned = false;
     t.mock.method(Admin, "findById", () => ({ select: async () => ({
@@ -25,7 +27,13 @@ test("booking deletion preserves supplier payment history", async (t) => {
     }) }));
     t.mock.method(Booking, "findById", async () => ({
         _id: bookingId, bookingCode: "DCJ-TEST", customer: { fullName: "CI Guest" },
-        deleteOne: async () => { deleted = true; },
+        excursions: hasExcursions ? [{ title: "Retained activity" }] : [],
+        deleteOne: async function () {
+            assert.deepEqual(this.$where, { "excursions.0": { $exists: false } });
+            if (deleteRace) return { deletedCount: 0 };
+            deleted = true;
+            return { deletedCount: 1 };
+        },
     }));
     t.mock.method(Booking, "exists", async (query) => {
         assert.deepEqual(query["handoverNotes.0"], { $exists: true });
@@ -60,6 +68,16 @@ test("booking deletion preserves supplier payment history", async (t) => {
     assert.equal(invoiceProtected.status, 409);
     assert.match((await invoiceProtected.json()).message, /supplier invoice history/);
     hasInvoices = false;
+    hasExcursions = true;
+    const activityProtected = await fetch(url, { method: "DELETE", headers });
+    assert.equal(activityProtected.status, 409);
+    assert.match((await activityProtected.json()).message, /activity reservation history/);
+    hasExcursions = false;
+    deleteRace = true;
+    assert.equal((await fetch(url, { method: "DELETE", headers })).status, 409);
+    assert.equal(deleted, false);
+    assert.equal(cleaned, false);
+    deleteRace = false;
     assert.equal((await fetch(url, { method: "DELETE", headers })).status, 200);
     assert.equal(deleted, true);
     assert.equal(cleaned, true);

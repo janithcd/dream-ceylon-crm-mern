@@ -19,10 +19,13 @@ Use this page to find a module and its operating instructions. The detailed guid
 - Hotel stays, cancellation deadlines, supplier contact history and confirmation drafts.
 - Saved rooming plans, hotel vouchers and reviewed rooming emails.
 - Transport assignments, airport transfer schedules, flight details and guest pickup drafts.
+- Activities and excursions with supplier snapshots, confirmation references, cancellation history, daily schedules and reviewed supplier/guest message drafts.
 - Preparation tasks, My Tasks, Team Tasks, departure readiness and pre-arrival contact tracking.
 - Private handover journals, unread team worklists, operations PDFs and cancellation review.
 
 [Booking and operations workflow](docs/workflows/BOOKINGS.md)
+
+[Activities and excursions workflow](docs/workflows/EXCURSIONS.md)
 
 ## Trip support and guest care
 

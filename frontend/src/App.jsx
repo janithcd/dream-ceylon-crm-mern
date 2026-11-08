@@ -27,6 +27,7 @@ const Suppliers = lazy(() => import("./pages/Suppliers"));
 const HotelCancellationDeadlines = lazy(() => import("./pages/HotelCancellationDeadlines"));
 const CancellationReview = lazy(() => import("./pages/CancellationReview"));
 const AirportTransfers = lazy(() => import("./pages/AirportTransfers"));
+const Excursions = lazy(() => import("./pages/Excursions"));
 const DepartureReadiness = lazy(() => import("./pages/DepartureReadiness"));
 const PostTripCare = lazy(() => import("./pages/PostTripCare"));
 const TripSupport = lazy(() => import("./pages/TripSupport"));
@@ -205,6 +206,7 @@ const App = () => {
                                 <PostTripCare />
                             </PermissionRoute>
                         } />
+                        <Route path="excursions" element={<PermissionRoute permission={ROUTE_PERMISSIONS.bookings}><Excursions /></PermissionRoute>} />
                         <Route path="trip-support" element={
                             <PermissionRoute permission={ROUTE_PERMISSIONS.bookings}>
                                 <TripSupport />

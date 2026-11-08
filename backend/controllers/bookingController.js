@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Booking = require("../models/Booking");
 const CostEntry = require("../models/CostEntry");
 const SupplierInvoice = require("../models/SupplierInvoice");
+const { excursionsFitBooking } = require("../utils/excursions");
 const BookingPayment = require("../models/BookingPayment");
 const Inquiry = require("../models/Inquiry");
 const { createActivityLog } = require("../utils/createActivityLog");
@@ -333,7 +334,7 @@ const getBookings = async (req, res) => {
         const [bookings, totalBookings] = await Promise.all([
             populateBooking(
                 Booking.find(query)
-                    .select("-tripIssues -postTripCare.events")
+                    .select("-tripIssues -postTripCare.events -excursions")
                     .sort({ createdAt: -1 })
                     .skip(skip)
                     .limit(limit)
@@ -458,6 +459,10 @@ const updateBooking = async (req, res) => {
             });
         }
 
+        if (!excursionsFitBooking(booking.excursions, payload)) {
+            return res.status(400).json({ message: "Trip dates and traveler count must include all active activities. Update or cancel the activities first." });
+        }
+
         if (!payload.customer.fullName) {
             return res.status(400).json({
                 message: "Customer name is required",
@@ -465,6 +470,8 @@ const updateBooking = async (req, res) => {
         }
 
         Object.assign(booking, payload);
+        // Reject a concurrent activity edit while saving trip dates/headcount.
+        booking.$where = { excursionsRevision: (booking.excursionsRevision ?? 0) === 0 ? { $in: [0, null] } : booking.excursionsRevision };
         await booking.save();
         await markInquiryConverted(booking.inquiry);
 
@@ -509,6 +516,9 @@ const updateBooking = async (req, res) => {
             booking: populatedBooking,
         });
     } catch (error) {
+        if (["DocumentNotFoundError", "VersionError"].includes(error.name)) {
+            return res.status(409).json({ message: "The booking or activities changed. Reload before saving." });
+        }
         return res.status(500).json({
             message: "Failed to update booking",
             error: error.message,
@@ -533,6 +543,9 @@ const deleteBooking = async (req, res) => {
             return res.status(409).json({
                 message: "This booking has a trip issue history. Cancel it instead of deleting the support record.",
             });
+        }
+        if (booking.excursions?.length) {
+            return res.status(409).json({ message: "This booking has activity reservation history. Cancel the booking and follow up with suppliers instead of deleting it." });
         }
 
         if (await Booking.exists({ _id: booking._id, "handoverNotes.0": { $exists: true } })) {
@@ -569,7 +582,11 @@ const deleteBooking = async (req, res) => {
             selectedPackage: booking.selectedPackage,
         };
 
-        await booking.deleteOne();
+        booking.$where = { "excursions.0": { $exists: false } };
+        const deletion = await booking.deleteOne();
+        if (deletion?.deletedCount === 0) {
+            return res.status(409).json({ message: "The booking changed. Reload before deleting it." });
+        }
         try {
             await CostEntry.deleteMany({ recordType: "Booking", recordId: deletedDetails.id });
         } catch (cleanupError) {

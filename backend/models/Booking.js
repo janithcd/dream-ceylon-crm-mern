@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 const { itineraryFitsTrip } = require("../utils/bookingItinerary");
+const ExcursionSchema = require("./ExcursionSchema");
+const { excursionsFitBooking } = require("../utils/excursions");
 
 const customerSchema = new mongoose.Schema(
     {
@@ -409,6 +411,13 @@ const bookingSchema = new mongoose.Schema(
             default: [],
         },
 
+        excursionsRevision: { type: Number, default: 0 },
+        excursions: { type: [ExcursionSchema], default: [], validate: [
+            { validator: (items) => items.length <= 60, message: "A booking can hold at most 60 activity records" },
+            { validator: function (items) { return !(this instanceof mongoose.Document) || excursionsFitBooking(items, this); },
+                message: "Active activities must fit the trip dates and traveler count" },
+        ] },
+
         transportAssignments: {
             type: [transportAssignmentSchema],
             default: [],
@@ -436,6 +445,7 @@ bookingSchema.index({ "customer.email": 1 });
 bookingSchema.index({ bookingStatus: 1, updatedAt: -1 });
 bookingSchema.index({ bookingStatus: 1, travelEndDate: -1 });
 bookingSchema.index({ "tripIssues.status": 1 });
+bookingSchema.index({ "excursions.date": 1, "excursions.status": 1 });
 
 const Booking = mongoose.model("Booking", bookingSchema);
 
