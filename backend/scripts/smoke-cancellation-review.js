@@ -41,6 +41,12 @@ const main = async () => {
         const open = await makeBooking(`${code}-OPEN`, "Cancelled", "Confirmed");
         const settled = await makeBooking(`${code}-SETTLED`, "Cancelled", "Cancelled");
         await makeBooking(`${code}-ACTIVE`, "Confirmed", "Requested");
+        const activityOnly = await makeBooking(`${code}-ACTIVITIES`, "Cancelled", "Cancelled");
+        activityOnly.excursions = ["Planned", "Requested", "Confirmed", "Cancellation requested", "Completed", "Cancelled"].map((status) => ({
+            title: `CI Activity ${status}`, type: "Safari", date: new Date("2027-04-03"), participants: 2, status,
+            followUpDate: new Date("2027-04-01"), internalNotes: "PRIVATE_ACTIVITY_NOTE", supplierEmail: "PRIVATE_CONTACT@example.invalid",
+        }));
+        await activityOnly.save();
         await BookingPayment.create({ paymentNo: `${code}-R`, booking: open._id,
             amount: 200, currency: "USD", status: "Received", paymentType: "Advance" });
         await BookingPayment.create({ paymentNo: `${code}-F`, booking: open._id,
@@ -60,6 +66,15 @@ const main = async () => {
         assert.equal(salesItem?.bookedPaidAmount, undefined);
         assert.equal(salesItem?.supplierCosts, undefined);
         assert.equal(salesData.items.some((item) => item._id === String(settled._id)), false);
+        const activityItem = salesData.items.find((item) => item._id === String(activityOnly._id));
+        assert.equal(activityItem?.activeServiceCount, 4, "Activity-only cancellations remain in the open queue");
+        assert.deepEqual(activityItem.activeHotels, []);
+        assert.deepEqual(activityItem.activeTransport, []);
+        assert.deepEqual(activityItem.activeActivities.map((item) => item.status), ["Planned", "Requested", "Confirmed", "Cancellation requested"]);
+        assert.equal(activityItem.activeActivities[0].followUpDate, "2027-04-01T00:00:00.000Z");
+        assert.equal(JSON.stringify(activityItem).includes("PRIVATE_"), false);
+        assert.equal(activityItem.bookedPaidAmount, undefined);
+        assert.equal(activityItem.supplierCosts, undefined);
         assert.equal((await request(manager, "?filter=open")).status, 200);
         const financeResponse = await request(finance, "?filter=all");
         assert.equal(financeResponse.status, 200, await financeResponse.clone().text());

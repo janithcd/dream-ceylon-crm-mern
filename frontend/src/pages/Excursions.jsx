@@ -19,7 +19,7 @@ export default function Excursions() {
     const [bookings, setBookings] = useState([]);
     const [searchBusy, setSearchBusy] = useState(false);
     const [searchError, setSearchError] = useState("");
-    const selectBooking = (id) => setParams((current) => { const next = new URLSearchParams(current); if (id) next.set("booking", id); else next.delete("booking"); return next; });
+    const selectBooking = (id) => setParams((current) => { const next = new URLSearchParams(current); next.delete("activity"); if (id) next.set("booking", id); else next.delete("booking"); return next; });
     useEffect(() => {
         let active = true;
         api.get("/bookings/excursion-schedule", { params: { ...query, page } }).then(({ data }) => {
@@ -44,7 +44,7 @@ export default function Excursions() {
             {searchError && <p role="status" className="mt-2 mb-0">{searchError}</p>}
             {!!bookings.length && <><label htmlFor="excursion-booking" className="form-label mt-2">Select booking (up to 100 matches)</label><select id="excursion-booking" className="form-select" value={bookings.some((b) => b._id === selectedId) ? selectedId : ""} onChange={(e) => selectBooking(e.target.value)}><option value="">Choose booking…</option>{bookings.map((b) => <option value={b._id} key={b._id}>{b.bookingCode} · {b.customer?.fullName} · {b.bookingStatus}</option>)}</select></>}
         </div></div>
-        {selectedId && <div className="mb-4"><div className="d-flex gap-2 mb-2"><Link className="btn btn-sm btn-outline-secondary" to={`/bookings?keyword=${encodeURIComponent(bookings.find((b) => b._id === selectedId)?.bookingCode || "")}`}>Bookings</Link><button className="btn btn-sm btn-outline-secondary" onClick={() => selectBooking("")}>Close booking activities</button></div><BookingExcursions key={selectedId} bookingId={selectedId} onChanged={refreshSchedule} /></div>}
+        {selectedId && <div className="mb-4"><div className="d-flex gap-2 mb-2"><Link className="btn btn-sm btn-outline-secondary" to={`/bookings?keyword=${encodeURIComponent(bookings.find((b) => b._id === selectedId)?.bookingCode || "")}`}>Bookings</Link><button className="btn btn-sm btn-outline-secondary" onClick={() => selectBooking("")}>Close booking activities</button></div><BookingExcursions key={selectedId} bookingId={selectedId} onChanged={refreshSchedule} focusItemId={params.get("activity") || ""} /></div>}
         <section className="card border-0 shadow-sm"><div className="card-body"><h5>Operations schedule</h5><p className="small text-muted">Filter by activity date, up to 31 days at a time. Follow-up flags apply to activities in this date range. All dates and times are in Sri Lanka.</p>
             <form className="row g-3 mb-3" onSubmit={(e) => { e.preventDefault(); setLoading(true); setError(""); setPage(1); setQuery({ ...filters }); }}>
                 {[["from", "From"], ["to", "To"]].map(([name, label]) => <div className="col-md-2" key={name}><label className="form-label" htmlFor={`schedule-${name}`}>{label}</label><input className="form-control" id={`schedule-${name}`} type="date" required value={filters[name]} onChange={(e) => setFilters({ ...filters, [name]: e.target.value })} /></div>)}

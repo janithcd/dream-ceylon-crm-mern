@@ -14,7 +14,7 @@ const emptyForm = (booking) => ({ title: "", type: "Safari", date: toCalendarDat
     followUpDate: "", guestInstructions: "", internalNotes: "" });
 const errorMessage = (err) => err.response?.data?.message || "Could not complete the action. Please try again.";
 
-export default function BookingExcursions({ bookingId, onChanged }) {
+export default function BookingExcursions({ bookingId, onChanged, focusItemId = "" }) {
     const { hasPermission } = usePermissions();
     const canEdit = hasPermission("booking.update");
     const [data, setData] = useState(null);
@@ -33,6 +33,13 @@ export default function BookingExcursions({ bookingId, onChanged }) {
     const [supplierBusy, setSupplierBusy] = useState(false);
     const [supplierError, setSupplierError] = useState("");
     const panelRef = useRef(null);
+    const focusedActivityRef = useRef(null);
+    useEffect(() => {
+        if (!loading && focusItemId) {
+            focusedActivityRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+            focusedActivityRef.current?.focus({ preventScroll: true });
+        }
+    }, [focusItemId, loading]);
     const panel = form ? "form" : action ? "action" : draft ? "draft" : "";
     const actionId = action?.id;
     useEffect(() => { panelRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }); }, [panel, editingId, actionId]);
@@ -94,8 +101,11 @@ export default function BookingExcursions({ bookingId, onChanged }) {
         {notice && <div role="status" className="alert alert-success">{notice}</div>}
         {closed && <p className="alert alert-warning">This booking is closed. Review outstanding supplier cancellations; closing a booking does not cancel reservations. On completed bookings you can also mark confirmed activities as completed.</p>}
         {!data.items.length && <p className="text-muted">No activities yet. Add a safari, guide, train reservation, or another excursion for this trip.</p>}
+        {focusItemId && !data.items.some((item) => item._id === focusItemId) && <p className="alert alert-warning" role="status">The linked activity was not found on this booking. Review the current records below.</p>}
         <div className="d-grid gap-3">
-            {data.items.map((item) => <article className="border rounded p-3" key={item._id}>
+            {data.items.map((item) => <article className={`border rounded p-3 ${item._id === focusItemId ? "border-primary border-2" : ""}`} key={item._id}
+                ref={item._id === focusItemId ? focusedActivityRef : null} tabIndex={item._id === focusItemId ? -1 : undefined}
+                aria-label={`Activity: ${item.title}`}>
                 <div className="d-flex flex-wrap justify-content-between gap-2"><div><strong>{item.title}</strong> <span className={`badge ${item.status === "Confirmed" ? "text-bg-success" : item.status === "Cancellation requested" ? "text-bg-danger" : "text-bg-secondary"}`}>{item.status}</span>
                     <div>{formatCalendarDate(item.date)} · {item.startTime || "Time needed"} (Sri Lanka) · {item.participants} participants · {item.type}</div>
                     <div className="small">{item.supplierName || "Supplier needed"}{item.supplierPhone && ` · ${item.supplierPhone}`}{item.supplierEmail && ` · ${item.supplierEmail}`}</div>

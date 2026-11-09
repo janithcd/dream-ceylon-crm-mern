@@ -87,7 +87,7 @@ const CancellationReview = () => {
     return <div>
         <div className="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-4">
             <div><h3 className="fw-bold mb-1"><FaBan className="me-2 text-primary" />Cancellation review</h3>
-                <p className="text-muted mb-0">Follow up on cancelled trips with hotel or transport arrangements still open.</p></div>
+                <p className="text-muted mb-0">Follow up on cancelled trips with hotel, transport or activity arrangements still open.</p></div>
             <button type="button" className="btn btn-outline-primary" disabled={loading} onClick={refresh}><FaSyncAlt className="me-2" />Refresh</button>
         </div>
         {error && <div className="alert alert-danger" role="alert">{error}</div>}
@@ -102,7 +102,7 @@ const CancellationReview = () => {
                         className={`btn btn-sm ${filter === value ? "btn-primary" : "btn-outline-primary"}`}
                         onClick={() => { setFilter(value); setPage(1); setSelected(null); }}>{label}</button>)}
             </div>
-            <p className="small text-muted">Requested and confirmed services on cancelled trips stay here until their individual status is changed. Contact the supplier and check the agreed terms before recording a cancellation. This screen does not calculate fees or issue refunds.</p>
+            <p className="small text-muted">Open hotel, transport and activity arrangements stay here until resolved individually. Activities include planned reservations and cancellations awaiting acknowledgement. Contact suppliers for requested or confirmed services; close unsent plans with a reason. Fees and refunds are reviewed separately.</p>
             {loading && <p className="text-muted" role="status">Loading cancelled trips...</p>}
             {!loading && !error && data.items.length === 0 && <p className="text-muted mb-0">No cancelled trips in this view.</p>}
             {!loading && !error && data.items.map((item) => <div key={item._id} className="border rounded-3 p-3 mb-3">
@@ -136,6 +136,15 @@ const CancellationReview = () => {
                             <strong>Transport · {leg.name}</strong> <span className="text-muted">({leg.status})</span>
                             <div>Start: {formatCalendarDate(leg.date)}</div>
                             <button type="button" className="btn btn-sm btn-outline-primary mt-2" onClick={() => openPanel(item, "transport", leg._id)}>Review transport</button>
+                        </div>
+                    </div>)}
+                    {(item.activeActivities || []).map((activity) => <div className="col-md-6" key={activity._id}>
+                        <div className="border rounded p-2 h-100 small">
+                            <strong>Activity · {activity.name}</strong> <span className={activity.status === "Cancellation requested" ? "text-danger" : "text-muted"}>({activity.status})</span>
+                            <div>Activity date: {formatCalendarDate(activity.date)}</div>
+                            {activity.followUpDate && <div>Follow up: {formatCalendarDate(activity.followUpDate)}</div>}
+                            <div className="text-muted mt-1">{activity.status === "Planned" ? "No supplier request is recorded. Close this plan with a reason if it is no longer needed." : activity.status === "Cancellation requested" ? "Awaiting the supplier’s cancellation acknowledgement." : "Prepare a cancellation draft, contact the supplier, then record their acknowledgement."}</div>
+                            <Link className="btn btn-sm btn-outline-primary mt-2" to={`/excursions?booking=${item._id}&activity=${activity._id}`}>Review activity</Link>
                         </div>
                     </div>)}
                 </div>}

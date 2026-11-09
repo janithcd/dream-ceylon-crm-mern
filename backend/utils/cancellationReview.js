@@ -5,11 +5,11 @@ const PAGE_SIZE = 20;
 // available to booking staff without reading cost or payment collections.
 const buildCancellationReviewPipeline = ({ filter = "open", page = 1, includeFinance = false } = {}) => {
     const selected = filter === "open" ? { activeServiceCount: { $gt: 0 } } : {};
-    const active = (field, nameField, dateField) => ({
+    const active = (field, nameField, dateField, statuses = ["Requested", "Confirmed"]) => ({
         $map: {
             input: { $filter: {
                 input: { $ifNull: [`$${field}`, []] }, as: "item",
-                cond: { $in: ["$$item.status", ["Requested", "Confirmed"]] },
+                cond: { $in: ["$$item.status", statuses] },
             } },
             as: "item", in: {
                 _id: "$$item._id", name: `$$item.${nameField}`,
@@ -18,6 +18,7 @@ const buildCancellationReviewPipeline = ({ filter = "open", page = 1, includeFin
                     cancellationDeadline: "$$item.cancellationDeadline",
                     cancellationTerms: "$$item.cancellationTerms",
                 } : {}),
+                ...(field === "excursions" ? { followUpDate: "$$item.followUpDate" } : {}),
             },
         },
     });
@@ -60,10 +61,11 @@ const buildCancellationReviewPipeline = ({ filter = "open", page = 1, includeFin
             updatedAt: 1, cancellationReason: 1, cancelledAt: 1, cancelledByName: 1,
             activeHotels: active("hotelStays", "hotelName", "checkInDate"),
             activeTransport: active("transportAssignments", "route", "startDate"),
+            activeActivities: active("excursions", "title", "date", ["Planned", "Requested", "Confirmed", "Cancellation requested"]),
             ...(includeFinance ? { currency: 1, bookedPaidAmount: "$advancePayment" } : {}),
         } },
         { $addFields: { activeServiceCount: { $add: [
-            { $size: "$activeHotels" }, { $size: "$activeTransport" },
+            { $size: "$activeHotels" }, { $size: "$activeTransport" }, { $size: "$activeActivities" },
         ] } } },
         { $facet: {
             summary: [{ $group: { _id: null, total: { $sum: 1 },

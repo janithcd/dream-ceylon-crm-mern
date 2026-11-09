@@ -230,9 +230,11 @@ check the exact cutoff time, charges, and written terms with the hotel. `GET
 /api/bookings/hotel-cancellation-deadlines` requires `booking.view`, accepts `filter=due7|overdue|later|all`
 and `page`, and returns 25 stays per page without guest contact or supplier cost details.
 
-**Cancellation Review** lists cancelled bookings with requested or confirmed hotel stays or transport legs
-that still need supplier follow-up. Review each arrangement and record its individual cancellation after
-contacting the supplier. The All cancelled trips view retains trips after arrangements are closed. Finance and
+**Cancellation Review** lists cancelled bookings with requested or confirmed hotel stays or transport legs,
+and activities that are Planned, Requested, Confirmed, or Cancellation requested. Activity-only trips stay
+in the open queue until resolved. **Review activity** opens and highlights the specific reservation.
+Review each arrangement and record its individual cancellation after contacting the supplier; unsent
+activity plans can be closed with a reason. The All cancelled trips view retains trips after arrangements are closed. Finance and
 Super Admin also see booked paid totals, recorded receipts and refunds, and recorded supplier costs by
 currency; these figures are review context, not an automatic cancellation charge or refund entitlement. The
 queue omits financial fields for staff without both `payment.view` and `cost.view`. `GET
@@ -243,7 +245,7 @@ When a booking enters **Cancelled**, enter a 10–300 character reason. The CRM 
 time, shows the details in Cancellation Review, and adds the reason to booking history. A cancelled booking
 can still be edited without replacing its saved reason; older cancellations with no reason are labelled as
 such. Reopening clears the current cancellation fields, while the earlier reason remains in activity history.
-These status changes do not cancel hotel/transport arrangements or decide financial settlements.
+These status changes do not cancel hotel, transport, or activity arrangements or decide financial settlements.
 
 From **Cancellation Review** or **Bookings → Hotels**, staff with booking edit access can prepare an editable
 hotel cancellation email for an open stay on a cancelled trip. It uses the saved dates, room count, lead guest

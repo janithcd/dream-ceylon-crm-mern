@@ -14,6 +14,13 @@ test("cancellation queue filters individual open services and loads finance only
     assert.equal(operations[1].$project.currency, undefined);
     const stays = operations[1].$project.activeHotels.$map.input.$filter;
     assert.deepEqual(stays.cond.$in[1], ["Requested", "Confirmed"]);
+    const activities = operations[1].$project.activeActivities.$map;
+    assert.deepEqual(activities.input.$filter.input, { $ifNull: ["$excursions", []] });
+    assert.deepEqual(activities.input.$filter.cond.$in[1], ["Planned", "Requested", "Confirmed", "Cancellation requested"]);
+    assert.deepEqual(Object.keys(activities.in).sort(), ["_id", "date", "followUpDate", "name", "status"]);
+    assert.deepEqual(operations[2].$addFields.activeServiceCount.$add, [
+        { $size: "$activeHotels" }, { $size: "$activeTransport" }, { $size: "$activeActivities" },
+    ]);
     assert.deepEqual(operations.at(-1).$facet.items[0].$match, { activeServiceCount: { $gt: 0 } });
     assert.equal(operations.at(-1).$facet.items[2].$skip, 20);
     assert.equal(operations.at(-1).$facet.items.length, 4);

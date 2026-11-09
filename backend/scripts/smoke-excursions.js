@@ -93,11 +93,18 @@ const main = async () => {
         await changeFuture("Requested"); await changeFuture("Confirmed", { confirmationReference: "CI-FUTURE" });
         assert.equal((await request(`${base}/${futureId}/status`, "PATCH", { status: "Completed", expectedVersion: result.version, confirmed: true })).status, 400);
         await Booking.updateOne({ _id: booking._id }, { $set: { bookingStatus: "Cancelled" } });
+        const cancellationQueue = async () => json(await request(`${root}/cancellation-review?filter=open`));
+        const openCancellation = (await cancellationQueue()).items.find((item) => item._id === String(booking._id));
+        assert.equal(openCancellation?.activeServiceCount, 1);
+        assert.equal(openCancellation.activeActivities[0]._id, futureId);
+        assert.equal(JSON.stringify(openCancellation).includes("Private margin note"), false);
         schedule = await json(await request(`${schedulePath}&attention=cancellation`));
         assert.equal(schedule.total, 1); assert.equal(schedule.items[0]._id, futureId);
         await json(await request(`${base}/${futureId}/message?audience=cancellation`));
         await changeFuture("Cancellation requested", { note: "Guest cancelled the trip" });
+        assert.equal((await cancellationQueue()).items.find((item) => item._id === String(booking._id)).activeActivities[0].status, "Cancellation requested");
         await changeFuture("Cancelled", { note: "Supplier acknowledged, no fee" });
+        assert.equal((await cancellationQueue()).items.some((item) => item._id === String(booking._id)), false);
         assert.equal((await json(await request(`${schedulePath}&attention=cancellation`))).total, 0);
         assert.equal((await request(base, "POST", { ...payload, expectedVersion: result.version })).status, 409);
         const audit = await ActivityLog.find({ relatedRecordId: booking._id }).lean();

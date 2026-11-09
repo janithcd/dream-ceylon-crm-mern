@@ -31,6 +31,8 @@ Prepare **Cancellation draft** while the reservation is Requested or Confirmed. 
 
 Closing or cancelling the booking does not contact suppliers or cancel activities. Closed bookings allow cancellation follow-up; completed bookings also allow recording completion of already confirmed activities. Booking deletion is blocked when any activity history exists. Cancelled activities may be edited while the booking is open, then reopened after checking dates and participants.
 
+**Cancellation Review** includes cancelled trips with Planned, Requested, Confirmed or Cancellation requested activities, even when all hotel/transport reservations are closed. **Review activity** opens and highlights that exact record. Close an unsent Planned activity with a reason; for requested/confirmed reservations, prepare the cancellation draft, contact the supplier, record Cancellation requested and then their acknowledgement. Completed and Cancelled activities are excluded from the open count. This queue has no activity date cutoff, so older or future trips remain visible until resolved.
+
 ## Operations schedule
 
 The schedule defaults to the next seven activity dates. Choose a range of up to 31 days, activity status and an attention filter:
