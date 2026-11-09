@@ -43,6 +43,9 @@ Filters apply within the selected **activity date range**, including the follow-
 
 ## Controls and scope
 
+- Departure Readiness counts pending confirmations, incomplete confirmed details, outstanding cancellation requests and due follow-ups. Use **Review activities** to resolve the booking's outstanding arrangements. Completed/cancelled records are excluded from readiness warnings.
+- The booking's detailed readiness review also checks activity dates, participant count, time, operator, meeting point and confirmation reference. The internal operations brief includes non-cancelled activities with clear status labels, operator phone numbers and guest instructions; private activity notes and supplier emails remain excluded.
+
 - Read access: `booking.view`. Changes and message drafts: `booking.view` plus `booking.update`. Directory lookup additionally needs `supplier.view`.
 - Up to 60 activity records per booking. The latest 50 events per activity show actor, date, state and reason. Activity records cannot be deleted through this workflow.
 - Every write checks `expectedVersion` plus current trip dates, headcount and booking state. Conflicts require a reload. General booking edits cannot shrink dates/headcount past an active activity, and conflicting changes fail safely.

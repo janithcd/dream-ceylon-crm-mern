@@ -31,7 +31,7 @@ const getDepartureReadiness = async (req, res) => {
         const query = getDepartureReadinessQuery(new Date(), message);
         const [bookings, total] = await Promise.all([
             Booking.find(query)
-                .select("bookingCode customer.fullName travelStartDate bookingStatus preArrivalContact.sentAt preArrivalContact.sentByName preArrivalContact.channel numberOfTravelers travelerNames travelerRosterVersion hotelStays.status hotelStays.rooms hotelStays.roomingPlan transportAssignments.status preparationTasks.completedAt")
+                .select("bookingCode customer.fullName travelStartDate travelEndDate bookingStatus preArrivalContact.sentAt preArrivalContact.sentByName preArrivalContact.channel numberOfTravelers travelerNames travelerRosterVersion hotelStays.status hotelStays.rooms hotelStays.roomingPlan transportAssignments.status preparationTasks.completedAt excursions.status excursions.title excursions.supplierName excursions.meetingPoint excursions.confirmationReference excursions.startTime excursions.participants excursions.date excursions.followUpDate")
                 .sort({ travelStartDate: 1, createdAt: 1, _id: 1 })
                 .skip((page - 1) * PAGE_SIZE)
                 .limit(PAGE_SIZE)
@@ -39,7 +39,7 @@ const getDepartureReadiness = async (req, res) => {
             Booking.countDocuments(query),
         ]);
         return res.json({
-            items: bookings.map(summarizeDepartureReadiness),
+            items: bookings.map((booking) => summarizeDepartureReadiness(booking)),
             total, page, message, totalPages: Math.ceil(total / PAGE_SIZE) || 1,
         });
     } catch (error) {

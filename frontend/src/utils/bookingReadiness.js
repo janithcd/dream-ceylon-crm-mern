@@ -154,6 +154,33 @@ export const getBookingReadiness = (booking, now = new Date()) => {
         : `${count(assignments.length, "active transport leg")}. Checks saved details; vehicle availability is reviewed in Transport.`,
     transportIssues, Boolean(assignments.length && trip)));
 
+    const activities = (booking.excursions || []).filter((item) => !["Cancelled", "Completed"].includes(item.status));
+    const activityIssues = [];
+    const pendingActivities = activities.filter((item) => ["Planned", "Requested"].includes(item.status)).length;
+    const cancellations = activities.filter((item) => item.status === "Cancellation requested").length;
+    if (pendingActivities) activityIssues.push(`${count(pendingActivities, "activity", "activities")} awaiting supplier confirmation.`);
+    if (cancellations) activityIssues.push(`${count(cancellations, "activity cancellation")} awaiting supplier acknowledgement.`);
+    activities.forEach((item, index) => {
+        const label = `Activity ${index + 1}`;
+        if (item.status === "Confirmed") {
+            const missing = [];
+            for (const [field, title] of [["title", "activity name"], ["supplierName", "operator"], ["meetingPoint", "meeting point"], ["confirmationReference", "confirmation reference"]]) {
+                if (!hasText(item[field])) missing.push(title);
+            }
+            if (!validTime(item.startTime)) missing.push("valid start time");
+            if (missing.length) activityIssues.push(`${label}: add ${missing.join(", ")}.`);
+            const date = dayNumber(item.date);
+            if (date === null || !trip || date < trip.from || date > trip.to) activityIssues.push(`${label}: save a valid date within the trip.`);
+            if (!Number.isInteger(item.participants) || item.participants < 1 || item.participants > headcount) activityIssues.push(`${label}: correct the participant count against the booking.`);
+        } else {
+            const followUp = toCalendarDateInput(item.followUpDate);
+            if (followUp && followUp <= todayCalendarDate(now)) activityIssues.push(`${label}: supplier follow-up is due in Sri Lanka time.`);
+        }
+    });
+    sections.push(section("activities", "Activities & excursions", activities.length
+        ? `${count(activities.length, "active activity", "active activities")}. Confirmed activities need valid dates, participants, a time, meeting point, operator and reference.`
+        : "No active activities are recorded. Check whether excursions are included or guest-arranged.", activityIssues, Boolean(activities.length)));
+
     const tasks = booking.preparationTasks || [];
     const openTasks = tasks.filter((task) => !task.completedAt);
     const today = todayCalendarDate(now);

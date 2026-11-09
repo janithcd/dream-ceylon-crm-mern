@@ -1325,6 +1325,7 @@ const Bookings = () => {
                         if (section === "itinerary") setSelectedItineraryBooking(booking);
                         if (section === "hotels") setSelectedHotelBooking(booking);
                         if (section === "transport") setSelectedTransportBooking(booking);
+                        if (section === "activities") navigate(`/excursions?booking=${booking._id}`);
                         if (section === "tasks") setSelectedPreparationBooking(booking);
                     }}
                 />

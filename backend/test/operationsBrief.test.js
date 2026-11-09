@@ -205,3 +205,33 @@ test("departure PDF requires booking and PDF permissions and rejects cancelled t
     assert.equal((await request(endpoint, salesId)).status, 409);
     assert.equal(logs.length, 1);
 });
+
+test("operations brief includes activity status, meeting details and contact but excludes private history", async () => {
+    const booking = exampleBooking();
+    booking.excursions = [
+        { title: "Later safari", type: "Safari", date: new Date("2027-03-04"), startTime: "05:30", participants: 2, status: "Confirmed",
+            supplierName: "Test Jeep Provider", supplierPhone: "+94772223333", supplierEmail: "PRIVATE-EMAIL@example.test", meetingPoint: "Hotel lobby",
+            confirmationReference: "SAF-TEST-123", guestInstructions: "Bring drinking water", internalNotes: "PRIVATE ACTIVITY NOTE" },
+        { title: "Earlier activity", type: "Guide", date: new Date("2027-03-02"), participants: 2, status: "Cancellation requested", followUpDate: new Date("2027-03-01") },
+        { title: "Cancelled excursion", type: "Other", date: new Date("2027-03-03"), participants: 2, status: "Cancelled" },
+    ];
+    const brief = buildOperationsBrief(booking);
+    const group = brief.sections.find((section) => section.title === "Activities & excursions");
+    assert.equal(group.items.length, 2);
+    assert.match(group.items[0].title, /Earlier activity/);
+    assert.match(group.notice, /not confirmed/);
+    const projection = JSON.stringify(group);
+    for (const required of ["Cancellation requested", "Follow up:", "SAF-TEST-123", "05:30", "Hotel lobby", "+94772223333", "Bring drinking water"]) assert.ok(projection.includes(required), required);
+    assert.doesNotMatch(projection, /PRIVATE|Cancelled excursion/);
+    const bytes = await createOperationsBriefPdf(brief, { companyName: "Dream Ceylon Journeys" });
+    const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const task = getDocument({ data: new Uint8Array(bytes), disableFontFace: true, useSystemFonts: false });
+    try {
+        const pdf = await task.promise, pages = [];
+        for (let page = 1; page <= pdf.numPages; page++) pages.push((await (await pdf.getPage(page)).getTextContent()).items.map(({ str }) => str).join(" "));
+        const printed = pages.join(" ");
+        assert.match(printed, /Activities & excursions/); assert.match(printed, /SAF-TEST-123/);
+        assert.match(printed, /Cancellation requested/); assert.match(printed, /Bring drinking water/);
+        assert.doesNotMatch(printed, /PRIVATE|Cancelled excursion/);
+    } finally { await task.destroy(); }
+});

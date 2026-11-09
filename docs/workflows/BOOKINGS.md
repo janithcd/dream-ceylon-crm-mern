@@ -185,6 +185,15 @@ guest contact details, notes or financial fields. A missing hotel/transport serv
 outside the agreed scope; the labels are prompts to review, not a final trip approval. `GET
 /api/bookings/departure-readiness?page=1` requires `booking.view` and disables caching.
 
+Activities also affect departure readiness. Planned/requested activities, outstanding cancellation requests,
+due supplier follow-ups, and confirmed activities with invalid dates/headcounts or missing time, meeting point,
+operator or confirmation reference require attention. Completed/cancelled activities do not create departure
+warnings. The queue exposes counts only and links directly to the booking's activities. The detailed readiness
+review includes an Activities & Excursions section; no recorded activities means the scope needs checking,
+not that a required reservation is missing. The internal operations brief includes non-cancelled activities,
+their statuses, operator phone, meeting details, reference, guest instructions and pending follow-up dates.
+It excludes private activity notes, supplier emails, history and financial details.
+
 **Pre-arrival message** on a confirmed upcoming booking in Departure Readiness prepares an editable, trip-wide
 guest note with saved dates and, only when unambiguous, a confirmed first-night hotel and arrival transfer.
 Missing, requested, or conflicting arrangements appear as staff review prompts instead of guest claims. Staff

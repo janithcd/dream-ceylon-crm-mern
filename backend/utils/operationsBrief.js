@@ -18,6 +18,7 @@ const buildOperationsBrief = (booking) => {
         .filter((task) => !task.completedAt)
         .sort(byDate("dueDate"));
     const travelerNames = (booking.travelerNames || []).filter((name) => typeof name === "string" && name.trim());
+    const activities = (booking.excursions || []).filter((item) => item.status !== "Cancelled").sort(byDate("date"));
 
     return {
         bookingCode: display(booking.bookingCode),
@@ -78,6 +79,21 @@ const buildOperationsBrief = (booking) => {
                     ],
                 })),
             },
+            ...(activities.length ? [{
+                title: "Activities & excursions",
+                notice: "Check each reservation status. Planned/requested activities are not confirmed; cancellation requests still need supplier acknowledgement. All activity times are Sri Lanka local time.",
+                items: activities.map((item) => ({
+                    title: `${formatDocumentDate(item.date)} - ${display(item.title)}`,
+                    lines: [
+                        `Status: ${display(item.status)} | Type: ${display(item.type)} | Participants: ${display(item.participants)}`,
+                        `Time: ${display(item.startTime)} | Meeting point: ${display(item.meetingPoint)}`,
+                        `Operator: ${display(item.supplierName)} | Phone: ${display(item.supplierPhone)}`,
+                        `Confirmation: ${display(item.confirmationReference)}`,
+                        ...(!["Confirmed", "Completed"].includes(item.status) && item.followUpDate ? [`Follow up: ${formatDocumentDate(item.followUpDate)}`] : []),
+                        ...(item.guestInstructions ? [`Guest instructions: ${item.guestInstructions}`] : []),
+                    ],
+                })),
+            }] : []),
             {
                 title: "Open preparation tasks",
                 empty: "No open preparation tasks.",

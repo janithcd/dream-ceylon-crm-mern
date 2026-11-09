@@ -20,6 +20,8 @@ const completeBooking = () => ({
         flight: { number: "UL505", direction: "Departure", date: "2027-03-04", time: "02:00", airport: "BIA" },
     }],
     preparationTasks: [{ title: "Confirm hotels", completedAt: "2027-03-01" }],
+    excursions: [{ title: "Safari", status: "Confirmed", date: "2027-03-03", startTime: "05:30", participants: 2,
+        supplierName: "Jeep operator", meetingPoint: "Hotel lobby", confirmationReference: "SAF-123" }],
 });
 const findSection = (result, id) => result.sections.find((item) => item.id === id);
 
@@ -29,7 +31,7 @@ test("a fully recorded trip passes with an overnight airport pickup and no input
     const review = getBookingReadiness(booking, now);
     assert.equal(review.attentionCount, 0);
     assert.equal(review.unassessedCount, 0);
-    assert.equal(review.sections.length, 6);
+    assert.equal(review.sections.length, 7);
     assert.ok(review.sections.every((item) => item.status === "clear"));
     assert.deepEqual(booking, before);
     // No second-day pickup requirement is inferred from the scheduled flight.
@@ -154,6 +156,7 @@ test("same-day trips, invalid ranges and bookings with old incomplete records st
     dayTrip.transportAssignments[0].startDate = dayTrip.travelStartDate;
     dayTrip.transportAssignments[0].endDate = dayTrip.travelStartDate;
     dayTrip.transportAssignments[0].flight = null;
+    dayTrip.excursions[0].date = dayTrip.travelStartDate;
     const dayReview = getBookingReadiness(dayTrip, now);
     assert.equal(dayReview.attentionCount, 0);
     assert.equal(findSection(dayReview, "itinerary").status, "clear");
@@ -170,7 +173,7 @@ test("same-day trips, invalid ranges and bookings with old incomplete records st
 
     const legacy = getBookingReadiness({ bookingStatus: "Pending", customer: { whatsappNumber: "0771234567" } }, now);
     assert.equal(legacy.attentionCount, 1);
-    assert.equal(legacy.unassessedCount, 5);
+    assert.equal(legacy.unassessedCount, 6);
     assert.match(findSection(legacy, "booking").issues.join("\n"), /full international number/);
 });
 
@@ -195,4 +198,24 @@ test("review summaries exclude financial data, private notes, task text and gues
     for (const value of ["PRIVATE_", "1234567", booking.customer.fullName, booking.customer.email, booking.customer.whatsappNumber]) {
         assert.ok(!output.includes(value), `Review must exclude ${value}`);
     }
+});
+
+test("activity readiness flags pending reservations, cancellations, missing details and due follow-ups", () => {
+    const booking = completeBooking();
+    const good = structuredClone(booking.excursions[0]);
+    booking.excursions.push({ status: "Requested", followUpDate: "2027-03-02", internalNotes: "PRIVATE_ACTIVITY_NOTE" },
+        { status: "Cancellation requested" }, { status: "Cancelled" }, { status: "Completed" });
+    const review = findSection(getBookingReadiness(booking, now), "activities");
+    assert.equal(review.status, "attention");
+    assert.match(review.summary, /3 active activities/);
+    assert.match(review.issues.join(" "), /1 activity awaiting supplier confirmation/);
+    assert.match(review.issues.join(" "), /1 activity cancellation awaiting supplier acknowledgement/);
+    assert.match(review.issues.join(" "), /follow-up is due/);
+    assert.ok(!JSON.stringify(review).includes("PRIVATE"));
+    booking.excursions = [{ ...good, startTime: "25:30", meetingPoint: "", confirmationReference: "", date: "2027-03-05", participants: 3 }];
+    const issues = findSection(getBookingReadiness(booking, now), "activities").issues.join(" ");
+    for (const term of ["valid start time", "meeting point", "confirmation reference", "valid date within the trip", "participant count"]) assert.ok(issues.includes(term), term);
+    booking.excursions = [{ status: "Cancelled" }, { status: "Completed" }];
+    const empty = findSection(getBookingReadiness(booking, now), "activities");
+    assert.equal(empty.status, "unassessed"); assert.deepEqual(empty.issues, []);
 });

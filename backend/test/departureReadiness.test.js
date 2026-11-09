@@ -92,6 +92,9 @@ test("queue API enforces booking permission, paginates and returns a safe summar
             assert.match(projection, /travelerRosterVersion/);
             assert.match(projection, /hotelStays\.roomingPlan/);
             assert.match(projection, /preArrivalContact\.sentAt/);
+            assert.match(projection, /excursions\.confirmationReference/);
+            assert.match(projection, /travelEndDate/);
+            assert.doesNotMatch(projection, /excursions\.internalNotes|excursions\.history/);
             return { sort: () => ({ skip: (offset) => ({ limit: () => ({ lean: async () => {
                 assert.equal(offset, 20);
                 return [example()];
@@ -174,4 +177,28 @@ test("pre-arrival reminder endpoint is permissioned and exposes only due booking
     assert.equal(body.items[0].bookingCode, "DCJ-READY-TEST");
     assert.equal(body.items[0].bookingId, "507f1f77bcf86cd799439201");
     assert.equal(JSON.stringify(body).includes("PRIVATE"), false);
+});
+
+test("activities prevent a clear departure summary until confirmation, details and cancellations are resolved", () => {
+    const booking = example();
+    booking.hotelStays = [booking.hotelStays[0]];
+    booking.transportAssignments = [{ status: "Confirmed" }];
+    booking.preparationTasks = [];
+    booking.travelEndDate = new Date("2027-04-05");
+    const now = new Date("2027-03-31T18:30:00Z"); // April 1 in Colombo
+    const complete = { status: "Confirmed", title: "PRIVATE_TITLE", date: new Date("2027-04-02"), startTime: "05:30", participants: 2,
+        supplierName: "PRIVATE_SUPPLIER", meetingPoint: "PRIVATE_MEETING", confirmationReference: "PRIVATE_REFERENCE", internalNotes: "PRIVATE_NOTES" };
+    booking.excursions = [complete];
+    assert.equal(summarizeDepartureReadiness(booking, now).status, "recorded-clear");
+    booking.excursions.push({ status: "Requested", followUpDate: new Date("2027-04-01") }, { status: "Cancellation requested" }, { status: "Cancelled" }, { status: "Completed" });
+    const summary = summarizeDepartureReadiness(booking, now);
+    assert.equal(summary.status, "attention"); assert.equal(summary.activeActivityCount, 3);
+    assert.equal(summary.pendingActivityCount, 1); assert.equal(summary.activityCancellationCount, 1); assert.equal(summary.activityFollowUpDueCount, 1);
+    assert.equal(JSON.stringify(summary).includes("PRIVATE"), false);
+    for (const change of [{ startTime: "24:00" }, { meetingPoint: "" }, { confirmationReference: "" }, { date: new Date("2027-04-06") }, { participants: 3 }]) {
+        booking.excursions = [{ ...complete, ...change }];
+        assert.equal(summarizeDepartureReadiness(booking, now).incompleteActivityCount, 1, JSON.stringify(change));
+    }
+    booking.excursions = [{ status: "Completed" }, { status: "Cancelled" }];
+    assert.equal(summarizeDepartureReadiness(booking, now).status, "recorded-clear");
 });

@@ -79,7 +79,7 @@ const DepartureReadiness = () => {
             <button type="button" className="btn btn-outline-secondary" onClick={refresh} disabled={loading}><FaSyncAlt className="me-2" />Refresh</button>
         </div>
         <div className="alert alert-info small">
-            This view checks saved traveler names, supplier confirmations, hotel rooming plans and open tasks. A missing plan or service may be outside the agreed scope. Confirm the arrangements with the team; payment and supplier costs are reviewed separately.
+            This view checks saved traveler names, supplier confirmations, hotel rooming plans, activity arrangements and open tasks. A missing plan or service may be outside the agreed scope. Confirm the arrangements with the team; payment and supplier costs are reviewed separately.
         </div>
         <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Pre-arrival message filter">
             {Object.entries(messageFilters).map(([value, label]) => <button key={value} type="button"
@@ -120,6 +120,16 @@ const DepartureReadiness = () => {
                             <div className="col-sm-6 col-xl"><strong>Rooming plans</strong><div className={item.staleRoomingCount ? "text-warning-emphasis" : "text-muted"}>{item.staleRoomingCount ? `${item.staleRoomingCount} stale` : "No stale plans"}{item.missingRoomingCount ? ` · ${item.missingRoomingCount} missing` : ""}</div></div>
                             <div className="col-sm-6 col-xl"><strong>Transport</strong><div className={item.pendingTransportCount ? "text-warning-emphasis" : "text-muted"}>{item.pendingTransportCount ? `${item.pendingTransportCount} awaiting confirmation` : "No pending confirmations"}</div></div>
                             <div className="col-sm-6 col-xl"><strong>Tasks</strong><div className={item.openTaskCount ? "text-warning-emphasis" : "text-muted"}>{item.openTaskCount} open</div></div>
+                            <div className="col-sm-6 col-xl"><strong>Activities</strong>
+                                {!item.activeActivityCount ? <div className="text-muted">No active activities recorded</div> : <>
+                                    <div>{item.activeActivityCount} active</div>
+                                    {!!item.pendingActivityCount && <div className="text-warning-emphasis">{item.pendingActivityCount} awaiting confirmation</div>}
+                                    {!!item.incompleteActivityCount && <div className="text-warning-emphasis">{item.incompleteActivityCount} confirmed with missing/invalid details</div>}
+                                    {!!item.activityCancellationCount && <div className="text-danger">{item.activityCancellationCount} cancellation(s) awaiting acknowledgement</div>}
+                                    {!!item.activityFollowUpDueCount && <div className="text-danger">{item.activityFollowUpDueCount} follow-up(s) due</div>}
+                                </>}
+                                <Link to={`/excursions?booking=${item._id}`}>Review activities</Link>
+                            </div>
                         </div>
                     </div>
                 </article>)}

@@ -42,6 +42,13 @@ const main = async () => {
         assert.equal(read.headers.get("cache-control"), "no-store"); await json(read);
         const move = async (status, extra = {}) => { result = await json(await request(`${base}/${id}/status`, "PATCH", { status, expectedVersion: result.version, confirmed: true, ...extra })); };
         await move("Requested");
+        const readiness = await json(await request(`${root}/departure-readiness`));
+        const readinessItem = readiness.items.find((item) => item._id === String(booking._id));
+        assert.ok(readinessItem, "Activity booking appears in departure readiness");
+        assert.equal(readinessItem.pendingActivityCount, 1);
+        assert.equal(readinessItem.activityFollowUpDueCount, 1);
+        assert.equal(readinessItem.status, "attention");
+        assert.equal(JSON.stringify(readinessItem).includes("Private margin note"), false);
         const schedulePath = `${root}/excursion-schedule?from=${day}&to=${endDay}`;
         let schedule = await json(await request(`${schedulePath}&attention=followup`));
         assert.equal(schedule.total, 1); assert.equal(schedule.summary.followUpDue, 1);
@@ -53,6 +60,11 @@ const main = async () => {
         assert.match(cancellation.body, /Please cancel/);
         assert.equal((await Booking.findById(booking._id)).excursions[0].status, "Requested");
         await move("Confirmed", { confirmationReference: "CI-SAF-123" });
+        const confirmedReadiness = await json(await request(`${root}/departure-readiness`));
+        const confirmedItem = confirmedReadiness.items.find((item) => item._id === String(booking._id));
+        assert.equal(confirmedItem.pendingActivityCount, 0);
+        assert.equal(confirmedItem.incompleteActivityCount, 0);
+        assert.equal(confirmedItem.activityFollowUpDueCount, 0);
         await Booking.updateOne({ _id: booking._id }, { $set: { itineraryDays: [{ date: new Date(day), title: "Safari day", plan: "Enjoy the park with your operator." }] } });
         const packUrl = `http://127.0.0.1:5000/api/booking-pdf/travel-pack/${booking._id}`;
         assert.equal((await request(`${packUrl}/preview`, "GET", undefined, admins[1])).status, 403);
