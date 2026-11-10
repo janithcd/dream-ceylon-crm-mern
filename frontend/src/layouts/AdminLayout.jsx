@@ -191,6 +191,10 @@ const AdminLayout = () => {
                         </NavLink>
                     </PermissionGuard>
 
+                    <PermissionGuard permission={ROUTE_PERMISSIONS.transportDispatch}>
+                        <NavLink to="/transport-dispatch"><FaCar />Transport Dispatch</NavLink>
+                    </PermissionGuard>
+
                     <PermissionGuard permission={ROUTE_PERMISSIONS.supplierConfirmations}>
                         <NavLink to="/excursions"><FaClipboardCheck />Activities &amp; Excursions</NavLink>
                         <NavLink to="/supplier-confirmations">

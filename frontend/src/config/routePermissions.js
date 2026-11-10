@@ -14,6 +14,7 @@ export const ROUTE_PERMISSIONS = Object.freeze({
     suppliers: "supplier.view",
     hotelDeadlines: "booking.view",
     airportTransfers: "booking.view",
+    transportDispatch: "booking.view",
     bookingCalendar: "booking.view",
 
     payments: "payment.view",

@@ -19,6 +19,7 @@ Use this page to find a module and its operating instructions. The detailed guid
 - Hotel stays, cancellation deadlines, supplier contact history and confirmation drafts.
 - Saved rooming plans, hotel vouchers and reviewed rooming emails.
 - Transport assignments, airport transfer schedules, flight details and guest pickup drafts.
+- Transport Dispatch board for tour drives and transfers, with date overlap, missing dispatch details and direct review of each assignment.
 - Activities and excursions with supplier snapshots, confirmation references, cancellation history, daily schedules and reviewed supplier/guest message drafts.
 - Supplier confirmation queue and due alerts for hotels, transport and activities across all trip dates, with private contact history and next follow-up dates.
 - Activity confirmation, cancellation and missing-detail checks in departure readiness, plus activity dispatch details in the internal operations brief.
