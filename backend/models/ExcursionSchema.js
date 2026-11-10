@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { TYPES, STATUSES, FIELDS } = require("../utils/excursions");
+const supplierContactSchema = require("./SupplierContactSchema");
 const history = new mongoose.Schema({
     action: { type: String, required: true }, fromStatus: String, toStatus: String,
     note: { type: String, maxlength: 300, default: "" }, at: { type: Date, required: true },
@@ -12,5 +13,6 @@ module.exports = new mongoose.Schema({
     participants: { type: Number, required: true, min: 1 },
     status: { type: String, enum: STATUSES, default: "Planned" },
     confirmationReference: { type: String, default: "", maxlength: 100 }, followUpDate: { type: Date, default: null },
+    contacts: { type: [supplierContactSchema], default: [] },
     history: { type: [history], default: [] }, createdAt: { type: Date, default: Date.now },
 });

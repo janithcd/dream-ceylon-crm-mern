@@ -1,7 +1,7 @@
 const { getBusinessDayBounds } = require("./businessDate");
 const { ACTIVE_BOOKING_STATUSES } = require("./myTasks");
 
-const TYPES = ["all", "hotel", "transport"];
+const TYPES = ["all", "hotel", "transport", "activity"];
 const DATE_FILTERS = ["all", "actionable", "overdue", "today", "upcoming", "noDue"];
 const PAGE_SIZE = 20;
 
@@ -18,8 +18,8 @@ const pendingRequests = (field, type, title, serviceDate) => ({
             type,
             title: `$$request.${title}`,
             serviceDate: `$$request.${serviceDate}`,
-            endDate: type === "hotel" ? "$$request.checkOutDate" : "$$request.endDate",
-            detail: type === "hotel" ? "$$request.location" : "$$request.pickupLocation",
+            endDate: type === "hotel" ? "$$request.checkOutDate" : type === "activity" ? null : "$$request.endDate",
+            detail: type === "hotel" ? "$$request.location" : type === "activity" ? "$$request.supplierName" : "$$request.pickupLocation",
             followUpDate: { $ifNull: ["$$request.followUpDate", null] },
             lastContact: { $arrayElemAt: [{ $ifNull: ["$$request.contacts", []] }, -1] },
             createdAt: "$$request.createdAt",
@@ -46,6 +46,7 @@ const buildSupplierConfirmationsPipeline = ({ type = "all", dateFilter = "all", 
             $or: [
                 { hotelStays: { $elemMatch: { status: "Requested" } } },
                 { transportAssignments: { $elemMatch: { status: "Requested" } } },
+                { excursions: { $elemMatch: { status: "Requested" } } },
             ],
         } },
         { $project: {
@@ -54,6 +55,7 @@ const buildSupplierConfirmationsPipeline = ({ type = "all", dateFilter = "all", 
             requests: { $concatArrays: [
                 pendingRequests("hotelStays", "hotel", "hotelName", "checkInDate"),
                 pendingRequests("transportAssignments", "transport", "route", "startDate"),
+                pendingRequests("excursions", "activity", "title", "date"),
             ] },
         } },
         { $unwind: "$requests" },
@@ -74,6 +76,7 @@ const buildSupplierConfirmationsPipeline = ({ type = "all", dateFilter = "all", 
                 open: { $sum: 1 },
                 hotels: countIf({ $eq: ["$type", "hotel"] }),
                 transport: countIf({ $eq: ["$type", "transport"] }),
+                activities: countIf({ $eq: ["$type", "activity"] }),
                 overdue: countIf({ $and: [dueExists, { $lt: ["$followUpDate", start] }] }),
                 today: countIf({ $and: [dueExists, { $gte: ["$followUpDate", start] }, { $lte: ["$followUpDate", end] }] }),
                 noDue: countIf({ $eq: ["$followUpDate", null] }),

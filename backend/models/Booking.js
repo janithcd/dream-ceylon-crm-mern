@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const { itineraryFitsTrip } = require("../utils/bookingItinerary");
 const ExcursionSchema = require("./ExcursionSchema");
+const supplierContactSchema = require("./SupplierContactSchema");
 const { excursionsFitBooking } = require("../utils/excursions");
 
 const customerSchema = new mongoose.Schema(
@@ -102,15 +103,6 @@ const handoverNoteSchema = new mongoose.Schema({
     createdAt: { type: Date, required: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
     createdByName: { type: String, trim: true, maxlength: 120, default: "" },
-});
-
-const supplierContactSchema = new mongoose.Schema({
-    contactedAt: { type: Date, required: true },
-    contactedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", required: true },
-    contactedByName: { type: String, trim: true, maxlength: 120, default: "" },
-    channel: { type: String, enum: ["Email", "WhatsApp", "Phone", "Other"], required: true },
-    note: { type: String, trim: true, maxlength: 300, default: "" },
-    nextFollowUpDate: { type: Date, default: null },
 });
 
 const roomingPlanSchema = new mongoose.Schema({

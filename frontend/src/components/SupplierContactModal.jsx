@@ -3,6 +3,7 @@ import { FaHistory } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
+import { notifySupplierConfirmationsChanged } from "../utils/supplierEvents";
 
 const formatContactTime = (value) => value ? new Date(value).toLocaleString("en-GB", {
     timeZone: "Asia/Colombo", dateStyle: "medium", timeStyle: "short",
@@ -15,6 +16,7 @@ const SupplierContactModal = ({ bookingId, type, itemId, onClose, onChanged }) =
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [success, setSuccess] = useState("");
+    const [stale, setStale] = useState(false);
     const [reloadKey, setReloadKey] = useState(0);
     const [channel, setChannel] = useState("Email");
     const [note, setNote] = useState("");
@@ -26,7 +28,7 @@ const SupplierContactModal = ({ bookingId, type, itemId, onClose, onChanged }) =
     useEffect(() => {
         let active = true;
         api.get(`/bookings/${bookingId}/supplier-contacts/${type}/${itemId}`)
-            .then(({ data: result }) => { if (active) setData(result); })
+            .then(({ data: result }) => { if (active) { setData(result); setStale(false); } })
             .catch((err) => { if (active) setError(err.response?.data?.message || "Failed to load supplier contact history."); })
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
@@ -74,21 +76,24 @@ const SupplierContactModal = ({ bookingId, type, itemId, onClose, onChanged }) =
     };
     const save = async (event) => {
         event.preventDefault();
-        if (!data || saving) return;
+        if (!data || saving || stale) return;
         setSaving(true);
         setError("");
         setSuccess("");
         try {
             const response = await api.post(`/bookings/${bookingId}/supplier-contacts/${type}/${itemId}`, {
                 channel, note, nextFollowUpDate: nextFollowUpDate || null,
+                ...(type === "activity" ? { expectedVersion: data.version } : {}),
             });
             setData(response.data);
             setNote("");
             setNextFollowUpDate("");
             setSuccess("Contact recorded. The supplier request still needs confirmation when they reply.");
+            notifySupplierConfirmationsChanged();
             onChanged?.();
         } catch (err) {
             setError(err.response?.data?.message || "Failed to log supplier contact. Refresh and try again.");
+            if (err.response?.status === 409) setStale(true);
         } finally {
             setSaving(false);
         }
@@ -109,6 +114,7 @@ const SupplierContactModal = ({ bookingId, type, itemId, onClose, onChanged }) =
                     <div className="modal-body">
                         {loading && <p className="text-muted" role="status">Loading the latest supplier contacts...</p>}
                         {error && <div className="alert alert-danger" role="alert">{error}</div>}
+                        {stale && <button type="button" className="btn btn-outline-primary mb-3" disabled={saving || loading} onClick={reload}>Reload current history</button>}
                         {!loading && !data && <button type="button" className="btn btn-outline-primary" onClick={reload}>Try again</button>}
                         {!loading && data && <>
                             <p className="fw-semibold mb-1">{data.title} <span className="badge text-bg-secondary ms-2">{data.status}</span></p>
@@ -136,7 +142,7 @@ const SupplierContactModal = ({ bookingId, type, itemId, onClose, onChanged }) =
                                     </div>
                                 </div>
                                 <p className="small text-muted mt-2 mb-3">Leave the date blank to clear the current follow-up reminder. Follow-up dates must be on or before the service date in Sri Lanka.</p>
-                                <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving..." : "Log contact"}</button>
+                                <button type="submit" className="btn btn-primary" disabled={saving || stale}>{saving ? "Saving..." : "Log contact"}</button>
                             </form>}
                             {!canLog && <p className="small text-muted">Contact can be logged while this service is requested on an active booking. Past contacts remain visible.</p>}
                             <h6>Contact history</h6>

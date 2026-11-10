@@ -25,15 +25,20 @@ test("hotel and transport follow-up dates must be valid and no later than servic
     assert.equal(parseHotelStay({ followUpDate: "" }, existing).value.followUpDate, null);
 });
 
-test("supplier queue includes both request types with Colombo follow-up boundaries", () => {
+test("supplier queue includes all three request types with Colombo follow-up boundaries", () => {
     const pipeline = buildSupplierConfirmationsPipeline(
         { type: "transport", dateFilter: "overdue", page: 2 }, new Date("2026-10-16T19:00:00Z")
     );
     assert.deepEqual(pipeline[0].$match.bookingStatus.$in, ["Pending", "Confirmed", "In Progress"]);
-    assert.equal(pipeline[0].$match.$or.length, 2);
-    const [hotels, transport] = pipeline[1].$project.requests.$concatArrays;
+    assert.equal(pipeline[0].$match.$or.length, 3);
+    const [hotels, transport, activities] = pipeline[1].$project.requests.$concatArrays;
     assert.equal(hotels.$map.in.type, "hotel");
     assert.equal(transport.$map.in.type, "transport");
+    assert.equal(activities.$map.in.type, "activity");
+    assert.deepEqual(activities.$map.input.$filter.input, { $ifNull: ["$excursions", []] });
+    assert.deepEqual(activities.$map.input.$filter.cond, { $eq: ["$$request.status", "Requested"] });
+    assert.equal(activities.$map.in.serviceDate, "$$request.date");
+    assert.equal(activities.$map.in.endDate, null);
     assert.deepEqual(pipeline.at(-1).$facet.items[0].$match, {
         type: "transport", followUpDate: { $ne: null, $lt: new Date("2026-10-16T18:30:00.000Z") },
     });
@@ -58,7 +63,7 @@ test("supplier queue requires booking view permission and validates filters", as
     t.mock.method(Booking, "aggregate", async () => {
         aggregateCalls += 1;
         return [{
-            summary: [{ open: 2, hotels: 1, transport: 1, overdue: 1, today: 0, noDue: 1 }],
+            summary: [{ open: 3, hotels: 1, transport: 1, activities: 1, overdue: 1, today: 0, noDue: 1 }],
             total: [{ value: 1 }],
             items: [{ type: "hotel", bookingCode: "DCJ-1", title: "Hotel A", followUpDate: null }],
         }];
@@ -80,8 +85,10 @@ test("supplier queue requires booking view permission and validates filters", as
     assert.equal(aggregateCalls, 0);
     const response = await request("?type=hotel&dateFilter=noDue&page=1", viewerId);
     assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
     const data = await response.json();
-    assert.equal(data.summary.open, 2);
+    assert.equal(data.summary.open, 3);
+    assert.equal(data.summary.activities, 1);
     assert.equal(data.summary.noDue, 1);
     assert.equal(data.total, 1);
     assert.equal(data.items[0].title, "Hotel A");
@@ -89,4 +96,5 @@ test("supplier queue requires booking view permission and validates filters", as
 
     assert.equal((await request("?dateFilter=actionable", viewerId)).status, 200);
     assert.equal(aggregateCalls, 2);
+    assert.equal((await request("?type=activity&dateFilter=actionable", viewerId)).status, 200);
 });

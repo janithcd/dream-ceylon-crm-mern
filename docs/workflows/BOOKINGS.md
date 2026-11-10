@@ -101,14 +101,16 @@ the supplier replies, record its confirmation status and reference in Hotels. Th
 /api/bookings/:id/hotel-stays/:stayId/confirmation-draft` for active bookings with requested stays.
 
 Log a supplier email, WhatsApp message, or phone call from **Supplier Confirmations** or the booking's
-**Hotels** and **Transport** details. The service history records who made contact, when, the channel, a
+**Hotels**, **Transport** and **Activities & Excursions** details. The service history records who made contact, when, the channel, a
 private note, and the next follow-up date. Logging updates the queue's follow-up date and shows the latest
 contact there; it does not send a message or confirm the supplier. Leave the next date blank to clear a
-reminder. Dates must be today or later and no later than check-in or the transport start (Sri Lanka time). Up
+reminder. Dates must be today or later and no later than check-in, transport start or activity date (Sri Lanka time). Up
 to 50 recent contacts per service are kept. Staff with `booking.view` can read the history; logging needs both
 `booking.view` and `booking.update`, an active booking, and a requested service. Use `GET` and `POST
-/api/bookings/:id/supplier-contacts/:type/:itemId`, where `type` is `hotel` or `transport`. The queue and
-booking activity log exclude private contact notes.
+/api/bookings/:id/supplier-contacts/:type/:itemId`, where `type` is `hotel`, `transport` or `activity`. Activity
+contact writes also require the current `version` as `expectedVersion` and invalidate older activity editors.
+The queue and booking activity log exclude private contact notes. **Supplier Confirmations → Activities** and
+the **Suppliers** alert include requested activities across all trip dates; [activity follow-up instructions](EXCURSIONS.md#supplier-replies-and-contact-history) cover the full workflow.
 
 Review hotel night coverage in each booking to spot missing nights, reservations awaiting confirmation,
 overlapping stays, and stays outside the trip dates

@@ -168,13 +168,13 @@ const SupplierAlert = () => {
                                         {requests.map((request) => (
                                             <Link
                                                 key={`${request.bookingId}-${request.type}-${request._id}`}
-                                                to={`/bookings?keyword=${encodeURIComponent(request.bookingCode)}`}
+                                                to={request.type === "activity" ? `/excursions?booking=${request.bookingId}&activity=${request._id}` : `/bookings?keyword=${encodeURIComponent(request.bookingCode)}`}
                                                 onClick={() => setOpen(false)}
                                                 className="list-group-item list-group-item-action px-0 py-2"
                                             >
                                                 <span className="d-block fw-semibold small">{request.title}</span>
                                                 <span className="d-block text-muted small">
-                                                    {request.bookingCode} · {request.type === "hotel" ? "Hotel" : "Transport"} · {toCalendarDateInput(request.followUpDate) < today ? "Overdue" : "Today"} · {formatCalendarDate(request.followUpDate)}
+                                                    {request.bookingCode} · {{ hotel: "Hotel", transport: "Transport", activity: "Activity" }[request.type]} · {toCalendarDateInput(request.followUpDate) < today ? "Overdue" : "Today"} · {formatCalendarDate(request.followUpDate)}
                                                 </span>
                                             </Link>
                                         ))}

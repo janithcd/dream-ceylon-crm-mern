@@ -20,6 +20,7 @@ Use this page to find a module and its operating instructions. The detailed guid
 - Saved rooming plans, hotel vouchers and reviewed rooming emails.
 - Transport assignments, airport transfer schedules, flight details and guest pickup drafts.
 - Activities and excursions with supplier snapshots, confirmation references, cancellation history, daily schedules and reviewed supplier/guest message drafts.
+- Supplier confirmation queue and due alerts for hotels, transport and activities across all trip dates, with private contact history and next follow-up dates.
 - Activity confirmation, cancellation and missing-detail checks in departure readiness, plus activity dispatch details in the internal operations brief.
 - Activity-only cancelled trips remain in Cancellation Review until open reservations are resolved, with direct links to each activity.
 - Reviewed guest travel pack PDF combining the daily itinerary with confirmed hotels, transport and activities, with missing-detail warnings and stale-preview protection.

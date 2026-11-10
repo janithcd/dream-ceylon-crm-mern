@@ -5,7 +5,7 @@ const { createActivityLog } = require("../utils/createActivityLog");
 const { SERVICE_FIELDS, parseSupplierContact, presentSupplierContacts } = require("../utils/supplierContact");
 
 const checkRoute = (req, res) => {
-    if (!SERVICE_FIELDS[req.params.type] || !mongoose.Types.ObjectId.isValid(req.params.id) ||
+    if (!Object.hasOwn(SERVICE_FIELDS, req.params.type) || !mongoose.Types.ObjectId.isValid(req.params.id) ||
         !mongoose.Types.ObjectId.isValid(req.params.itemId)) {
         res.status(400).json({ message: "Invalid supplier type, booking or service ID" });
         return null;
@@ -19,7 +19,7 @@ const getSupplierContacts = async (req, res) => {
     if (!config) return;
     try {
         const booking = await Booking.findById(req.params.id)
-            .select(`bookingCode bookingStatus ${config.field}._id ${config.field}.${config.title} ${config.field}.status ${config.field}.${config.serviceDate} ${config.field}.followUpDate ${config.field}.contacts`);
+            .select(`bookingCode bookingStatus ${config.revision || ""} ${config.field}._id ${config.field}.${config.title} ${config.field}.status ${config.field}.${config.serviceDate} ${config.field}.followUpDate ${config.field}.contacts`);
         if (!booking) return res.status(404).json({ message: "Booking not found" });
         const item = booking[config.field].id(req.params.itemId);
         if (!item) return res.status(404).json({ message: "Supplier request not found in this booking" });
@@ -36,12 +36,21 @@ const logSupplierContact = async (req, res) => {
     if (!config) return;
     try {
         const booking = await Booking.findById(req.params.id)
-            .select(`bookingStatus ${config.field}._id ${config.field}.status ${config.field}.${config.serviceDate}`);
+            .select(`bookingStatus ${config.revision || ""} ${config.field}._id ${config.field}.status ${config.field}.${config.serviceDate}`);
         if (!booking) return res.status(404).json({ message: "Booking not found" });
         const item = booking[config.field].id(req.params.itemId);
         if (!item) return res.status(404).json({ message: "Supplier request not found in this booking" });
         if (!ACTIVE_BOOKING_STATUSES.includes(booking.bookingStatus) || item.status !== "Requested") {
             return res.status(409).json({ message: "Only requested services on active bookings can be contacted from this queue" });
+        }
+        const version = config.revision ? booking[config.revision] ?? 0 : null;
+        if (config.revision) {
+            if (!Number.isSafeInteger(req.body?.expectedVersion) || req.body.expectedVersion < 0) {
+                return res.status(400).json({ message: "Reload the activity contact history before saving" });
+            }
+            if (req.body.expectedVersion !== version) {
+                return res.status(409).json({ message: "Activities changed. Reload the contact history before saving" });
+            }
         }
         const parsed = parseSupplierContact(req.body || {}, item[config.serviceDate]);
         if (parsed.error) return res.status(400).json({ message: parsed.error });
@@ -56,6 +65,7 @@ const logSupplierContact = async (req, res) => {
         const updated = await Booking.findOneAndUpdate(
             {
                 _id: req.params.id, bookingStatus: { $in: ACTIVE_BOOKING_STATUSES },
+                ...(config.revision ? { [config.revision]: version === 0 ? { $in: [0, null] } : version } : {}),
                 [config.field]: { $elemMatch: {
                     _id: req.params.itemId, status: "Requested",
                     [config.serviceDate]: item[config.serviceDate],
@@ -64,6 +74,7 @@ const logSupplierContact = async (req, res) => {
             {
                 $push: { [`${config.field}.$.contacts`]: { $each: [event], $slice: -50 } },
                 $set: { [`${config.field}.$.followUpDate`]: parsed.value.nextFollowUpDate },
+                ...(config.revision ? { $inc: { [config.revision]: 1, __v: 1 } } : {}),
             },
             { new: true, runValidators: true }
         );
@@ -71,7 +82,7 @@ const logSupplierContact = async (req, res) => {
         const current = updated[config.field].id(req.params.itemId);
         await createActivityLog({
             req, action: "UPDATE", module: "Booking",
-            description: `${req.params.type === "hotel" ? "Hotel" : "Transport"} supplier contact logged (${event.channel}) for booking ${updated.bookingCode}`,
+            description: `${config.label} supplier contact logged (${event.channel}) for booking ${updated.bookingCode}`,
             relatedRecordId: updated._id, relatedModel: "Booking",
             referenceNo: updated.bookingCode, customerName: updated.customer?.fullName,
             metadata: { supplierType: req.params.type, itemId: req.params.itemId, channel: event.channel, nextFollowUpDate: parsed.value.nextFollowUpDate },

@@ -10,7 +10,7 @@ import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 
 const emptyData = {
-    items: [], summary: { open: 0, hotels: 0, transport: 0, overdue: 0, today: 0, noDue: 0 },
+    items: [], summary: { open: 0, hotels: 0, transport: 0, activities: 0, overdue: 0, today: 0, noDue: 0 },
     total: 0, page: 1, totalPages: 1,
 };
 
@@ -97,7 +97,7 @@ const SupplierConfirmations = () => {
             <div className="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
                 <div>
                     <h3 className="fw-bold mb-1"><FaClipboardCheck className="me-2 text-primary" />Supplier Confirmations</h3>
-                    <p className="text-muted mb-0">Hotel and transport requests awaiting a reply. Follow-up dates use Sri Lanka time.</p>
+                    <p className="text-muted mb-0">Hotel, transport and activity requests awaiting a reply across all trip dates. Follow-up dates use Sri Lanka time.</p>
                 </div>
                 <button type="button" className="btn btn-outline-primary" onClick={refresh} disabled={loading}>
                     <FaSyncAlt className="me-2" />Refresh
@@ -111,6 +111,7 @@ const SupplierConfirmations = () => {
                     { label: "Awaiting reply", value: data.summary.open, color: "primary" },
                     { label: "Hotels", value: data.summary.hotels, color: "primary" },
                     { label: "Transport", value: data.summary.transport, color: "primary" },
+                    { label: "Activities", value: data.summary.activities || 0, color: "primary" },
                     { label: "Overdue follow-ups", value: data.summary.overdue, color: "danger" },
                     { label: "Due today", value: data.summary.today, color: "warning" },
                 ].map((item) => (
@@ -129,6 +130,7 @@ const SupplierConfirmations = () => {
                         { value: "all", label: "All requests", count: data.summary.open },
                         { value: "hotel", label: "Hotels", count: data.summary.hotels },
                         { value: "transport", label: "Transport", count: data.summary.transport },
+                        { value: "activity", label: "Activities", count: data.summary.activities || 0 },
                     ].map((choice) => (
                         <button type="button" key={choice.value} className={`btn btn-sm ${type === choice.value ? "btn-primary" : "btn-outline-primary"}`} onClick={() => changeFilter(setType, choice.value)}>
                             {choice.label} ({choice.count})
@@ -143,6 +145,8 @@ const SupplierConfirmations = () => {
                     ))}
                 </div>
 
+                <p className="small text-muted">Only requests already sent to suppliers appear here. Planned activities remain in Activities &amp; Excursions; cancelled trips are handled in Cancellation Review.</p>
+
                 {loading ? <p className="text-muted mb-0" role="status">Loading supplier requests...</p> : !data.items.length ? (
                     <p className="text-muted mb-0">No requests awaiting confirmation in this view.</p>
                 ) : (
@@ -154,7 +158,7 @@ const SupplierConfirmations = () => {
                             return (
                                 <tr key={`${item.bookingId}-${item.type}-${item._id}`}>
                                     <td>
-                                        <span className={`badge me-2 ${item.type === "hotel" ? "text-bg-info" : "text-bg-primary"}`}>{item.type === "hotel" ? "Hotel" : "Transport"}</span>
+                                        <span className={`badge me-2 ${item.type === "hotel" ? "text-bg-info" : item.type === "activity" ? "text-bg-success" : "text-bg-primary"}`}>{{ hotel: "Hotel", transport: "Transport", activity: "Activity" }[item.type]}</span>
                                         <strong>{item.title}</strong>
                                         {item.detail && <small className="d-block text-muted mt-1">{item.detail}</small>}
                                     </td>
@@ -169,7 +173,8 @@ const SupplierConfirmations = () => {
                                     </td>
                                     <td className="text-end">
                                         <div className="d-flex justify-content-end gap-2 flex-wrap">
-                                            <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelected(item)}>Review</button>
+                                            {item.type === "activity" ? <Link className="btn btn-sm btn-outline-primary" to={`/excursions?booking=${item.bookingId}&activity=${item._id}`}>Review activity</Link> :
+                                                <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelected(item)}>Review</button>}
                                             <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelectedContact({ bookingId: item.bookingId, type: item.type, itemId: item._id })}><FaHistory className="me-1" />{hasPermission("booking.update") ? "Log contact" : "History"}</button>
                                             {item.type === "hotel" && hasPermission("booking.update") && <button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelectedEmail({ bookingId: item.bookingId, stayId: item._id })}><FaEnvelope className="me-1" />Prepare email</button>}
                                             <Link className="btn btn-sm btn-outline-secondary" to={`/bookings?keyword=${encodeURIComponent(item.bookingCode)}`}>Booking</Link>

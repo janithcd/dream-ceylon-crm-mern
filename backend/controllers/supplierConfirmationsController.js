@@ -2,6 +2,7 @@ const Booking = require("../models/Booking");
 const { buildSupplierConfirmationsPipeline, TYPES, DATE_FILTERS, PAGE_SIZE } = require("../utils/supplierConfirmations");
 
 const getSupplierConfirmations = async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
     const type = req.query.type || "all";
     const dateFilter = req.query.dateFilter || "all";
     const page = req.query.page === undefined ? 1 : Number(req.query.page);
@@ -18,6 +19,7 @@ const getSupplierConfirmations = async (req, res) => {
             items: result?.items || [],
             summary: {
                 open: summary.open || 0, hotels: summary.hotels || 0, transport: summary.transport || 0,
+                activities: summary.activities || 0,
                 overdue: summary.overdue || 0, today: summary.today || 0, noDue: summary.noDue || 0,
             },
             total, page, totalPages: Math.ceil(total / PAGE_SIZE) || 1,

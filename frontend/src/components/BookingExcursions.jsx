@@ -3,6 +3,8 @@ import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
 import { formatCalendarDate, toCalendarDateInput, todayCalendarDate } from "../utils/calendarDate";
 import { buildSupplierMailtoUrl } from "../utils/supplierEmail";
+import SupplierContactModal from "./SupplierContactModal";
+import { notifySupplierConfirmationsChanged } from "../utils/supplierEvents";
 
 import { ACTIVITY_TYPES } from "../utils/excursionOptions";
 const transitions = { Planned: ["Requested", "Cancelled"], Requested: ["Confirmed", "Cancellation requested"],
@@ -28,6 +30,7 @@ export default function BookingExcursions({ bookingId, onChanged, focusItemId = 
     const [editingId, setEditingId] = useState(null);
     const [action, setAction] = useState(null);
     const [draft, setDraft] = useState(null);
+    const [contactId, setContactId] = useState(null);
     const [supplierSearch, setSupplierSearch] = useState("");
     const [suppliers, setSuppliers] = useState([]);
     const [supplierBusy, setSupplierBusy] = useState(false);
@@ -57,6 +60,7 @@ export default function BookingExcursions({ bookingId, onChanged, focusItemId = 
         try {
             const { data: result } = await api[method](`/bookings/${bookingId}/excursions${path}`, { ...body, expectedVersion: data.version });
             setData(result); setForm(null); setAction(null); setDraft(null); setNotice("Activity saved."); onChanged();
+            notifySupplierConfirmationsChanged();
         } catch (err) { setError(errorMessage(err)); if (err.response?.status === 409) setStale(true); }
         finally { setBusy(false); }
     };
@@ -124,6 +128,8 @@ export default function BookingExcursions({ bookingId, onChanged, focusItemId = 
                     {!closed && item.status === "Confirmed" && <button className="btn btn-sm btn-outline-primary" disabled={disabled} onClick={() => openDraft(item, "guest")}>Guest instructions draft</button>}
                     {item.supplierName && ["Requested", "Confirmed"].includes(item.status) && <button className="btn btn-sm btn-outline-secondary" disabled={disabled} onClick={() => openDraft(item, "cancellation")}>Cancellation draft</button>}
                 </div>}
+                <button type="button" className="btn btn-sm btn-outline-secondary mt-2" disabled={disabled || !!panel}
+                    onClick={() => setContactId(item._id)}>{canEdit && !closed && item.status === "Requested" ? "Log supplier contact" : "Supplier contact history"}</button>
                 <details className="mt-2 small"><summary>History ({item.history.length} most recent events)</summary>
                     <ol className="mb-0 mt-2">{[...item.history].reverse().map((entry, index) => <li key={index}>{formatCalendarDate(entry.at)} · {entry.byName} · {entry.action}: {entry.fromStatus && `${entry.fromStatus} → `}{entry.toStatus}{entry.note && ` · ${entry.note}`}</li>)}</ol>
                 </details>
@@ -170,5 +176,7 @@ export default function BookingExcursions({ bookingId, onChanged, focusItemId = 
             <label className="form-label d-block">Message<textarea className="form-control" rows={12} maxLength={1800} value={draft.body} onChange={(e) => setDraft({ ...draft, body: e.target.value })} /></label>
             <div className="d-flex flex-wrap gap-2"><button className="btn btn-primary" onClick={copyDraft}>Copy draft</button>{buildSupplierMailtoUrl(draft) && <a className="btn btn-outline-primary" href={buildSupplierMailtoUrl(draft)}>Open email app</a>}<button className="btn btn-outline-secondary" onClick={() => setDraft(null)}>Close draft</button></div>
         </div>}
+        {contactId && <SupplierContactModal bookingId={bookingId} type="activity" itemId={contactId}
+            onChanged={onChanged} onClose={() => { setContactId(null); refresh(); }} />}
     </div></section>;
 }

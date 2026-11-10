@@ -3,8 +3,9 @@ const { getBusinessDayBounds } = require("./businessDate");
 
 const CONTACT_CHANNELS = ["Email", "WhatsApp", "Phone", "Other"];
 const SERVICE_FIELDS = {
-    hotel: { field: "hotelStays", title: "hotelName", serviceDate: "checkInDate" },
-    transport: { field: "transportAssignments", title: "route", serviceDate: "startDate" },
+    hotel: { field: "hotelStays", title: "hotelName", serviceDate: "checkInDate", label: "Hotel" },
+    transport: { field: "transportAssignments", title: "route", serviceDate: "startDate", label: "Transport" },
+    activity: { field: "excursions", title: "title", serviceDate: "date", label: "Activity", revision: "excursionsRevision" },
 };
 
 const parseSupplierContact = (body, serviceDate, now = new Date()) => {
@@ -37,6 +38,7 @@ const presentSupplierContacts = (booking, item, type) => ({
     status: item.status,
     serviceDate: item[SERVICE_FIELDS[type].serviceDate],
     followUpDate: item.followUpDate || null,
+    ...(SERVICE_FIELDS[type].revision ? { version: booking[SERVICE_FIELDS[type].revision] ?? 0 } : {}),
     contacts: [...(item.contacts || [])].reverse().map((entry) => ({
         id: entry._id,
         contactedAt: entry.contactedAt,
