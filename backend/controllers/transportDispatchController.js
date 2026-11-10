@@ -17,6 +17,7 @@ const getTransportDispatch = async (req, res) => {
                 total: summary.total || 0, requested: summary.requested || 0,
                 attention: summary.attention || 0, missingDriver: summary.missingDriver || 0,
                 missingVehicle: summary.missingVehicle || 0, missingPickup: summary.missingPickup || 0,
+                conflicts: summary.conflicts || 0,
             },
         });
     } catch (error) {

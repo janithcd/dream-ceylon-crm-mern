@@ -36,6 +36,19 @@ test("dispatch matches overlapping assignments, checks confirmed details, and pr
     assert.equal(pipeline[3].$project.customer, undefined);
     assert.equal(pipeline[3].$project.totalPrice, undefined);
     assert.equal(pipeline[3].$project.chauffeurPhone, "$transportAssignments.chauffeurPhone");
+    const lookup = pipeline.find((stage) => stage.$lookup).$lookup;
+    assert.equal(lookup.localField, "vehicleLookupKey");
+    assert.equal(lookup.foreignField, "transportAssignments.registrationKey");
+    assert.deepEqual(lookup.pipeline[0].$match.bookingStatus.$in, ["Pending", "Confirmed", "In Progress"]);
+    assert.equal(lookup.pipeline[2].$match["transportAssignments.status"], "Confirmed");
+    assert.deepEqual(lookup.pipeline[2].$match.$expr.$and[0],
+        { $eq: ["$transportAssignments.registrationKey", "$$vehicleKey"] });
+    assert.deepEqual(Object.keys(lookup.pipeline.at(-2).$project).sort(),
+        ["_id", "assignmentId", "bookingCode", "bookingId", "endDate", "route", "startDate"]);
+    assert.deepEqual(pipeline.at(-1).$facet.items.at(-1).$project, { sortTime: 0, registrationKey: 0, vehicleLookupKey: 0 });
+    const clash = buildTransportDispatchPipeline({ ...input, filter: "conflicts" }).at(-1).$facet;
+    assert.deepEqual(clash.items[0], { $match: { vehicleConflict: true } });
+    assert.deepEqual(clash.total[0], clash.items[0]);
     assert.deepEqual(pipeline.at(-1).$facet.items[0], { $match: { needsAttention: true } });
     assert.deepEqual(pipeline.at(-1).$facet.total[0], { $match: { needsAttention: true } });
     assert.equal(pipeline.at(-1).$facet.items.at(-2).$limit, 20);
@@ -46,7 +59,7 @@ test("dispatch endpoint requires booking access, validates filters and handles a
     const viewerId = "507f1f77bcf86cd799439601", blockedId = "507f1f77bcf86cd799439602";
     let calls = 0, fail = false;
     let result = [{ items: [{ bookingCode: "DCJ-TEST", route: "Tour" }],
-        total: [{ value: 21 }], summary: [{ total: 24, requested: 22, attention: 23, missingDriver: 1 }] }];
+        total: [{ value: 21 }], summary: [{ total: 24, requested: 22, attention: 23, conflicts: 3, missingDriver: 1 }] }];
     t.mock.method(Admin, "findById", (id) => ({ select: async () => ({ _id: id,
         role: String(id) === blockedId ? "Unknown Role" : "Viewer", status: "Active", tokenVersion: 0 }) }));
     t.mock.method(Booking, "aggregate", async () => { calls++; if (fail) throw new Error("synthetic unavailable database"); return result; });
@@ -64,11 +77,12 @@ test("dispatch endpoint requires booking access, validates filters and handles a
     const data = await response.json();
     assert.equal(data.page, 2); assert.equal(data.total, 21); assert.equal(data.totalPages, 2);
     assert.equal(data.summary.total, 24); assert.equal(data.summary.missingVehicle, 0);
+    assert.equal(data.summary.conflicts, 3);
     assert.equal(data.items[0].route, "Tour");
     result = [{ items: [], total: [], summary: [] }];
     const empty = await (await request("?filter=all", viewerId)).json();
     assert.equal(empty.total, 0); assert.equal(empty.totalPages, 1);
-    assert.deepEqual(empty.summary, { total: 0, requested: 0, attention: 0, missingDriver: 0, missingVehicle: 0, missingPickup: 0 });
+    assert.deepEqual(empty.summary, { total: 0, requested: 0, attention: 0, missingDriver: 0, missingVehicle: 0, missingPickup: 0, conflicts: 0 });
     fail = true;
     assert.equal((await request("", viewerId)).status, 500);
 });

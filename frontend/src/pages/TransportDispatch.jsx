@@ -11,8 +11,8 @@ const defaultDates = () => {
 };
 const choices = [
     ["all", "All assignments"], ["attention", "Needs attention"], ["requested", "Requested"],
-    ["confirmed", "Confirmed"], ["missingDriver", "Missing driver"],
-    ["missingVehicle", "Missing registration"], ["missingPickup", "Missing pickup"],
+    ["confirmed", "Confirmed"], ["conflicts", "Vehicle conflicts"], ["missingDriver", "Missing driver"],
+    ["missingVehicle", "Registration review"], ["missingPickup", "Missing pickup"],
 ];
 
 export default function TransportDispatch() {
@@ -73,8 +73,9 @@ export default function TransportDispatch() {
             <p className="text-muted">Service dates: {formatCalendarDate(data.from)} – {formatCalendarDate(data.to)} · {data.total} in this view.</p>
             <div className="row g-3 mb-4">
                 {[["All active", data.summary.total], ["Needs attention", data.summary.attention], ["Awaiting confirmation", data.summary.requested],
-                    ["Missing driver details", data.summary.missingDriver], ["Missing registration", data.summary.missingVehicle], ["Missing pickup details", data.summary.missingPickup]]
-                    .map(([label, count]) => <div className="col-6 col-md-4 col-xl-2" key={label}><div className="card border-0 shadow-sm h-100"><div className="card-body p-3">
+                    ["Vehicle conflicts", data.summary.conflicts], ["Missing driver details", data.summary.missingDriver],
+                    ["Registration review", data.summary.missingVehicle], ["Missing pickup details", data.summary.missingPickup]]
+                    .map(([label, count]) => <div className="col-6 col-md-4 col-xl-3" key={label}><div className="card border-0 shadow-sm h-100"><div className="card-body p-3">
                         <small className="text-muted">{label}</small><div className="fs-3 fw-bold">{count}</div></div></div></div>)}
             </div>
             <div className="card border-0 shadow-sm"><div className="card-body">
@@ -82,7 +83,7 @@ export default function TransportDispatch() {
                     {choices.map(([value, label]) => <button type="button" key={value} className={`btn btn-sm ${filters.filter === value ? "btn-primary" : "btn-outline-primary"}`}
                         onClick={() => choose(value)}>{label}</button>)}
                 </div>
-                <p className="small text-muted">Requested assignments need supplier confirmation. Confirmed assignments need a chauffeur name and phone, registration, pickup time and location before dispatch. Review possible vehicle overlaps in the booking’s Transport panel.</p>
+                <p className="small text-muted">Requested assignments need supplier confirmation. Confirmed assignments need a chauffeur name and phone, registration, pickup time and location. Vehicle conflicts compare overlapping dates for the same registration, including other legs in the same booking; review the exact times before dispatch.</p>
                 {!data.items.length ? <div className="py-4 text-center"><p className="mb-2">No transport assignments in this view.</p>
                     <Link to="/bookings" className="btn btn-outline-primary btn-sm">Open bookings</Link></div> :
                     <div className="table-responsive"><table className="table align-middle">
@@ -96,10 +97,14 @@ export default function TransportDispatch() {
                             <td><div className="d-flex flex-wrap gap-1">
                                 {item.status === "Requested" && <span className="badge text-bg-warning">Confirmation needed</span>}
                                 {item.missingDriver && <span className="badge text-bg-danger">Driver details</span>}
-                                {item.missingVehicle && <span className="badge text-bg-danger">Registration</span>}
+                                {item.missingVehicle && <span className="badge text-bg-danger">Registration review</span>}
                                 {item.missingPickup && <span className="badge text-bg-danger">Pickup details</span>}
-                                {!item.needsAttention && <span className="badge text-bg-success">Ready for dispatch</span>}
-                            </div></td>
+                                {item.vehicleConflict && <span className="badge text-bg-danger">Possible vehicle clash</span>}
+                                {!item.needsAttention && <span className="badge text-bg-success">Details complete</span>}
+                            </div>{item.vehicleConflicts?.length > 0 && <details className="small mt-2"><summary>{item.vehicleConflicts.length} overlapping confirmed assignment{item.vehicleConflicts.length === 1 ? "" : "s"}</summary>
+                                <ul className="ps-3 mt-1 mb-0">{item.vehicleConflicts.map((conflict) => <li key={`${conflict.bookingId}-${conflict.assignmentId}`}>
+                                    <Link to={`/bookings?keyword=${encodeURIComponent(conflict.bookingCode)}`}>{conflict.bookingCode}</Link> · {conflict.route} · {formatCalendarDate(conflict.startDate)} – {formatCalendarDate(conflict.endDate)}
+                                </li>)}</ul></details>}</td>
                             <td className="text-end"><button type="button" className="btn btn-sm btn-outline-primary" onClick={() => setSelected(item)}>Review transport</button></td>
                         </tr>)}</tbody>
                     </table></div>}

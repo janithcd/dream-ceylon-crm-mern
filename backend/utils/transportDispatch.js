@@ -3,7 +3,7 @@ const { getBusinessDayBounds } = require("./businessDate");
 const { ACTIVE_BOOKING_STATUSES } = require("./myTasks");
 
 const PAGE_SIZE = 20;
-const FILTERS = ["all", "attention", "requested", "confirmed", "missingDriver", "missingVehicle", "missingPickup"];
+const FILTERS = ["all", "attention", "requested", "confirmed", "conflicts", "missingDriver", "missingVehicle", "missingPickup"];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const parseTransportDispatchFilters = (query = {}, now = new Date()) => {
@@ -32,7 +32,7 @@ const buildTransportDispatchPipeline = ({ from, to, filter = "all", page = 1 }) 
     const countIf = (condition) => ({ $sum: { $cond: [condition, 1, 0] } });
     const match = {
         requested: { status: "Requested" }, confirmed: { status: "Confirmed" },
-        attention: { needsAttention: true }, missingDriver: { missingDriver: true },
+        attention: { needsAttention: true }, conflicts: { vehicleConflict: true }, missingDriver: { missingDriver: true },
         missingVehicle: { missingVehicle: true }, missingPickup: { missingPickup: true },
     }[filter];
     const selected = match ? [{ $match: match }] : [];
@@ -49,21 +49,47 @@ const buildTransportDispatchPipeline = ({ from, to, filter = "all", page = 1 }) 
             pickupTime: "$transportAssignments.pickupTime", pickupLocation: "$transportAssignments.pickupLocation",
             dropoffLocation: "$transportAssignments.dropoffLocation", vehicleDescription: "$transportAssignments.vehicleDescription",
             registration: "$transportAssignments.registration", chauffeurName: "$transportAssignments.chauffeurName",
-            chauffeurPhone: "$transportAssignments.chauffeurPhone",
+            chauffeurPhone: "$transportAssignments.chauffeurPhone", registrationKey: "$transportAssignments.registrationKey",
         } },
+        { $addFields: { vehicleLookupKey: { $cond: [
+            { $and: [{ $ne: ["$registrationKey", null] }, { $ne: ["$registrationKey", ""] }] },
+            "$registrationKey", "__NO_REGISTRATION__",
+        ] } } },
+        { $lookup: {
+            from: "bookings", localField: "vehicleLookupKey", foreignField: "transportAssignments.registrationKey",
+            let: { vehicleKey: "$vehicleLookupKey", serviceStart: "$startDate", serviceEnd: "$endDate",
+                ownBooking: "$bookingId", ownAssignment: "$_id" },
+            pipeline: [
+                { $match: { bookingStatus: { $in: ACTIVE_BOOKING_STATUSES } } },
+                { $unwind: "$transportAssignments" },
+                { $match: { "transportAssignments.status": "Confirmed", $expr: { $and: [
+                    { $eq: ["$transportAssignments.registrationKey", "$$vehicleKey"] },
+                    { $lte: ["$transportAssignments.startDate", "$$serviceEnd"] },
+                    { $gte: ["$transportAssignments.endDate", "$$serviceStart"] },
+                    { $or: [{ $ne: ["$_id", "$$ownBooking"] }, { $ne: ["$transportAssignments._id", "$$ownAssignment"] }] },
+                ] } } },
+                { $project: { _id: 0, bookingId: "$_id", bookingCode: 1,
+                    assignmentId: "$transportAssignments._id", route: "$transportAssignments.route",
+                    startDate: "$transportAssignments.startDate", endDate: "$transportAssignments.endDate" } },
+                { $sort: { startDate: 1, bookingCode: 1, assignmentId: 1 } },
+            ],
+            as: "vehicleConflicts",
+        } },
+        { $addFields: { vehicleConflict: { $gt: [{ $size: "$vehicleConflicts" }, 0] } } },
         { $addFields: {
             missingDriver: { $and: [confirmed, { $or: [blank("chauffeurName"), blank("chauffeurPhone")] }] },
-            missingVehicle: { $and: [confirmed, blank("registration")] },
+            missingVehicle: { $and: [confirmed, { $or: [blank("registration"), blank("registrationKey")] }] },
             missingPickup: { $and: [confirmed, { $or: [blank("pickupTime"), blank("pickupLocation")] }] },
         } },
         { $addFields: { needsAttention: { $or: [
-            { $eq: ["$status", "Requested"] }, "$missingDriver", "$missingVehicle", "$missingPickup",
+            { $eq: ["$status", "Requested"] }, "$missingDriver", "$missingVehicle", "$missingPickup", "$vehicleConflict",
         ] } } },
         { $facet: {
             summary: [{ $group: {
                 _id: null, total: { $sum: 1 }, requested: countIf({ $eq: ["$status", "Requested"] }),
                 attention: countIf("$needsAttention"), missingDriver: countIf("$missingDriver"),
                 missingVehicle: countIf("$missingVehicle"), missingPickup: countIf("$missingPickup"),
+                conflicts: countIf("$vehicleConflict"),
             } }],
             total: [...selected, { $count: "value" }],
             items: [
@@ -71,7 +97,7 @@ const buildTransportDispatchPipeline = ({ from, to, filter = "all", page = 1 }) 
                 { $addFields: { sortTime: { $cond: [blank("pickupTime"), "99:99", "$pickupTime"] } } },
                 { $sort: { startDate: 1, sortTime: 1, bookingCode: 1, bookingId: 1, _id: 1 } },
                 { $skip: (page - 1) * PAGE_SIZE }, { $limit: PAGE_SIZE },
-                { $project: { sortTime: 0 } },
+                { $project: { sortTime: 0, registrationKey: 0, vehicleLookupKey: 0 } },
             ],
         } },
     ];

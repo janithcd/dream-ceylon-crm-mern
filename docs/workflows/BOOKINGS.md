@@ -144,7 +144,7 @@ tour is pending or reprinted after completion. No automatic email is sent.
 
 ## Transport and airport transfers
 
-**Transport Dispatch** shows Requested and Confirmed tour drives and transfers on active bookings within any selected service-date range of up to 31 days. A multi-day assignment appears when it overlaps the chosen range, even if it started earlier. Use **Needs attention** to find unconfirmed arrangements or confirmed services without a chauffeur name/phone, registration, pickup time or pickup location. Open **Review transport** to correct the assignment; the existing Transport panel also flags possible vehicle registration overlaps. This board does not include cancelled legs or closed trips, and it does not expose supplier notes or financial details. [Dispatch guide](TRANSPORT_DISPATCH.md).
+**Transport Dispatch** shows Requested and Confirmed tour drives and transfers on active bookings within any selected service-date range of up to 31 days. A multi-day assignment appears when it overlaps the chosen range, even if it started earlier. Use **Needs attention** to find unconfirmed arrangements, possible vehicle registration clashes or confirmed services without a chauffeur name/phone, registration, pickup time or pickup location. Expand a clash to inspect the other booking, then open **Review transport** to correct an assignment. This board does not include cancelled legs or closed trips, and it does not expose supplier notes or financial details. [Dispatch guide](TRANSPORT_DISPATCH.md).
 
 
 Plan multiple transport legs per booking with vehicle registration, chauffeur, pickup details, and status;

@@ -30,11 +30,17 @@ const main = async () => {
             assignment("Long tour", 100, 150, "Confirmed", { registration: "", registrationKey: "", chauffeurPhone: "", pickupTime: "", pickupLocation: "" }),
             assignment("Airport return", 123, 123, "Requested"),
             assignment("Hotel transfer", 125, 125, "Confirmed", { registration: "YY-3333", registrationKey: "YY3333" }),
-            assignment("Cancelled leg", 124, 124, "Cancelled"),
+            assignment("Cancelled leg", 125, 125, "Cancelled", { registration: "YY-3333", registrationKey: "YY3333" }),
         ]);
         const many = await makeBooking("MANY", "Pending", Array.from({ length: 21 }, (_, index) =>
             assignment(`Requested ${index}`, 124, 124, "Requested")));
-        const closed = await makeBooking("CLOSED", "Cancelled", [assignment("Hidden cancelled booking", 124, 124, "Confirmed")]);
+        const shared = await makeBooking("SHARED", "Confirmed", [
+            assignment("Other confirmed transfer", 125, 125, "Confirmed", { registration: "YY-3333", registrationKey: "YY3333" }),
+            assignment("Tentative same vehicle", 125, 125, "Requested", { registration: "YY-3333", registrationKey: "YY3333" }),
+            assignment("Other vehicle", 125, 125, "Confirmed", { registration: "ZZ-2222", registrationKey: "ZZ2222" }),
+        ]);
+        const closed = await makeBooking("CLOSED", "Cancelled", [assignment("Hidden cancelled booking", 125, 125, "Confirmed",
+            { registration: "YY-3333", registrationKey: "YY3333" })]);
         const root = "http://127.0.0.1:5000/api/bookings";
         const request = (path, method = "GET", body, admin = admins[0]) => fetch(path, { method,
             headers: { Authorization: `Bearer ${jwt.sign({ id: admin._id, v: 0 }, process.env.JWT_SECRET)}`, "Content-Type": "application/json" },
@@ -49,20 +55,29 @@ const main = async () => {
         assert.equal((await request(`${root}/transport-dispatch?from=bad`)).status, 400);
         assert.equal((await request(`${root}/transport-dispatch?from=${offset(120)}&to=${offset(151)}`)).status, 400);
         const first = await schedule("all", 1, admins[1]), second = await schedule("all", 2);
-        assert.equal(first.total, 24); assert.equal(first.totalPages, 2); assert.equal(first.items.length, 20);
-        assert.equal(second.items.length, 4);
-        assert.equal(new Set([...first.items, ...second.items].map((item) => item._id)).size, 24);
+        assert.equal(first.total, 27); assert.equal(first.totalPages, 2); assert.equal(first.items.length, 20);
+        assert.equal(second.items.length, 7);
+        assert.equal(new Set([...first.items, ...second.items].map((item) => item._id)).size, 27);
         assert.equal(first.items[0].route, "Long tour", "A drive starting before the range must still appear if it continues into the range");
         assert.equal(first.items.some((item) => String(item.bookingId) === String(closed._id)), false);
         assert.equal(first.items.some((item) => item.route === "Cancelled leg"), false);
-        assert.deepEqual(first.summary, { total: 24, requested: 22, attention: 23,
-            missingDriver: 1, missingVehicle: 1, missingPickup: 1 });
+        assert.deepEqual(first.summary, { total: 27, requested: 23, attention: 26,
+            missingDriver: 1, missingVehicle: 1, missingPickup: 1, conflicts: 3 });
         for (const secret of ["PRIVATE VEHICLE NOTE", "private-guest@example.invalid", "totalPrice", "contacts", "advancePayment"]) {
             assert.equal(JSON.stringify(first).includes(secret), false);
         }
-        assert.equal((await schedule("attention")).total, 23);
-        assert.equal((await schedule("requested")).total, 22);
-        assert.equal((await schedule("confirmed")).total, 2);
+        assert.equal((await schedule("attention")).total, 26);
+        assert.equal((await schedule("requested")).total, 23);
+        assert.equal((await schedule("confirmed")).total, 4);
+        const clashes = await schedule("conflicts");
+        assert.equal(clashes.total, 3);
+        const hotelTransfer = clashes.items.find((item) => item.route === "Hotel transfer");
+        assert.deepEqual(hotelTransfer.vehicleConflicts.map((item) => item.route), ["Other confirmed transfer"]);
+        const tentative = clashes.items.find((item) => item.route === "Tentative same vehicle");
+        assert.deepEqual(tentative.vehicleConflicts.map((item) => item.route).sort(), ["Hotel transfer", "Other confirmed transfer"]);
+        assert.equal(JSON.stringify(clashes).includes("Hidden cancelled booking"), false);
+        assert.equal(JSON.stringify(clashes).includes("Cancelled leg"), false);
+        assert.equal(JSON.stringify(clashes).includes("private-guest@example.invalid"), false);
         for (const filter of ["missingDriver", "missingVehicle", "missingPickup"]) {
             const result = await schedule(filter);
             assert.equal(result.total, 1); assert.equal(result.items[0].route, "Long tour");
@@ -72,14 +87,26 @@ const main = async () => {
         });
         assert.equal(updated.status, 200, await updated.clone().text());
         const fixed = await schedule("attention");
-        assert.equal(fixed.total, 22); assert.equal(fixed.summary.missingDriver, 0);
+        assert.equal(fixed.total, 25); assert.equal(fixed.summary.missingDriver, 0);
         assert.equal(fixed.summary.missingVehicle, 0); assert.equal(fixed.summary.missingPickup, 0);
-        assert.equal((await schedule("confirmed")).total, 2);
+        assert.equal((await schedule("confirmed")).total, 4);
         await Booking.updateOne({ _id: open._id }, { $set: { bookingStatus: "Completed" } });
-        assert.equal((await schedule("all")).total, 21);
+        assert.equal((await schedule("all")).total, 24);
+        assert.equal((await schedule("conflicts")).total, 1, "Same-booking overlap stays visible after another trip closes");
         await Booking.updateOne({ _id: many._id }, { $set: { bookingStatus: "Cancelled" } });
+        assert.equal((await schedule("all")).total, 3);
+        await Booking.updateOne({ _id: shared._id }, { $set: { bookingStatus: "Completed" } });
         assert.equal((await schedule("all")).total, 0);
-        console.log("Dispatch board: ongoing multi-day drives, access, pagination, missing details, live corrections, and closed trips passed.");
+        const legacy = await makeBooking("LEGACY", "Confirmed", [assignment("Old registration", 120, 126, "Confirmed",
+            { registration: "LEG-0001", registrationKey: "" })]);
+        assert.equal((await schedule("missingVehicle")).total, 1, "Legacy registrations need review before conflict checks can trust them");
+        const normalized = await request(`${root}/${legacy._id}/transport-assignments/${legacy.transportAssignments[0]._id}`, "PUT",
+            { registration: "LEG-0001" });
+        assert.equal(normalized.status, 200, await normalized.clone().text());
+        assert.equal((await schedule("attention")).total, 0);
+        await Booking.updateOne({ _id: legacy._id }, { $set: { bookingStatus: "Completed" } });
+        assert.equal((await schedule("all")).total, 0);
+        console.log("Dispatch board: vehicle clashes across trips and within a booking, tentative requests, ongoing drives, access, pagination, privacy, corrections, and closed trips passed.");
     } finally {
         const ids = bookings.map((booking) => booking._id);
         await ActivityLog.deleteMany({ relatedRecordId: { $in: ids } });
