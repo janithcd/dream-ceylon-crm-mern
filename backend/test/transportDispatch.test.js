@@ -6,6 +6,20 @@ const app = require("../app");
 const Booking = require("../models/Booking");
 const Admin = require("../models/Admin");
 const { parseTransportDispatchFilters, buildTransportDispatchPipeline } = require("../utils/transportDispatch");
+const { dispatchCsv } = require("../utils/transportDispatchCsv");
+
+test("dispatch CSV quotes spreadsheet formulas and excludes private fields", () => {
+    const csv = dispatchCsv([{ startDate: new Date("2027-03-05"), endDate: new Date("2027-03-06"),
+        bookingCode: "DCJ-001", customerName: "=HYPERLINK(\"evil\")", route: "Tour, \"North\"",
+        status: "Confirmed", vehicleConflict: true, vehicleConflicts: [{ bookingCode: "DCJ-OTHER" }, { bookingCode: "DCJ-OTHER" }],
+        notes: "PRIVATE SUPPLIER NOTE", totalPrice: 999,
+    }]);
+    assert.match(csv, /"'=HYPERLINK\(""evil""\)"/);
+    assert.match(csv, /"Tour, ""North"""/);
+    assert.match(csv, /"Possible vehicle clash","DCJ-OTHER"/);
+    assert.ok(!csv.includes("PRIVATE SUPPLIER NOTE") && !csv.includes("999"));
+    assert.equal(csv.split("\r\n").length, 3);
+});
 
 test("dispatch range follows Sri Lanka's calendar day and accepts up to 31 days", () => {
     const before = parseTransportDispatchFilters({}, new Date("2026-12-31T18:29:59Z")).value;
@@ -56,13 +70,15 @@ test("dispatch matches overlapping assignments, checks confirmed details, and pr
 });
 
 test("dispatch endpoint requires booking access, validates filters and handles an empty range", async (t) => {
-    const viewerId = "507f1f77bcf86cd799439601", blockedId = "507f1f77bcf86cd799439602";
+    const viewerId = "507f1f77bcf86cd799439601", blockedId = "507f1f77bcf86cd799439602", exportId = "507f1f77bcf86cd799439603";
     let calls = 0, fail = false;
     let result = [{ items: [{ bookingCode: "DCJ-TEST", route: "Tour" }],
         total: [{ value: 21 }], summary: [{ total: 24, requested: 22, attention: 23, conflicts: 3, missingDriver: 1 }] }];
     t.mock.method(Admin, "findById", (id) => ({ select: async () => ({ _id: id,
-        role: String(id) === blockedId ? "Unknown Role" : "Viewer", status: "Active", tokenVersion: 0 }) }));
-    t.mock.method(Booking, "aggregate", async () => { calls++; if (fail) throw new Error("synthetic unavailable database"); return result; });
+        role: String(id) === blockedId ? "Unknown Role" : String(id) === exportId ? "Super Admin" : "Viewer", status: "Active", tokenVersion: 0 }) }));
+    let lastPipeline;
+    t.mock.method(Booking, "aggregate", async (pipeline) => { calls++; lastPipeline = pipeline;
+        if (fail) throw new Error("synthetic unavailable database"); return result; });
     const server = app.listen(0, "127.0.0.1");
     await new Promise((resolve) => server.once("listening", resolve));
     t.after(() => new Promise((resolve) => server.close(resolve)));
@@ -79,6 +95,22 @@ test("dispatch endpoint requires booking access, validates filters and handles a
     assert.equal(data.summary.total, 24); assert.equal(data.summary.missingVehicle, 0);
     assert.equal(data.summary.conflicts, 3);
     assert.equal(data.items[0].route, "Tour");
+    assert.equal((await request("/export", viewerId)).status, 403);
+    assert.equal((await request("/export?filter=bad", exportId)).status, 400);
+    result = [{ items: [{ bookingCode: "DCJ-TEST", customerName: "=PRIVATE", route: "Tour",
+        status: "Confirmed", startDate: new Date("2027-03-05"), endDate: new Date("2027-03-05") }], total: [{ value: 1 }], summary: [] }];
+    const exportResponse = await request("/export?from=2027-03-05&to=2027-03-07&filter=confirmed&page=2", exportId);
+    assert.equal(exportResponse.status, 200);
+    assert.equal(exportResponse.headers.get("cache-control"), "no-store");
+    assert.match(exportResponse.headers.get("content-type"), /text\/csv/);
+    assert.match(exportResponse.headers.get("content-disposition"), /transport-dispatch-2027-03-05-to-2027-03-07\.csv/);
+    assert.ok((await exportResponse.text()).includes("'=PRIVATE"));
+    assert.equal(lastPipeline.at(-1).$facet.items.at(-2).$limit, 501);
+    assert.equal(lastPipeline.at(-1).$facet.items.at(-3).$skip, 0);
+    result = [{ items: [], total: [{ value: 501 }], summary: [] }];
+    const tooMany = await request("/export?filter=all", exportId);
+    assert.equal(tooMany.status, 409);
+    assert.match((await tooMany.json()).message, /Narrow the date range/);
     result = [{ items: [], total: [], summary: [] }];
     const empty = await (await request("?filter=all", viewerId)).json();
     assert.equal(empty.total, 0); assert.equal(empty.totalPages, 1);

@@ -33,7 +33,7 @@ const { getHotelCancellationDeadlines } = require("../controllers/hotelCancellat
 const { getCancellationReview } = require("../controllers/cancellationReviewController");
 const { getSupplierContacts, logSupplierContact } = require("../controllers/supplierContactController");
 const { getAirportTransfers } = require("../controllers/airportTransfersController");
-const { getTransportDispatch } = require("../controllers/transportDispatchController");
+const { getTransportDispatch, exportTransportDispatch } = require("../controllers/transportDispatchController");
 const { getDepartureReadiness, getPreArrivalAlerts } = require("../controllers/departureReadinessController");
 const { getPostTripCareQueue, getRecoveryAlerts, getPostTripCare, getPostTripMessage, recordPostTripCare,
     assignPostTripCare } = require("../controllers/postTripCareController");
@@ -91,6 +91,7 @@ router.get(
 );
 
 router.get("/transport-dispatch", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getTransportDispatch);
+router.get("/transport-dispatch/export", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW, PERMISSIONS.REPORT_EXPORT), exportTransportDispatch);
 
 router.get("/departure-readiness", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getDepartureReadiness);
 router.get("/handover-worklist", protect, authorizePermissions(PERMISSIONS.BOOKING_VIEW), getHandoverWorklist);

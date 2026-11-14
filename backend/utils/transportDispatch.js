@@ -3,6 +3,7 @@ const { getBusinessDayBounds } = require("./businessDate");
 const { ACTIVE_BOOKING_STATUSES } = require("./myTasks");
 
 const PAGE_SIZE = 20;
+const MAX_EXPORT_ROWS = 500;
 const FILTERS = ["all", "attention", "requested", "confirmed", "conflicts", "missingDriver", "missingVehicle", "missingPickup"];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -23,7 +24,7 @@ const parseTransportDispatchFilters = (query = {}, now = new Date()) => {
     return { value: { from, to, filter, page } };
 };
 
-const buildTransportDispatchPipeline = ({ from, to, filter = "all", page = 1 }) => {
+const buildTransportDispatchPipeline = ({ from, to, filter = "all", page = 1 }, pageSize = PAGE_SIZE) => {
     const start = getBusinessDayBounds(new Date(`${from}T00:00:00Z`)).start;
     const end = getBusinessDayBounds(new Date(`${to}T00:00:00Z`)).end;
     const serviceMatch = { status: { $in: ["Requested", "Confirmed"] }, startDate: { $lte: end }, endDate: { $gte: start } };
@@ -96,11 +97,11 @@ const buildTransportDispatchPipeline = ({ from, to, filter = "all", page = 1 }) 
                 ...selected,
                 { $addFields: { sortTime: { $cond: [blank("pickupTime"), "99:99", "$pickupTime"] } } },
                 { $sort: { startDate: 1, sortTime: 1, bookingCode: 1, bookingId: 1, _id: 1 } },
-                { $skip: (page - 1) * PAGE_SIZE }, { $limit: PAGE_SIZE },
+                { $skip: (page - 1) * pageSize }, { $limit: pageSize },
                 { $project: { sortTime: 0, registrationKey: 0, vehicleLookupKey: 0 } },
             ],
         } },
     ];
 };
 
-module.exports = { parseTransportDispatchFilters, buildTransportDispatchPipeline, PAGE_SIZE, FILTERS };
+module.exports = { parseTransportDispatchFilters, buildTransportDispatchPipeline, PAGE_SIZE, MAX_EXPORT_ROWS, FILTERS };

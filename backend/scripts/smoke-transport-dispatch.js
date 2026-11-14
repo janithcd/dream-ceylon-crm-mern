@@ -63,6 +63,17 @@ const main = async () => {
         assert.equal(first.items.some((item) => item.route === "Cancelled leg"), false);
         assert.deepEqual(first.summary, { total: 27, requested: 23, attention: 26,
             missingDriver: 1, missingVehicle: 1, missingPickup: 1, conflicts: 3 });
+        assert.equal((await request(`${root}/transport-dispatch/export?from=${offset(120)}&to=${offset(126)}`, "GET", undefined, admins[1])).status, 403);
+        await Admin.updateOne({ _id: admins[0]._id }, { $addToSet: { customPermissions: "report.export" } });
+        const exportUrl = `${root}/transport-dispatch/export?from=${offset(120)}&to=${offset(126)}`;
+        const exported = await request(`${exportUrl}&filter=all&page=2`);
+        assert.equal(exported.status, 200, await exported.clone().text());
+        const csv = await exported.text();
+        assert.equal(csv.split("\r\n").length, 29, "Export includes all 27 assignments, not just one board page");
+        assert.ok(csv.includes("Hotel transfer") && csv.includes("Other confirmed transfer"));
+        assert.ok(!csv.includes("PRIVATE VEHICLE NOTE") && !csv.includes("private-guest@example.invalid"));
+        const conflictCsv = await (await request(`${exportUrl}&filter=conflicts`)).text();
+        assert.equal(conflictCsv.split("\r\n").length, 5, "The export honors the selected clash filter");
         for (const secret of ["PRIVATE VEHICLE NOTE", "private-guest@example.invalid", "totalPrice", "contacts", "advancePayment"]) {
             assert.equal(JSON.stringify(first).includes(secret), false);
         }

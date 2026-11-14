@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { FaCar, FaSyncAlt } from "react-icons/fa";
 import api from "../api/axios";
 import BookingTransportModal from "../components/BookingTransportModal";
+import { usePermissions } from "../context/PermissionContext";
 import { addCalendarDays, formatCalendarDate, todayCalendarDate } from "../utils/calendarDate";
 
 const defaultDates = () => {
@@ -16,6 +17,7 @@ const choices = [
 ];
 
 export default function TransportDispatch() {
+    const { hasPermission } = usePermissions();
     const [filters, setFilters] = useState(() => ({ ...defaultDates(), filter: "all", page: 1 }));
     const [dates, setDates] = useState(() => defaultDates());
     const [reload, setReload] = useState(0);
@@ -23,6 +25,7 @@ export default function TransportDispatch() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [selected, setSelected] = useState(null);
+    const [downloading, setDownloading] = useState(false);
 
     useEffect(() => {
         let active = true;
@@ -46,6 +49,25 @@ export default function TransportDispatch() {
     const submitDates = (event) => { event.preventDefault(); setLoading(true); setFilters((current) => ({ ...current, ...dates, page: 1 })); };
     const resetDates = () => { const next = defaultDates(); setDates(next); setLoading(true); setFilters((current) => ({ ...current, ...next, page: 1 })); };
     const changePage = (page) => { setLoading(true); setFilters((current) => ({ ...current, page })); };
+    const downloadCsv = async () => {
+        try {
+            setDownloading(true); setError("");
+            const response = await api.get("/bookings/transport-dispatch/export", {
+                params: { from: filters.from, to: filters.to, filter: filters.filter }, responseType: "blob",
+            });
+            const url = window.URL.createObjectURL(new Blob([response.data], { type: "text/csv;charset=utf-8" }));
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `transport-dispatch-${filters.from}-to-${filters.to}.csv`;
+            document.body.appendChild(link);
+            link.click(); link.remove();
+            window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+        } catch {
+            setError("Could not export the schedule. If it contains more than 500 assignments, narrow the dates or filter and try again.");
+        } finally {
+            setDownloading(false);
+        }
+    };
     const booking = selected && { _id: selected.bookingId, bookingCode: selected.bookingCode,
         customer: { fullName: selected.customerName }, travelStartDate: selected.travelStartDate,
         travelEndDate: selected.travelEndDate };
@@ -79,9 +101,13 @@ export default function TransportDispatch() {
                         <small className="text-muted">{label}</small><div className="fs-3 fw-bold">{count}</div></div></div></div>)}
             </div>
             <div className="card border-0 shadow-sm"><div className="card-body">
-                <div className="d-flex gap-2 flex-wrap mb-3" role="group" aria-label="Dispatch filter">
-                    {choices.map(([value, label]) => <button type="button" key={value} className={`btn btn-sm ${filters.filter === value ? "btn-primary" : "btn-outline-primary"}`}
-                        onClick={() => choose(value)}>{label}</button>)}
+                <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                    <div className="d-flex gap-2 flex-wrap" role="group" aria-label="Dispatch filter">
+                        {choices.map(([value, label]) => <button type="button" key={value} className={`btn btn-sm ${filters.filter === value ? "btn-primary" : "btn-outline-primary"}`}
+                            onClick={() => choose(value)}>{label}</button>)}
+                    </div>
+                    {hasPermission("report.export") && <button type="button" className="btn btn-sm btn-outline-secondary" disabled={loading || downloading} onClick={downloadCsv}>
+                        {downloading ? "Exporting…" : "Download schedule CSV"}</button>}
                 </div>
                 <p className="small text-muted">Requested assignments need supplier confirmation. Confirmed assignments need a chauffeur name and phone, registration, pickup time and location. Vehicle conflicts compare overlapping dates for the same registration, including other legs in the same booking; review the exact times before dispatch.</p>
                 {!data.items.length ? <div className="py-4 text-center"><p className="mb-2">No transport assignments in this view.</p>
