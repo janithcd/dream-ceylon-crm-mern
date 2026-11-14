@@ -38,7 +38,7 @@ const isCurrentRoomingPlan = (booking, stay) => {
 
 // This reviews recorded operations data, not whether every service is in scope.
 // Financial records, private notes and guest contact values never enter the result.
-export const getBookingReadiness = (booking, now = new Date()) => {
+export const getBookingReadiness = (booking, now = new Date(), vehicleCheck = {}) => {
     if (["Completed", "Cancelled"].includes(booking.bookingStatus)) {
         return { inactive: true, sections: [], attentionCount: 0, unassessedCount: 0 };
     }
@@ -123,6 +123,8 @@ export const getBookingReadiness = (booking, now = new Date()) => {
     const transportIssues = [];
     const requestedTransport = assignments.filter((item) => item.status !== "Confirmed").length;
     if (requestedTransport) transportIssues.push(`${count(requestedTransport, "transport leg")} awaiting confirmation.`);
+    if (vehicleCheck.conflicts?.length) transportIssues.push(`${count(vehicleCheck.conflicts.length, "transport leg")} may share a vehicle with a confirmed service. Review the overlapping dates in Transport.`);
+    if (vehicleCheck.unavailable && assignments.length) transportIssues.push("Vehicle overlap check is unavailable. Verify registrations in Transport before departure.");
     assignments.forEach((item, index) => {
         const label = hasText(item.route) ? item.route.trim() : `Transport leg ${index + 1}`;
         const range = dateRange(item.startDate, item.endDate);
@@ -151,7 +153,7 @@ export const getBookingReadiness = (booking, now = new Date()) => {
     });
     sections.push(section("transport", "Transport", !assignments.length
         ? "No active transport is recorded. Check whether transport is needed for this booking."
-        : `${count(assignments.length, "active transport leg")}. Checks saved details; vehicle availability is reviewed in Transport.`,
+        : `${count(assignments.length, "active transport leg")}. Checks saved details and known registration overlaps; confirm the actual vehicle schedule with the supplier.`,
     transportIssues, Boolean(assignments.length && trip)));
 
     const activities = (booking.excursions || []).filter((item) => !["Cancelled", "Completed"].includes(item.status));

@@ -178,13 +178,14 @@ Open **Bookings → Readiness review** on an active booking to check the latest 
 day coverage, hotel night coverage, transport confirmations and pickup details, and open/overdue/unassigned
 preparation tasks. Each area links to its existing editor. Empty plans show **Not assessed** rather than a
 pass; hotels may be guest-arranged, and overlapping stays may be intentional. Flight and pickup times remain
-separate. The review uses Sri Lanka calendar dates, excludes financial checks, and does not change any
-booking, task, or contact record. Reopen or refresh it after saving changes; completed/cancelled bookings are
+separate. The review flags registered vehicles used by overlapping confirmed services, including when the
+current leg is only requested; an unavailable overlap check also needs review. It uses Sri Lanka calendar dates,
+excludes financial checks, and does not change any booking, task, or contact record. Reopen or refresh it after saving changes; completed/cancelled bookings are
 not assessed.
 
 **Departure Readiness** lists active bookings starting within 30 Sri Lanka calendar days, 20 per page. It
-counts missing traveler names, pending hotel and transport confirmations, missing or stale rooming plans on
-confirmed stays, and open tasks. **Review booking** opens the existing per-booking readiness review, which now
+counts missing traveler names, pending hotel and transport confirmations, possible vehicle clashes, missing
+or stale rooming plans on confirmed stays, and open tasks. **Review booking** opens the existing per-booking readiness review, which now
 also flags missing or stale rooming plans. The queue shows counts without traveler names, room assignments,
 guest contact details, notes or financial fields. A missing hotel/transport service or rooming plan may be
 outside the agreed scope; the labels are prompts to review, not a final trip approval. `GET

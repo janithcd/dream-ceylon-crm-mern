@@ -25,7 +25,7 @@ Use this page to find a module and its operating instructions. The detailed guid
 - Activity confirmation, cancellation and missing-detail checks in departure readiness, plus activity dispatch details in the internal operations brief.
 - Activity-only cancelled trips remain in Cancellation Review until open reservations are resolved, with direct links to each activity.
 - Reviewed guest travel pack PDF combining the daily itinerary with confirmed hotels, transport and activities, with missing-detail warnings and stale-preview protection.
-- Preparation tasks, My Tasks, Team Tasks, departure readiness and pre-arrival contact tracking.
+- Preparation tasks, My Tasks, Team Tasks, departure readiness with vehicle clash counts, and pre-arrival contact tracking.
 - Private handover journals, unread team worklists, operations PDFs and cancellation review.
 
 [Booking and operations workflow](docs/workflows/BOOKINGS.md)

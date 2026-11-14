@@ -1,5 +1,6 @@
 const Booking = require("../models/Booking");
 const { PAGE_SIZE, MESSAGE_FILTERS, REMINDER_DAYS, getDepartureReadinessQuery, summarizeDepartureReadiness } = require("../utils/departureReadiness");
+const { countDepartureVehicleConflicts } = require("../utils/departureVehicleConflicts");
 
 const getPreArrivalAlerts = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -28,18 +29,20 @@ const getDepartureReadiness = async (req, res) => {
     }
 
     try {
-        const query = getDepartureReadinessQuery(new Date(), message);
+        const now = new Date();
+        const query = getDepartureReadinessQuery(now, message);
         const [bookings, total] = await Promise.all([
             Booking.find(query)
-                .select("bookingCode customer.fullName travelStartDate travelEndDate bookingStatus preArrivalContact.sentAt preArrivalContact.sentByName preArrivalContact.channel numberOfTravelers travelerNames travelerRosterVersion hotelStays.status hotelStays.rooms hotelStays.roomingPlan transportAssignments.status preparationTasks.completedAt excursions.status excursions.title excursions.supplierName excursions.meetingPoint excursions.confirmationReference excursions.startTime excursions.participants excursions.date excursions.followUpDate")
+                .select("bookingCode customer.fullName travelStartDate travelEndDate bookingStatus preArrivalContact.sentAt preArrivalContact.sentByName preArrivalContact.channel numberOfTravelers travelerNames travelerRosterVersion hotelStays.status hotelStays.rooms hotelStays.roomingPlan transportAssignments._id transportAssignments.status transportAssignments.registrationKey transportAssignments.startDate transportAssignments.endDate preparationTasks.completedAt excursions.status excursions.title excursions.supplierName excursions.meetingPoint excursions.confirmationReference excursions.startTime excursions.participants excursions.date excursions.followUpDate")
                 .sort({ travelStartDate: 1, createdAt: 1, _id: 1 })
                 .skip((page - 1) * PAGE_SIZE)
                 .limit(PAGE_SIZE)
                 .lean(),
             Booking.countDocuments(query),
         ]);
+        const vehicleConflicts = await countDepartureVehicleConflicts(bookings);
         return res.json({
-            items: bookings.map((booking) => summarizeDepartureReadiness(booking)),
+            items: bookings.map((booking) => summarizeDepartureReadiness(booking, now, vehicleConflicts.get(String(booking._id)) || 0)),
             total, page, message, totalPages: Math.ceil(total / PAGE_SIZE) || 1,
         });
     } catch (error) {

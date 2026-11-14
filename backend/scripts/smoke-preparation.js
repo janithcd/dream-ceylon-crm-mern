@@ -817,11 +817,18 @@ const main = async () => {
         const secondTransport = JSON.parse(secondTransportText);
         assert.equal(secondTransport.conflicts[0].bookings[0].bookingCode, booking.bookingCode);
         assert.equal((await (await request(transportUrl, "GET")).json()).conflicts[0].bookings[0].bookingCode, overlappingBooking.bookingCode);
+        const clashingDepartures = (await (await request(departureUrl, "GET")).json()).items;
+        assert.equal(clashingDepartures.find((item) => item._id === String(booking._id)).vehicleConflictCount, 1);
+        assert.equal(clashingDepartures.find((item) => item._id === String(overlappingBooking._id)).vehicleConflictCount, 1);
+        assert.equal(JSON.stringify(clashingDepartures).includes("WPCAB1234"), false);
 
         const editedTransport = await request(`${otherTransportUrl}/${secondTransport.assignments[0]._id}`, "PUT", { registration: "WP-OTHER 999" });
         assert.equal(editedTransport.status, 200);
         assert.equal((await editedTransport.json()).conflicts.length, 0);
         assert.equal((await (await request(transportUrl, "GET")).json()).conflicts.length, 0);
+        const resolvedDepartures = (await (await request(departureUrl, "GET")).json()).items;
+        assert.equal(resolvedDepartures.find((item) => item._id === String(booking._id)).vehicleConflictCount, 0);
+        assert.equal(resolvedDepartures.find((item) => item._id === String(overlappingBooking._id)).vehicleConflictCount, 0);
         const flightCleared = await request(`${transportUrl}/${firstTransport.assignments[0]._id}`, "PUT", { flight: null });
         assert.equal(flightCleared.status, 200);
         assert.equal((await flightCleared.json()).assignments[0].flight, null);

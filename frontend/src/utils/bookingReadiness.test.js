@@ -148,6 +148,17 @@ test("missing pickup details and partial flights need attention while cancelled 
     assert.match(transport.summary, /2 active transport legs/);
 });
 
+test("vehicle clashes and an unavailable overlap check keep transport under review", () => {
+    const booking = completeBooking();
+    const warning = getBookingReadiness(booking, now, { conflicts: [{ assignmentId: "private-id", bookings: [{ bookingCode: "OTHER" }] }] });
+    assert.equal(findSection(warning, "transport").status, "attention");
+    assert.match(findSection(warning, "transport").issues.join(" "), /1 transport leg may share a vehicle/);
+    assert.equal(JSON.stringify(warning).includes("OTHER"), false);
+    const unavailable = getBookingReadiness(booking, now, { unavailable: true });
+    assert.match(findSection(unavailable, "transport").issues.join(" "), /Vehicle overlap check is unavailable/);
+    assert.equal(unavailable.attentionCount, 1);
+});
+
 test("same-day trips, invalid ranges and bookings with old incomplete records stay explicit", () => {
     const dayTrip = completeBooking();
     dayTrip.travelEndDate = dayTrip.travelStartDate;

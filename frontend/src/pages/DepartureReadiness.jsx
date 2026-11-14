@@ -79,7 +79,7 @@ const DepartureReadiness = () => {
             <button type="button" className="btn btn-outline-secondary" onClick={refresh} disabled={loading}><FaSyncAlt className="me-2" />Refresh</button>
         </div>
         <div className="alert alert-info small">
-            This view checks saved traveler names, supplier confirmations, hotel rooming plans, activity arrangements and open tasks. A missing plan or service may be outside the agreed scope. Confirm the arrangements with the team; payment and supplier costs are reviewed separately.
+            This view checks saved traveler names, supplier confirmations, vehicle registration overlaps, hotel rooming plans, activity arrangements and open tasks. A missing plan or service may be outside the agreed scope. Confirm the arrangements with the team; payment and supplier costs are reviewed separately.
         </div>
         <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Pre-arrival message filter">
             {Object.entries(messageFilters).map(([value, label]) => <button key={value} type="button"
@@ -118,7 +118,8 @@ const DepartureReadiness = () => {
                             <div className="col-sm-6 col-xl"><strong>Travelers</strong><div className={item.missingTravelerCount ? "text-warning-emphasis" : "text-muted"}>{item.namedTravelerCount} of {item.travelerCount} named{item.missingTravelerCount ? ` · ${item.missingTravelerCount} missing` : ""}</div></div>
                             <div className="col-sm-6 col-xl"><strong>Hotels</strong><div className={item.pendingHotelCount ? "text-warning-emphasis" : "text-muted"}>{item.pendingHotelCount ? `${item.pendingHotelCount} awaiting confirmation` : "No pending confirmations"}</div></div>
                             <div className="col-sm-6 col-xl"><strong>Rooming plans</strong><div className={item.staleRoomingCount ? "text-warning-emphasis" : "text-muted"}>{item.staleRoomingCount ? `${item.staleRoomingCount} stale` : "No stale plans"}{item.missingRoomingCount ? ` · ${item.missingRoomingCount} missing` : ""}</div></div>
-                            <div className="col-sm-6 col-xl"><strong>Transport</strong><div className={item.pendingTransportCount ? "text-warning-emphasis" : "text-muted"}>{item.pendingTransportCount ? `${item.pendingTransportCount} awaiting confirmation` : "No pending confirmations"}</div></div>
+                            <div className="col-sm-6 col-xl"><strong>Transport</strong><div className={item.pendingTransportCount ? "text-warning-emphasis" : "text-muted"}>{item.pendingTransportCount ? `${item.pendingTransportCount} awaiting confirmation` : "No pending confirmations"}</div>
+                                {!!item.vehicleConflictCount && <div className="text-danger">{item.vehicleConflictCount} possible vehicle {item.vehicleConflictCount === 1 ? "clash" : "clashes"} · open Transport from Review booking</div>}</div>
                             <div className="col-sm-6 col-xl"><strong>Tasks</strong><div className={item.openTaskCount ? "text-warning-emphasis" : "text-muted"}>{item.openTaskCount} open</div></div>
                             <div className="col-sm-6 col-xl"><strong>Activities</strong>
                                 {!item.activeActivityCount ? <div className="text-muted">No active activities recorded</div> : <>

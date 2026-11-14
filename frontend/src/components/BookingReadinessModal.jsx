@@ -12,6 +12,7 @@ const actionLabels = { booking: "Edit booking", travelers: "Open traveler roster
 const BookingReadinessModal = ({ bookingId, onClose, onOpenSection }) => {
     const { hasPermission } = usePermissions();
     const [trip, setTrip] = useState(null);
+    const [vehicleCheck, setVehicleCheck] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [reloadKey, setReloadKey] = useState(0);
@@ -21,10 +22,14 @@ const BookingReadinessModal = ({ bookingId, onClose, onOpenSection }) => {
     useEffect(() => { closeRef.current = onClose; }, [onClose]);
     useEffect(() => {
         let active = true;
-        api.get(`/bookings/${bookingId}`)
-            .then(({ data }) => { if (active) setTrip(data); })
-            .catch((err) => {
-                if (active) setError(err.response?.data?.message || "Failed to load the readiness review.");
+        Promise.allSettled([api.get(`/bookings/${bookingId}`), api.get(`/bookings/${bookingId}/transport-assignments`)])
+            .then(([bookingResult, transportResult]) => {
+                if (!active) return;
+                if (bookingResult.status === "fulfilled") setTrip(bookingResult.value.data);
+                else setError(bookingResult.reason.response?.data?.message || "Failed to load the readiness review.");
+                setVehicleCheck(transportResult.status === "fulfilled"
+                    ? { conflicts: transportResult.value.data.conflicts || [], unavailable: Boolean(transportResult.value.data.conflictCheckUnavailable) }
+                    : { unavailable: true });
             })
             .finally(() => { if (active) setLoading(false); });
         return () => { active = false; };
@@ -65,11 +70,12 @@ const BookingReadinessModal = ({ bookingId, onClose, onOpenSection }) => {
 
     const reload = () => {
         setTrip(null);
+        setVehicleCheck({});
         setLoading(true);
         setError("");
         setReloadKey((value) => value + 1);
     };
-    const review = trip ? getBookingReadiness(trip) : null;
+    const review = trip ? getBookingReadiness(trip, new Date(), vehicleCheck) : null;
 
     return (
         <>

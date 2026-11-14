@@ -8,6 +8,7 @@ const app = require("../app");
 const Admin = require("../models/Admin");
 const Booking = require("../models/Booking");
 const { getDepartureReadinessQuery, summarizeDepartureReadiness } = require("../utils/departureReadiness");
+const { countDepartureVehicleConflicts } = require("../utils/departureVehicleConflicts");
 
 const example = () => ({
     _id: "507f1f77bcf86cd799439201", bookingCode: "DCJ-READY-TEST", bookingStatus: "Confirmed",
@@ -75,6 +76,40 @@ test("queue distinguishes action, optional plan review and no recorded gaps with
     assert.equal(sent.preArrivalSentByName, "Casey");
     assert.equal(sent.preArrivalSentChannel, "Email");
     assert.equal(JSON.stringify(sent).includes("PRIVATE MESSAGE"), false);
+});
+
+test("departure counts confirmed vehicle overlaps for requested and confirmed legs without exposing candidates", async (t) => {
+    const source = { _id: "507f1f77bcf86cd799439211", transportAssignments: [
+        { _id: "507f1f77bcf86cd799439212", status: "Confirmed", registrationKey: "WP123",
+            startDate: new Date("2027-04-01"), endDate: new Date("2027-04-03") },
+        { _id: "507f1f77bcf86cd799439213", status: "Requested", registrationKey: "WP123",
+            startDate: new Date("2027-04-02"), endDate: new Date("2027-04-02") },
+        { _id: "507f1f77bcf86cd799439214", status: "Cancelled", registrationKey: "WP123",
+            startDate: new Date("2027-04-02"), endDate: new Date("2027-04-02") },
+    ] };
+    const other = { _id: "507f1f77bcf86cd799439215", transportAssignments: [
+        { _id: "507f1f77bcf86cd799439216", status: "Confirmed", registrationKey: "WP123",
+            startDate: new Date("2027-04-02"), endDate: new Date("2027-04-02") },
+        { _id: "507f1f77bcf86cd799439217", status: "Confirmed", registrationKey: "OTHER",
+            startDate: new Date("2027-04-02"), endDate: new Date("2027-04-02") },
+    ] };
+    let reads = 0;
+    t.mock.method(Booking, "find", (query) => {
+        reads++;
+        assert.deepEqual(query.transportAssignments.$elemMatch.registrationKey.$in, ["WP123"]);
+        assert.equal(query.transportAssignments.$elemMatch.status, "Confirmed");
+        return { select: () => ({ lean: async () => [source, other] }) };
+    });
+    const counts = await countDepartureVehicleConflicts([source]);
+    assert.equal(reads, 1);
+    assert.equal(counts.get(source._id), 2);
+    assert.equal((await countDepartureVehicleConflicts([{ _id: other._id, transportAssignments: [] }])).get(other._id), 0);
+    assert.equal(reads, 1);
+    const summary = summarizeDepartureReadiness({ ...example(), transportAssignments: [{ status: "Confirmed" }],
+        hotelStays: [example().hotelStays[0]], preparationTasks: [] }, new Date(), counts.get(source._id));
+    assert.equal(summary.vehicleConflictCount, 2);
+    assert.equal(summary.status, "attention");
+    assert.equal(JSON.stringify(summary).includes("WP123"), false);
 });
 
 test("queue API enforces booking permission, paginates and returns a safe summary", async (t) => {

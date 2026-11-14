@@ -9,7 +9,7 @@ const REMINDER_DAYS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Return operational counts only. Names, assignments, contact details and notes stay on the booking.
-const summarizeDepartureReadiness = (booking, now = new Date()) => {
+const summarizeDepartureReadiness = (booking, now = new Date(), vehicleConflictCount = 0) => {
     const namedCount = booking.travelerNames?.length || 0;
     const headcount = booking.numberOfTravelers || 0;
     const activeStays = (booking.hotelStays || []).filter((stay) => stay.status !== "Cancelled");
@@ -33,7 +33,7 @@ const summarizeDepartureReadiness = (booking, now = new Date()) => {
     const missingRoomingCount = rooming.filter((status) => status === "none").length;
     const staleRoomingCount = rooming.filter((status) => status === "stale").length;
     const needsAction = booking.bookingStatus === "Pending" || missingTravelerCount > 0 ||
-        pendingHotelCount > 0 || pendingTransportCount > 0 || openTasks.length > 0 || staleRoomingCount > 0 ||
+        pendingHotelCount > 0 || pendingTransportCount > 0 || vehicleConflictCount > 0 || openTasks.length > 0 || staleRoomingCount > 0 ||
         pendingActivityCount > 0 || activityCancellationCount > 0 || incompleteActivityCount > 0 || activityFollowUpDueCount > 0;
     const needsReview = missingRoomingCount > 0 || !activeStays.length || !transport.length;
 
@@ -51,6 +51,7 @@ const summarizeDepartureReadiness = (booking, now = new Date()) => {
         missingTravelerCount,
         pendingHotelCount,
         pendingTransportCount,
+        vehicleConflictCount,
         activeActivityCount: activities.length,
         pendingActivityCount,
         activityCancellationCount,
