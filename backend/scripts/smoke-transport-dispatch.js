@@ -75,6 +75,13 @@ const main = async () => {
         assert.deepEqual(hotelTransfer.vehicleConflicts.map((item) => item.route), ["Other confirmed transfer"]);
         const tentative = clashes.items.find((item) => item.route === "Tentative same vehicle");
         assert.deepEqual(tentative.vehicleConflicts.map((item) => item.route).sort(), ["Hotel transfer", "Other confirmed transfer"]);
+        const editorResponse = await request(`${root}/${shared._id}/transport-assignments`);
+        assert.equal(editorResponse.status, 200, await editorResponse.clone().text());
+        const editor = await editorResponse.json();
+        const editorWarning = editor.conflicts.find((item) => String(item.assignmentId) === String(shared.transportAssignments[1]._id));
+        assert.deepEqual(editorWarning.bookings.map((item) => item.route).sort(), ["Hotel transfer", "Other confirmed transfer"]);
+        assert.ok(editorWarning.bookings.some((item) => String(item.bookingId) === String(open._id)));
+        assert.equal(JSON.stringify(editor.conflicts).includes("private-guest@example.invalid"), false);
         assert.equal(JSON.stringify(clashes).includes("Hidden cancelled booking"), false);
         assert.equal(JSON.stringify(clashes).includes("Cancelled leg"), false);
         assert.equal(JSON.stringify(clashes).includes("private-guest@example.invalid"), false);

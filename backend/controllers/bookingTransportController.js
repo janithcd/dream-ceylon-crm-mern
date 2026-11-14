@@ -2,21 +2,23 @@ const mongoose = require("mongoose");
 const Booking = require("../models/Booking");
 const { parseTransportAssignment, datesOverlap } = require("../utils/bookingTransport");
 const { createActivityLog } = require("../utils/createActivityLog");
+const { ACTIVE_BOOKING_STATUSES } = require("../utils/myTasks");
 
 const validId = (value) => mongoose.Types.ObjectId.isValid(value);
 
 const getConflicts = async (booking) => {
     if (["Cancelled", "Completed"].includes(booking.bookingStatus)) return [];
 
-    const confirmed = booking.transportAssignments.filter((item) => item.status === "Confirmed" && item.registrationKey);
-    if (!confirmed.length) return [];
+    const active = booking.transportAssignments.filter((item) =>
+        ["Requested", "Confirmed"].includes(item.status) && item.registrationKey);
+    if (!active.length) return [];
 
-    const keys = [...new Set(confirmed.map((item) => item.registrationKey))];
-    const firstDate = new Date(Math.min(...confirmed.map((item) => item.startDate.getTime())));
-    const lastDate = new Date(Math.max(...confirmed.map((item) => item.endDate.getTime())));
+    const keys = [...new Set(active.map((item) => item.registrationKey))];
+    const firstDate = new Date(Math.min(...active.map((item) => item.startDate.getTime())));
+    const lastDate = new Date(Math.max(...active.map((item) => item.endDate.getTime())));
     const others = await Booking.find({
         _id: { $ne: booking._id },
-        bookingStatus: { $nin: ["Cancelled", "Completed"] },
+        bookingStatus: { $in: ACTIVE_BOOKING_STATUSES },
         transportAssignments: { $elemMatch: {
             status: "Confirmed",
             registrationKey: { $in: keys },
@@ -26,7 +28,7 @@ const getConflicts = async (booking) => {
     }).select("bookingCode transportAssignments").lean();
 
     const overlapping = [booking, ...others];
-    return confirmed.map((item) => ({
+    return active.map((item) => ({
         assignmentId: item._id,
         bookings: overlapping.flatMap((other) => other.transportAssignments
             .filter((candidate) =>
@@ -36,6 +38,7 @@ const getConflicts = async (booking) => {
                 datesOverlap(item, candidate)
             )
             .map((candidate) => ({
+                bookingId: other._id,
                 bookingCode: other.bookingCode,
                 route: candidate.route,
                 startDate: candidate.startDate,

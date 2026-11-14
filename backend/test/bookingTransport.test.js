@@ -146,6 +146,7 @@ test("transport can be maintained by booking editors and flags confirmed vehicle
     assert.equal(assignment.flight.number, "UL504");
     assert.equal(assignment.flight.date, "2027-03-01T00:00:00.000Z");
     assert.equal(result.conflicts[0].bookings[0].bookingCode, "DCJ-OTHER-TRANSPORT");
+    assert.equal(String(result.conflicts[0].bookings[0].bookingId), otherBookingId);
     assert.equal(result.conflicts[0].bookings[0].route, "Day tour");
     assert.equal("customer" in result.conflicts[0].bookings[0], false);
     assert.equal((await (await request(url, "GET", viewerId)).json()).conflicts.length, 1);
@@ -158,6 +159,20 @@ test("transport can be maintained by booking editors and flags confirmed vehicle
     const duplicateBody = await duplicate.json();
     assert.ok(duplicateBody.conflicts.some((conflict) => conflict.bookings.some((match) => match.bookingCode === booking.bookingCode)));
     assert.equal((await request(`${url}/${duplicateBody.assignments[1]._id}`, "DELETE", salesId)).status, 200);
+
+    const tentative = await request(url, "POST", salesId, {
+        route: "Tentative same vehicle", startDate: "2027-03-02", endDate: "2027-03-02",
+        registration: "WP-CAB 1234", status: "Requested",
+    });
+    assert.equal(tentative.status, 201);
+    const tentativeBody = await tentative.json();
+    const tentativeId = tentativeBody.assignments[1]._id;
+    const tentativeConflicts = tentativeBody.conflicts.find((conflict) => conflict.assignmentId === tentativeId);
+    assert.deepEqual(tentativeConflicts.bookings.map((match) => match.bookingCode).sort(),
+        ["DCJ-OTHER-TRANSPORT", "DCJ-TEST-TRANSPORT"]);
+    assert.equal((await request(`${url}/${tentativeId}`, "PUT", salesId, { status: "Cancelled" })).status, 200);
+    assert.equal((await (await request(url, "GET", salesId)).json()).conflicts.some((conflict) => conflict.assignmentId === tentativeId), false);
+    assert.equal((await request(`${url}/${tentativeId}`, "DELETE", salesId)).status, 200);
 
     const itemUrl = `${url}/${assignment._id}`;
     assert.equal((await request(itemUrl, "PUT", viewerId, { status: "Cancelled" })).status, 403);

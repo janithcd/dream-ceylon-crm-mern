@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { FaCar, FaEdit, FaHistory, FaPlus, FaTrash } from "react-icons/fa";
 import api from "../api/axios";
 import { usePermissions } from "../context/PermissionContext";
@@ -173,7 +174,7 @@ const BookingTransportModal = ({ booking, onClose, onChanged, onOpenContacts, fo
                         </div>
 
                         <div className="modal-body">
-                            <p className="text-muted small">Record each tour or transfer and its chauffeur. Registration overlap checks show possible scheduling conflicts for confirmed vehicles.</p>
+                            <p className="text-muted small">Record each tour or transfer and its chauffeur. Overlap checks flag requested or confirmed legs using a vehicle confirmed on overlapping dates. Check pickup times before choosing a vehicle.</p>
                             {error && <div className="alert alert-danger" role="alert">{error}</div>}
                             {success && <div className="alert alert-success" role="status">{success}</div>}
                             {conflictCheckUnavailable && <div className="alert alert-warning" role="alert">The vehicle overlap check is temporarily unavailable. Verify the schedule before dispatch.</div>}
@@ -221,7 +222,11 @@ const BookingTransportModal = ({ booking, onClose, onChanged, onOpenContacts, fo
                                                     </div>
                                                     {overlaps.length > 0 && (
                                                         <div className="alert alert-warning small mt-3 mb-0" role="status">
-                                                            Possible vehicle overlap: {overlaps.map((match) => `${match.bookingCode} (${formatCalendarDate(match.startDate)} – ${formatCalendarDate(match.endDate)})`).join(", ")}. Check the schedule before dispatch.
+                                                            Possible vehicle overlap with confirmed service{overlaps.length === 1 ? "" : "s"}:
+                                                            <ul className="mb-1 mt-1 ps-3">{overlaps.map((match, index) => <li key={`${match.bookingId || match.bookingCode}-${index}`}>
+                                                                <Link to={`/bookings?keyword=${encodeURIComponent(match.bookingCode)}`} onClick={onClose}>{match.bookingCode}</Link> · {match.route} · {formatCalendarDate(match.startDate)} – {formatCalendarDate(match.endDate)}
+                                                            </li>)}</ul>
+                                                            Check the actual pickup times before dispatch.
                                                         </div>
                                                     )}
                                                     {(canUpdate || onOpenContacts) && <div className="d-flex flex-wrap gap-2 mt-3">
