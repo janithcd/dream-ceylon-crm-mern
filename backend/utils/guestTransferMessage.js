@@ -6,7 +6,7 @@ const validTime = (value) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(oneLine(value));
 
 // Only explicitly selected operational details belong in a guest message.
 // Never interpolate whole booking/assignment objects or private supplier notes.
-const buildGuestTransferMessage = (booking, assignment, company = {}) => {
+const buildGuestTransferMessage = (booking, assignment, company = {}, vehicleReview = {}) => {
     if (!ACTIVE_BOOKING_STATUSES.includes(booking.bookingStatus)) {
         return { error: "Guest pickup messages are available only for active bookings" };
     }
@@ -20,6 +20,13 @@ const buildGuestTransferMessage = (booking, assignment, company = {}) => {
     const companyName = oneLine(company.companyName) || "Dream Ceylon Journeys";
     const bookingCode = oneLine(booking.bookingCode);
     const missingDetails = [];
+    const reviewItems = [];
+    const vehicleNeedsReview = vehicleReview.conflict || vehicleReview.unavailable;
+    if (vehicleReview.conflict) {
+        reviewItems.push("This vehicle overlaps another confirmed service. Resolve the schedule before sharing chauffeur or vehicle details with the guest.");
+    } else if (vehicleReview.unavailable) {
+        reviewItems.push("Vehicle overlap checks are unavailable. Verify the assignment before sharing chauffeur or vehicle details with the guest.");
+    }
     const requiredDetail = (label, value) => {
         const content = oneLine(value);
         if (!content) missingDetails.push(label);
@@ -35,9 +42,9 @@ const buildGuestTransferMessage = (booking, assignment, company = {}) => {
         requiredDetail("Meeting point", assignment.pickupLocation),
         requiredDetail("Drop-off", assignment.dropoffLocation),
         "",
-        requiredDetail("Chauffeur", assignment.chauffeurName),
-        requiredDetail("Chauffeur phone", assignment.chauffeurPhone),
-        requiredDetail("Vehicle", [oneLine(assignment.vehicleDescription), oneLine(assignment.registration)].filter(Boolean).join(" - ")),
+        vehicleNeedsReview ? "Chauffeur: To be confirmed" : requiredDetail("Chauffeur", assignment.chauffeurName),
+        vehicleNeedsReview ? "Chauffeur phone: To be confirmed" : requiredDetail("Chauffeur phone", assignment.chauffeurPhone),
+        vehicleNeedsReview ? "Vehicle: To be confirmed" : requiredDetail("Vehicle", [oneLine(assignment.vehicleDescription), oneLine(assignment.registration)].filter(Boolean).join(" - ")),
     ];
     const flight = assignment.flight;
     if (flight && ["Arrival", "Departure"].includes(flight.direction)) {
@@ -62,6 +69,7 @@ const buildGuestTransferMessage = (booking, assignment, company = {}) => {
         number: oneLine(booking.customer?.whatsappNumber),
         message: lines.join("\n"),
         missingDetails,
+        reviewItems,
     } };
 };
 

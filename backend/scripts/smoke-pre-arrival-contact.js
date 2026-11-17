@@ -96,9 +96,11 @@ const main = async () => {
         const arrivalBooking = await Booking.findById(booking._id);
         arrivalBooking.transportAssignments.push({ route: "Airport arrival", status: "Confirmed",
             registration: "CI-ARR123", registrationKey: "CIARR123", startDate: transferDate, endDate: transferDate,
+            chauffeurName: "CI Chauffeur", chauffeurPhone: "+94770000000", vehicleDescription: "Private van",
             flight: { direction: "Arrival", number: "UL505", date: transferDate, time: "08:30", airport: "CMB" },
         });
         await arrivalBooking.save();
+        const guestTransferPath = `/${booking._id}/transport-assignments/${arrivalBooking.transportAssignments[0]._id}/guest-message`;
         otherBooking = await Booking.create({ bookingCode: `CI-OTHER-ARRIVAL-${Date.now()}`,
             bookingStatus: "Confirmed", customer: { fullName: "Private Other Guest", email: "private-other@example.invalid",
                 whatsappNumber: "+94771111111", country: "UK" },
@@ -114,6 +116,13 @@ const main = async () => {
         assert.match(clashing.reviewItems.join(" "), /vehicle overlaps another confirmed service/);
         assert.equal(JSON.stringify(clashing).includes(otherBooking.bookingCode), false);
         assert.equal(JSON.stringify(clashing).includes("private-other@example.invalid"), false);
+        const pickupClashingResponse = await request(staff, guestTransferPath);
+        assert.equal(pickupClashingResponse.status, 200, await pickupClashingResponse.clone().text());
+        const pickupClashing = await pickupClashingResponse.json();
+        assert.match(pickupClashing.message, /Vehicle: To be confirmed/);
+        assert.doesNotMatch(pickupClashing.message, /CI Chauffeur|CI-ARR123|\+94770000000/);
+        assert.match(pickupClashing.reviewItems.join(" "), /overlaps another confirmed service/);
+        assert.equal(JSON.stringify(pickupClashing).includes(otherBooking.bookingCode), false);
         await Booking.updateOne({ _id: otherBooking._id }, { $set: {
             "transportAssignments.0.registration": "OTHER-999",
             "transportAssignments.0.registrationKey": "OTHER999",
@@ -121,7 +130,12 @@ const main = async () => {
         const resolvedResponse = await request(staff, draftPath);
         assert.equal(resolvedResponse.status, 200, await resolvedResponse.clone().text());
         assert.match((await resolvedResponse.json()).message, /arrival transfer for flight UL505 is confirmed/);
-        console.log("Pre-arrival contact and vehicle conflict draft checks passed.");
+        const pickupResolvedResponse = await request(staff, guestTransferPath);
+        assert.equal(pickupResolvedResponse.status, 200, await pickupResolvedResponse.clone().text());
+        const pickupResolved = await pickupResolvedResponse.json();
+        assert.match(pickupResolved.message, /Vehicle: Private van - CI-ARR123/);
+        assert.deepEqual(pickupResolved.reviewItems, []);
+        console.log("Pre-arrival contact and vehicle conflict guest draft checks passed.");
     } finally {
         if (otherBooking) await Booking.deleteOne({ _id: otherBooking._id });
         if (booking) {

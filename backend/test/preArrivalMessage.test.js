@@ -162,6 +162,10 @@ test("pre-arrival endpoint enforces permissions, refreshes saved facts and never
 
     booking.hotelStays[0].hotelName = "Updated Hotel";
     assert.match((await (await request()).json()).message, /Updated Hotel/);
+    booking.transportAssignments[0].registration = "CAB-123";
+    const legacy = await (await request()).json();
+    assert.doesNotMatch(legacy.message, /arrival transfer for flight/);
+    assert.match(legacy.reviewItems.join(" "), /overlap checks are unavailable/);
     booking.transportAssignments[0].registrationKey = "CAB123";
     let conflictCheckUnavailable = false;
     const competing = new Booking({ _id: "507f1f77bcf86cd799439116", bookingCode: "PRIVATE-OTHER-TRIP", bookingStatus: "Confirmed",

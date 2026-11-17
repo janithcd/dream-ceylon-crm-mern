@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Booking = require("../models/Booking");
 const { getDocumentBrandConfig } = require("../utils/documentSettings");
 const { buildGuestTransferMessage } = require("../utils/guestTransferMessage");
+const { getConflicts } = require("../utils/bookingTransportConflicts");
 
 const getGuestTransferMessage = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -15,9 +16,22 @@ const getGuestTransferMessage = async (req, res) => {
         if (!booking) return res.status(404).json({ message: "Booking not found" });
         const assignment = booking.transportAssignments.id(req.params.assignmentId);
         if (!assignment) return res.status(404).json({ message: "Transport arrangement not found in this booking" });
+        const eligibility = buildGuestTransferMessage(booking, assignment);
+        if (eligibility.error) return res.status(409).json({ message: eligibility.error });
+        let vehicleReview = {};
+        if (assignment.registration && !assignment.registrationKey) {
+            vehicleReview = { unavailable: true };
+        } else {
+            try {
+                const conflicts = await getConflicts(booking);
+                vehicleReview = { conflict: conflicts.some((item) => String(item.assignmentId) === String(assignment._id)) };
+            } catch (error) {
+                console.error("Guest transfer vehicle overlap check failed:", error.message);
+                vehicleReview = { unavailable: true };
+            }
+        }
         const company = await getDocumentBrandConfig();
-        const result = buildGuestTransferMessage(booking, assignment, company);
-        if (result.error) return res.status(409).json({ message: result.error });
+        const result = buildGuestTransferMessage(booking, assignment, company, vehicleReview);
         // Preparing a draft is read-only; it does not log contact or mark a message sent.
         return res.json(result.value);
     } catch (error) {

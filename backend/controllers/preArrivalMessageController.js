@@ -19,7 +19,7 @@ const getPreArrivalMessage = async (req, res) => {
             return res.status(400).json({ message: "Invalid booking ID" });
         }
         const booking = await Booking.findById(req.params.id).select(
-            "bookingCode bookingStatus customer.fullName customer.whatsappNumber travelStartDate travelEndDate hotelStays.hotelName hotelStays.location hotelStays.checkInDate hotelStays.checkOutDate hotelStays.status transportAssignments.status transportAssignments.flight transportAssignments.registrationKey transportAssignments.startDate transportAssignments.endDate preArrivalContact.sentAt preArrivalContact.sentByName preArrivalContact.channel preArrivalRevision"
+            "bookingCode bookingStatus customer.fullName customer.whatsappNumber travelStartDate travelEndDate hotelStays.hotelName hotelStays.location hotelStays.checkInDate hotelStays.checkOutDate hotelStays.status transportAssignments.status transportAssignments.flight transportAssignments.registration transportAssignments.registrationKey transportAssignments.startDate transportAssignments.endDate preArrivalContact.sentAt preArrivalContact.sentByName preArrivalContact.channel preArrivalRevision"
         );
         if (!booking) return res.status(404).json({ message: "Booking not found" });
         // Validate eligibility before loading company settings. Refresh the booking
@@ -29,7 +29,9 @@ const getPreArrivalMessage = async (req, res) => {
         let vehicleReview = {};
         try {
             const conflicts = await getConflicts(booking);
-            vehicleReview = { clashingAssignmentIds: conflicts.map((item) => item.assignmentId) };
+            vehicleReview = { clashingAssignmentIds: conflicts.map((item) => item.assignmentId),
+                unavailable: booking.transportAssignments.some((item) => item.status === "Confirmed" &&
+                    item.flight?.direction === "Arrival" && item.registration && !item.registrationKey) };
         } catch (error) {
             console.error("Pre-arrival vehicle overlap check failed:", error.message);
             vehicleReview = { unavailable: true };

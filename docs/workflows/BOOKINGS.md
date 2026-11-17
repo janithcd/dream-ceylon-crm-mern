@@ -162,13 +162,16 @@ completed/cancelled bookings are excluded. All times are in Sri Lanka time.
 Prepare a **Guest message** from a confirmed airport transfer. The CRM reloads saved pickup, flight,
 chauffeur, and vehicle details into an editable WhatsApp draft, highlights missing details, and lets staff
 copy the text or open WhatsApp with a reviewed international recipient number. Private notes and financial
-information are excluded. Staff send the message themselves; drafting or opening WhatsApp does not log
+information are excluded. When the vehicle overlaps another confirmed service, or an overlap cannot be checked
+(including an older registration without a normalized key), the draft holds the chauffeur, phone, and vehicle
+details as “To be confirmed” and shows a staff warning. Refresh the draft after resolving the schedule. Staff
+send the message themselves; drafting or opening WhatsApp does not log
 contact, mark a message sent, or change the booking.
 
 Guest pickup drafts use `GET /api/bookings/:id/transport-assignments/:assignmentId/guest-message` with both
 `booking.view` and `booking.update` permissions. The transfer must belong to the booking and be confirmed; the
 booking must be pending, confirmed, or in progress. The response contains only the guest name/number, booking
-reference, message, and missing-detail labels, and disables caching. Invalid IDs return 400, missing records
+reference, message, missing-detail labels and staff review prompts, and disables caching. Invalid IDs return 400, missing records
 return 404, and inactive bookings or unconfirmed transfers return 409. The endpoint is read-only and does not
 contact WhatsApp or send messages.
 
@@ -204,8 +207,9 @@ It excludes private activity notes, supplier emails, history and financial detai
 guest note with saved dates and, only when unambiguous, a confirmed first-night hotel and arrival transfer.
 Missing, requested, or conflicting arrangements appear as staff review prompts instead of guest claims. A
 review prompt also appears when an arrival vehicle overlaps another confirmed transport service; the draft omits
-the arrival-transfer claim until the conflict is resolved. If the vehicle overlap check is unavailable, the
-draft likewise holds the arrival-transfer claim for manual verification. Other transport clashes appear as
+the arrival-transfer claim until the conflict is resolved. If the vehicle overlap check is unavailable, including
+for an older registration without a normalized key, the draft likewise holds the arrival-transfer claim for
+manual verification. Other transport clashes appear as
 review prompts without revealing the other booking to the guest. Staff can edit the recipient and message,
 copy the draft or open WhatsApp to send it manually. Drafting never logs
 contact or changes the booking. `GET /api/bookings/:id/pre-arrival-message` requires `booking.view` and

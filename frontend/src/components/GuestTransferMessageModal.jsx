@@ -108,6 +108,12 @@ const GuestTransferMessageModal = ({ bookingId, assignmentId, onClose }) => {
                                             <strong>Missing from the saved transfer:</strong> {draft.missingDetails.join(", ")}. Review the “To be confirmed” details before sharing.
                                         </div>
                                     )}
+                                    {draft.reviewItems?.length > 0 && (
+                                        <div className="alert alert-warning small">
+                                            <strong>Check before sharing:</strong>
+                                            <ul className="mb-0 mt-2">{draft.reviewItems.map((item) => <li key={item}>{item}</li>)}</ul>
+                                        </div>
+                                    )}
                                     <label className="form-label fw-semibold" htmlFor="guest-transfer-number">Guest WhatsApp number</label>
                                     <input id="guest-transfer-number" type="tel" className="form-control" autoFocus
                                         value={draft.number} onChange={(event) => edit("number", event.target.value)} placeholder="+44 7700 900123" />
@@ -123,6 +129,7 @@ const GuestTransferMessageModal = ({ bookingId, assignmentId, onClose }) => {
                         <div className="modal-footer flex-wrap">
                             <button type="button" className="btn btn-outline-secondary" onClick={onClose}>Close</button>
                             {draft && !loading && <>
+                                <button type="button" className="btn btn-outline-secondary" onClick={reload}>Refresh draft</button>
                                 <button type="button" className="btn btn-outline-secondary" onClick={copyMessage} disabled={!draft.message.trim()}><FaCopy className="me-2" />Copy message</button>
                                 <button type="submit" className="btn btn-success" disabled={!draft.message.trim()}><FaWhatsapp className="me-2" />Open WhatsApp</button>
                             </>}

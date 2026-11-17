@@ -19,7 +19,7 @@ const exampleBooking = () => new Booking({
         _id: "507f1f77bcf86cd799439102", status: "Confirmed", route: "Hotel to airport",
         startDate: new Date("2027-03-01"), endDate: new Date("2027-03-02"), pickupTime: "23:00",
         pickupLocation: "Hotel lobby", dropoffLocation: "CMB departures",
-        chauffeurName: "Sample Chauffeur", chauffeurPhone: "+94770000000", vehicleDescription: "KDH van", registration: "CAB-1234",
+        chauffeurName: "Sample Chauffeur", chauffeurPhone: "+94770000000", vehicleDescription: "KDH van", registration: "CAB-1234", registrationKey: "CAB1234",
         notes: "PRIVATE SUPPLIER NOTE", followUpDate: new Date("2027-02-27"),
         flight: { direction: "Departure", number: "UL505", date: new Date("2027-03-02"), time: "02:00", airport: "CMB", terminal: "Departures" },
     }],
@@ -35,6 +35,7 @@ test("guest message separates an overnight pickup from the flight and selects on
     assert.equal(value.guestName, "Ava Morgan");
     assert.equal(value.number, "+44 7700 900123");
     assert.deepEqual(value.missingDetails, []);
+    assert.deepEqual(value.reviewItems, []);
     for (const detail of [
         "Hello Ava Morgan", "booking DCJ-PICKUP-TEST", "Pickup date: Mar 1, 2027",
         "Pickup time: 23:00 (Sri Lanka time)", "Meeting point: Hotel lobby",
@@ -46,6 +47,22 @@ test("guest message separates an overnight pickup from the flight and selects on
         assert.equal(JSON.stringify(value).includes(hidden), false, hidden);
     }
     assert.equal(value.message.includes(value.number), false, "Recipient number stays outside the draft text");
+});
+
+test("clashing or unverified vehicles hold chauffeur and vehicle details for staff review", () => {
+    const booking = exampleBooking();
+    const assignment = booking.transportAssignments[0];
+    for (const vehicleReview of [{ conflict: true }, { unavailable: true }]) {
+        const { value } = buildGuestTransferMessage(booking, assignment, {}, vehicleReview);
+        assert.match(value.message, /Chauffeur: To be confirmed/);
+        assert.match(value.message, /Chauffeur phone: To be confirmed/);
+        assert.match(value.message, /Vehicle: To be confirmed/);
+        assert.doesNotMatch(value.message, /Sample Chauffeur|CAB-1234|\+94770000000/);
+        assert.match(value.message, /Pickup date: Mar 1, 2027/);
+        assert.equal(value.reviewItems.length, 1);
+        assert.deepEqual(value.missingDetails, []);
+    }
+    assert.match(buildGuestTransferMessage(booking, assignment).value.message, /Vehicle: KDH van - CAB-1234/);
 });
 
 test("missing details remain explicit and local dates are independent of server timezone", () => {
@@ -100,6 +117,8 @@ test("guest draft endpoint enforces permissions and ownership, reloads changes, 
     let logs = 0;
     let writes = 0;
     let failRead = false;
+    let conflictCheckUnavailable = false;
+    let competing = null;
     t.mock.method(Admin, "findById", (id) => ({ select: async () => ({
         _id: id, role: String(id) === viewerId ? "Viewer" : String(id) === updateOnlyId ? "Unknown Role" : "Sales",
         customPermissions: String(id) === updateOnlyId ? ["booking.update"] : [], status: "Active", tokenVersion: 0,
@@ -109,6 +128,10 @@ test("guest draft endpoint enforces permissions and ownership, reloads changes, 
         if (failRead) throw new Error("synthetic unavailable database");
         return String(id) === String(booking._id) ? booking : null;
     } }));
+    t.mock.method(Booking, "find", () => ({ select: () => ({ lean: async () => {
+        if (conflictCheckUnavailable) throw new Error("synthetic vehicle check outage");
+        return competing ? [competing.toObject()] : [];
+    } }) }));
     t.mock.method(Booking, "updateOne", async () => { writes += 1; });
     t.mock.method(ActivityLog, "create", async () => { logs += 1; });
     t.mock.method(CompanySetting, "findOne", async () => ({ companyName: "Custom Tour Company", whatsapp: "+94775124645" }));
@@ -140,6 +163,30 @@ test("guest draft endpoint enforces permissions and ownership, reloads changes, 
     const refreshed = await (await request()).json();
     assert.match(refreshed.message, /Chauffeur: New Chauffeur/);
     assert.match(refreshed.message, /Pickup time: 22:30/);
+    competing = new Booking({ _id: "507f1f77bcf86cd799439106", bookingCode: "PRIVATE-OTHER-TRIP",
+        bookingStatus: "Confirmed", customer: { fullName: "Other", email: "private-other@example.invalid",
+            whatsappNumber: "+94771111111", country: "UK" },
+        transportAssignments: [{ route: "Other service", status: "Confirmed", registrationKey: "CAB1234",
+            startDate: new Date("2027-03-02"), endDate: new Date("2027-03-02") }],
+    });
+    const clashing = await (await request()).json();
+    assert.match(clashing.message, /Vehicle: To be confirmed/);
+    assert.doesNotMatch(clashing.message, /New Chauffeur|CAB-1234|\+94770000000/);
+    assert.match(clashing.reviewItems.join(" "), /overlaps another confirmed service/);
+    assert.equal(JSON.stringify(clashing).includes("PRIVATE-OTHER-TRIP"), false);
+    competing.transportAssignments[0].registrationKey = "OTHER999";
+    const resolved = await (await request()).json();
+    assert.match(resolved.message, /Vehicle: KDH van - CAB-1234/);
+    assert.deepEqual(resolved.reviewItems, []);
+    assignment.registrationKey = "";
+    const legacy = await (await request()).json();
+    assert.match(legacy.message, /Vehicle: To be confirmed/);
+    assert.match(legacy.reviewItems.join(" "), /overlap checks are unavailable/);
+    assignment.registrationKey = "CAB1234";
+    conflictCheckUnavailable = true;
+    const unavailable = await (await request()).json();
+    assert.match(unavailable.message, /Vehicle: To be confirmed/);
+    assert.match(unavailable.reviewItems.join(" "), /overlap checks are unavailable/);
     assignment.status = "Cancelled";
     assert.equal((await request()).status, 409);
     assignment.status = "Requested";
