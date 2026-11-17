@@ -11,6 +11,7 @@ const main = async () => {
     let staff;
     let viewer;
     let booking;
+    let otherBooking;
     try {
         const dateOnly = (instant) => {
             const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
@@ -91,8 +92,38 @@ const main = async () => {
         assert.equal(logs[0].metadata.channel, "WhatsApp");
         assert.match(logs[1].metadata.reason, /not actually sent/);
         assert.equal(JSON.stringify(logs).includes("private-arrival@example.invalid"), false);
-        console.log("Pre-arrival contact persists, filters update, duplicate writes fail and corrections are audited.");
+        const transferDate = new Date(dateOnly(booking.travelStartDate));
+        const arrivalBooking = await Booking.findById(booking._id);
+        arrivalBooking.transportAssignments.push({ route: "Airport arrival", status: "Confirmed",
+            registration: "CI-ARR123", registrationKey: "CIARR123", startDate: transferDate, endDate: transferDate,
+            flight: { direction: "Arrival", number: "UL505", date: transferDate, time: "08:30", airport: "CMB" },
+        });
+        await arrivalBooking.save();
+        otherBooking = await Booking.create({ bookingCode: `CI-OTHER-ARRIVAL-${Date.now()}`,
+            bookingStatus: "Confirmed", customer: { fullName: "Private Other Guest", email: "private-other@example.invalid",
+                whatsappNumber: "+94771111111", country: "UK" },
+            travelStartDate: transferDate, travelEndDate: new Date(transferDate.getTime() + 86400000),
+            numberOfTravelers: 1, totalPrice: 100,
+            transportAssignments: [{ route: "Other service", status: "Confirmed", registration: "CI-ARR123",
+                registrationKey: "CIARR123", startDate: transferDate, endDate: transferDate }],
+        });
+        const clashingResponse = await request(staff, draftPath);
+        assert.equal(clashingResponse.status, 200, await clashingResponse.clone().text());
+        const clashing = await clashingResponse.json();
+        assert.doesNotMatch(clashing.message, /arrival transfer for flight/);
+        assert.match(clashing.reviewItems.join(" "), /vehicle overlaps another confirmed service/);
+        assert.equal(JSON.stringify(clashing).includes(otherBooking.bookingCode), false);
+        assert.equal(JSON.stringify(clashing).includes("private-other@example.invalid"), false);
+        await Booking.updateOne({ _id: otherBooking._id }, { $set: {
+            "transportAssignments.0.registration": "OTHER-999",
+            "transportAssignments.0.registrationKey": "OTHER999",
+        } });
+        const resolvedResponse = await request(staff, draftPath);
+        assert.equal(resolvedResponse.status, 200, await resolvedResponse.clone().text());
+        assert.match((await resolvedResponse.json()).message, /arrival transfer for flight UL505 is confirmed/);
+        console.log("Pre-arrival contact and vehicle conflict draft checks passed.");
     } finally {
+        if (otherBooking) await Booking.deleteOne({ _id: otherBooking._id });
         if (booking) {
             await ActivityLog.deleteMany({ relatedRecordId: booking._id });
             await Booking.deleteOne({ _id: booking._id });

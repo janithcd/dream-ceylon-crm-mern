@@ -202,8 +202,12 @@ It excludes private activity notes, supplier emails, history and financial detai
 
 **Pre-arrival message** on a confirmed upcoming booking in Departure Readiness prepares an editable, trip-wide
 guest note with saved dates and, only when unambiguous, a confirmed first-night hotel and arrival transfer.
-Missing, requested, or conflicting arrangements appear as staff review prompts instead of guest claims. Staff
-can edit the recipient and message, copy the draft or open WhatsApp to send it manually. Drafting never logs
+Missing, requested, or conflicting arrangements appear as staff review prompts instead of guest claims. A
+review prompt also appears when an arrival vehicle overlaps another confirmed transport service; the draft omits
+the arrival-transfer claim until the conflict is resolved. If the vehicle overlap check is unavailable, the
+draft likewise holds the arrival-transfer claim for manual verification. Other transport clashes appear as
+review prompts without revealing the other booking to the guest. Staff can edit the recipient and message,
+copy the draft or open WhatsApp to send it manually. Drafting never logs
 contact or changes the booking. `GET /api/bookings/:id/pre-arrival-message` requires `booking.view` and
 `booking.update`, reloads the booking, returns only selected guest-facing fields, and disables caching. Past,
 unconfirmed or invalid trips return 409.

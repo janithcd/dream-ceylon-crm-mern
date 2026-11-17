@@ -75,6 +75,27 @@ test("unconfirmed and ambiguous arrangements are review prompts, never guest cla
     assert.match(filtered.message, /flight UL505/);
 });
 
+test("a clashing arrival vehicle or unavailable check prevents a guest transfer claim", () => {
+    const booking = exampleBooking();
+    const assignmentId = booking.transportAssignments[0]._id;
+    const clash = buildPreArrivalMessage(booking, {}, now, { clashingAssignmentIds: [assignmentId] }).value;
+    assert.doesNotMatch(clash.message, /arrival transfer for flight/);
+    assert.match(clash.reviewItems.join(" "), /vehicle overlaps another confirmed service/);
+    assert.ok(!JSON.stringify(clash).includes(String(assignmentId)));
+    const unavailable = buildPreArrivalMessage(booking, {}, now, { unavailable: true }).value;
+    assert.doesNotMatch(unavailable.message, /arrival transfer for flight/);
+    assert.match(unavailable.reviewItems.join(" "), /overlap checks are unavailable/);
+    const resolved = buildPreArrivalMessage(booking, {}, now, { clashingAssignmentIds: [] }).value;
+    assert.match(resolved.message, /arrival transfer for flight UL505 is confirmed/);
+    booking.transportAssignments.push({ route: "Later tour", status: "Confirmed",
+        registrationKey: "CAB123", startDate: new Date("2027-03-03"), endDate: new Date("2027-03-03") });
+    const otherClash = buildPreArrivalMessage(booking, {}, now, {
+        clashingAssignmentIds: [booking.transportAssignments[1]._id],
+    }).value;
+    assert.match(otherClash.message, /arrival transfer for flight UL505 is confirmed/);
+    assert.match(otherClash.reviewItems.join(" "), /Another transport leg may share a vehicle/);
+});
+
 test("draft requires confirmed booking and future valid trip dates in Sri Lanka", () => {
     const booking = exampleBooking();
     for (const status of ["Pending", "In Progress", "Cancelled", "Completed"]) {
@@ -97,6 +118,8 @@ test("pre-arrival endpoint enforces permissions, refreshes saved facts and never
     booking.hotelStays[0].checkInDate = new Date("2099-03-01");
     booking.hotelStays[0].checkOutDate = new Date("2099-03-02");
     booking.transportAssignments[0].flight.date = new Date("2099-03-01");
+    booking.transportAssignments[0].startDate = new Date("2099-03-01");
+    booking.transportAssignments[0].endDate = new Date("2099-03-01");
     const salesId = "507f1f77bcf86cd799439113";
     const viewerId = "507f1f77bcf86cd799439114";
     const updateOnlyId = "507f1f77bcf86cd799439115";
@@ -139,6 +162,28 @@ test("pre-arrival endpoint enforces permissions, refreshes saved facts and never
 
     booking.hotelStays[0].hotelName = "Updated Hotel";
     assert.match((await (await request()).json()).message, /Updated Hotel/);
+    booking.transportAssignments[0].registrationKey = "CAB123";
+    let conflictCheckUnavailable = false;
+    const competing = new Booking({ _id: "507f1f77bcf86cd799439116", bookingCode: "PRIVATE-OTHER-TRIP", bookingStatus: "Confirmed",
+        customer: { fullName: "Other", email: "other@example.invalid", whatsappNumber: "+94771111111", country: "UK" },
+        travelStartDate: new Date("2099-03-01"), travelEndDate: new Date("2099-03-02"), numberOfTravelers: 1, totalPrice: 100,
+        transportAssignments: [{ route: "Other arrival", status: "Confirmed", registrationKey: "CAB123",
+            startDate: new Date("2099-03-01"), endDate: new Date("2099-03-01") }],
+    });
+    t.mock.method(Booking, "find", () => ({ select: () => ({ lean: async () => {
+        if (conflictCheckUnavailable) throw new Error("synthetic vehicle check outage");
+        return [competing.toObject()];
+    } }) }));
+    const clashing = await (await request()).json();
+    assert.doesNotMatch(clashing.message, /arrival transfer for flight/);
+    assert.match(clashing.reviewItems.join(" "), /vehicle overlaps another confirmed service/);
+    assert.equal(JSON.stringify(clashing).includes("PRIVATE-OTHER-TRIP"), false);
+    competing.transportAssignments[0].registrationKey = "OTHER999";
+    assert.match((await (await request()).json()).message, /arrival transfer for flight UL505 is confirmed/);
+    conflictCheckUnavailable = true;
+    const unavailable = await (await request()).json();
+    assert.doesNotMatch(unavailable.message, /arrival transfer for flight/);
+    assert.match(unavailable.reviewItems.join(" "), /overlap checks are unavailable/);
     booking.bookingStatus = "Cancelled";
     assert.equal((await request()).status, 409);
     booking.bookingStatus = "Confirmed";

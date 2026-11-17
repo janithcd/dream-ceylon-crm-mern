@@ -9,7 +9,7 @@ const dateValue = (value) => {
 
 // Select only guest-facing fields. Supplier notes, payment details and private
 // booking fields must never be copied into a message sent outside the CRM.
-const buildPreArrivalMessage = (booking, company = {}, now = new Date()) => {
+const buildPreArrivalMessage = (booking, company = {}, now = new Date(), vehicleReview = {}) => {
     if (booking.bookingStatus !== "Confirmed") {
         return { error: "Confirm the booking before preparing a pre-arrival message" };
     }
@@ -53,7 +53,13 @@ const buildPreArrivalMessage = (booking, company = {}, now = new Date()) => {
     const arrivalTransfers = (booking.transportAssignments || []).filter((item) =>
         item.flight?.direction === "Arrival" && dateValue(item.flight.date) === start);
     const confirmedTransfers = arrivalTransfers.filter((item) => item.status === "Confirmed");
-    if (confirmedTransfers.length === 1 && oneLine(confirmedTransfers[0].flight.number)) {
+    const clashingIds = new Set((vehicleReview.clashingAssignmentIds || []).map(String));
+    const arrivalClash = confirmedTransfers.length === 1 && clashingIds.has(String(confirmedTransfers[0]._id));
+    if (arrivalClash) {
+        reviewItems.push("The confirmed arrival transfer's vehicle overlaps another confirmed service; resolve the schedule before mentioning the transfer to the guest.");
+    } else if (vehicleReview.unavailable && confirmedTransfers.length === 1) {
+        reviewItems.push("Vehicle overlap checks are unavailable; verify the arrival transfer before mentioning it to the guest.");
+    } else if (confirmedTransfers.length === 1 && oneLine(confirmedTransfers[0].flight.number)) {
         lines.push("", `Your arrival transfer for flight ${oneLine(confirmedTransfers[0].flight.number)} is confirmed. We will share the pickup details separately.`);
     } else if (confirmedTransfers.length > 1) {
         reviewItems.push("Multiple arrival transfers match the trip start; verify which one to mention.");
@@ -64,6 +70,9 @@ const buildPreArrivalMessage = (booking, company = {}, now = new Date()) => {
     }
     if (arrivalTransfers.some((item) => item.status === "Requested")) {
         reviewItems.push("An arrival transfer request is still awaiting confirmation.");
+    }
+    if ([...clashingIds].some((id) => !confirmedTransfers.some((item) => String(item._id) === id))) {
+        reviewItems.push("Another transport leg may share a vehicle with a confirmed service; check Transport before sharing the trip note.");
     }
 
     lines.push("", "Please keep your travel documents handy and let us know if your arrival plans change.");

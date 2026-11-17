@@ -4,6 +4,7 @@ const { getDocumentBrandConfig } = require("../utils/documentSettings");
 const { buildPreArrivalMessage } = require("../utils/preArrivalMessage");
 const { getBusinessDayBounds } = require("../utils/businessDate");
 const { createActivityLog } = require("../utils/createActivityLog");
+const { getConflicts } = require("../utils/bookingTransportConflicts");
 
 const contactSummary = (booking) => ({
     sentAt: booking.preArrivalContact?.sentAt || null,
@@ -18,15 +19,23 @@ const getPreArrivalMessage = async (req, res) => {
             return res.status(400).json({ message: "Invalid booking ID" });
         }
         const booking = await Booking.findById(req.params.id).select(
-            "bookingCode bookingStatus customer.fullName customer.whatsappNumber travelStartDate travelEndDate hotelStays.hotelName hotelStays.location hotelStays.checkInDate hotelStays.checkOutDate hotelStays.status transportAssignments.status transportAssignments.flight preArrivalContact.sentAt preArrivalContact.sentByName preArrivalContact.channel preArrivalRevision"
+            "bookingCode bookingStatus customer.fullName customer.whatsappNumber travelStartDate travelEndDate hotelStays.hotelName hotelStays.location hotelStays.checkInDate hotelStays.checkOutDate hotelStays.status transportAssignments.status transportAssignments.flight transportAssignments.registrationKey transportAssignments.startDate transportAssignments.endDate preArrivalContact.sentAt preArrivalContact.sentByName preArrivalContact.channel preArrivalRevision"
         );
         if (!booking) return res.status(404).json({ message: "Booking not found" });
         // Validate eligibility before loading company settings. Refresh the booking
         // on each request so drafts never rely on an old departure queue snapshot.
         const eligibility = buildPreArrivalMessage(booking);
         if (eligibility.error) return res.status(409).json({ message: eligibility.error });
+        let vehicleReview = {};
+        try {
+            const conflicts = await getConflicts(booking);
+            vehicleReview = { clashingAssignmentIds: conflicts.map((item) => item.assignmentId) };
+        } catch (error) {
+            console.error("Pre-arrival vehicle overlap check failed:", error.message);
+            vehicleReview = { unavailable: true };
+        }
         const company = await getDocumentBrandConfig();
-        const result = buildPreArrivalMessage(booking, company);
+        const result = buildPreArrivalMessage(booking, company, new Date(), vehicleReview);
         // Drafting is read-only: sending and recording guest contact remain manual.
         return res.json({ ...result.value, contact: contactSummary(booking), revision: booking.preArrivalRevision ?? 0 });
     } catch (error) {
