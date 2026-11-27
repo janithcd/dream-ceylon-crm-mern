@@ -99,6 +99,7 @@ const main = async () => {
             chauffeurName: "CI Chauffeur", chauffeurPhone: "+94770000000", vehicleDescription: "Private van",
             flight: { direction: "Arrival", number: "UL505", date: transferDate, time: "08:30", airport: "CMB" },
         });
+        arrivalBooking.itineraryDays.push({ date: transferDate, title: "Arrival day", plan: "Welcome to Sri Lanka" });
         await arrivalBooking.save();
         const guestTransferPath = `/${booking._id}/transport-assignments/${arrivalBooking.transportAssignments[0]._id}/guest-message`;
         otherBooking = await Booking.create({ bookingCode: `CI-OTHER-ARRIVAL-${Date.now()}`,
@@ -123,6 +124,22 @@ const main = async () => {
         assert.doesNotMatch(pickupClashing.message, /CI Chauffeur|CI-ARR123|\+94770000000/);
         assert.match(pickupClashing.reviewItems.join(" "), /overlaps another confirmed service/);
         assert.equal(JSON.stringify(pickupClashing).includes(otherBooking.bookingCode), false);
+        const packUrl = `http://127.0.0.1:5000/api/booking-pdf/travel-pack/${booking._id}`;
+        const packClashingResponse = await fetch(`${packUrl}/preview`, {
+            headers: { Authorization: `Bearer ${jwt.sign({ id: staff._id, v: 0 }, process.env.JWT_SECRET)}` },
+        });
+        assert.equal(packClashingResponse.status, 200, await packClashingResponse.clone().text());
+        const packClashing = await packClashingResponse.json();
+        assert.equal(packClashing.ready, true);
+        assert.match(packClashing.warnings.join(" "), /overlaps another confirmed service/);
+        assert.doesNotMatch(JSON.stringify(packClashing.pack), /CI Chauffeur|CI-ARR123|\+94770000000/);
+        assert.equal(JSON.stringify(packClashing).includes(otherBooking.bookingCode), false);
+        const packDownload = await fetch(packUrl, { method: "POST",
+            headers: { Authorization: `Bearer ${jwt.sign({ id: staff._id, v: 0 }, process.env.JWT_SECRET)}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ reviewed: true, fingerprint: packClashing.fingerprint }),
+        });
+        assert.equal(packDownload.status, 200, await packDownload.clone().text());
+        assert.equal(Buffer.from(await packDownload.arrayBuffer()).subarray(0, 5).toString(), "%PDF-");
         await Booking.updateOne({ _id: otherBooking._id }, { $set: {
             "transportAssignments.0.registration": "OTHER-999",
             "transportAssignments.0.registrationKey": "OTHER999",
@@ -135,7 +152,17 @@ const main = async () => {
         const pickupResolved = await pickupResolvedResponse.json();
         assert.match(pickupResolved.message, /Vehicle: Private van - CI-ARR123/);
         assert.deepEqual(pickupResolved.reviewItems, []);
-        console.log("Pre-arrival contact and vehicle conflict guest draft checks passed.");
+        const stalePackDownload = await fetch(packUrl, { method: "POST",
+            headers: { Authorization: `Bearer ${jwt.sign({ id: staff._id, v: 0 }, process.env.JWT_SECRET)}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ reviewed: true, fingerprint: packClashing.fingerprint }),
+        });
+        assert.equal(stalePackDownload.status, 409);
+        const packResolvedResponse = await fetch(`${packUrl}/preview`, {
+            headers: { Authorization: `Bearer ${jwt.sign({ id: staff._id, v: 0 }, process.env.JWT_SECRET)}` },
+        });
+        assert.equal(packResolvedResponse.status, 200, await packResolvedResponse.clone().text());
+        assert.match(JSON.stringify((await packResolvedResponse.json()).pack), /CI Chauffeur|CI-ARR123/);
+        console.log("Pre-arrival contact and vehicle conflict guest draft and travel pack checks passed.");
     } finally {
         if (otherBooking) await Booking.deleteOne({ _id: otherBooking._id });
         if (booking) {

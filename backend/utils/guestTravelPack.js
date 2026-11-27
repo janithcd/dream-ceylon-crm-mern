@@ -12,8 +12,10 @@ const validTime = (value) => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(text(value));
 
 // This is the single guest-facing projection for both preview and PDF. Never
 // spread booking, supplier, payment, or operational records into the document.
-const buildGuestTravelPack = (booking, company = {}) => {
+const buildGuestTravelPack = (booking, company = {}, vehicleReview = {}) => {
     const blockers = [], warnings = [], entries = [];
+    const clashingIds = new Set((vehicleReview.clashingAssignmentIds || []).map(String));
+    const uncheckableIds = new Set((vehicleReview.uncheckableAssignmentIds || []).map(String));
     const counts = { itinerary: 0, hotels: 0, transport: 0, activities: 0 };
     const start = day(booking.travelStartDate), end = day(booking.travelEndDate);
     const inTrip = (value) => day(value) && day(value) >= start && day(value) <= end;
@@ -63,11 +65,19 @@ const buildGuestTravelPack = (booking, company = {}) => {
             blockers.push("A confirmed transport arrangement has invalid details or dates outside the trip. Correct it before sharing."); continue;
         }
         const record = `Transport ${route}`;
+        const conflict = clashingIds.has(String(transfer._id));
+        const uncheckable = uncheckableIds.has(String(transfer._id));
+        const holdVehicleDetails = conflict || uncheckable || vehicleReview.unavailable;
+        if (conflict) warnings.push(`${record}: the assigned vehicle overlaps another confirmed service. Confirm the schedule before sharing driver and vehicle details.`);
+        else if (uncheckable) warnings.push(`${record}: this older vehicle registration cannot be checked for overlaps. Review it before sharing driver and vehicle details.`);
+        else if (vehicleReview.unavailable) warnings.push(`${record}: vehicle overlap checks are unavailable. Verify the assignment before sharing driver and vehicle details.`);
         const details = ["Arrangement: Confirmed", `Service dates: ${formatDocumentDate(transfer.startDate)} to ${formatDocumentDate(transfer.endDate)}`,
             missingDetail("Pickup time (Sri Lanka)", validTime(transfer.pickupTime) ? transfer.pickupTime : "", record),
             missingDetail("Meeting point", transfer.pickupLocation, record), missingDetail("Drop-off", transfer.dropoffLocation, record),
-            missingDetail("Chauffeur", transfer.chauffeurName, record), missingDetail("Chauffeur phone", transfer.chauffeurPhone, record),
-            missingDetail("Vehicle", transfer.vehicleDescription, record), missingDetail("Registration", transfer.registration, record)];
+            ...(holdVehicleDetails ? ["Chauffeur: To be confirmed", "Chauffeur phone: To be confirmed", "Vehicle: To be confirmed", "Registration: To be confirmed"] : [
+                missingDetail("Chauffeur", transfer.chauffeurName, record), missingDetail("Chauffeur phone", transfer.chauffeurPhone, record),
+                missingDetail("Vehicle", transfer.vehicleDescription, record), missingDetail("Registration", transfer.registration, record),
+            ])];
         if (transfer.flight) {
             const flight = transfer.flight;
             details.push(`${text(flight.direction)} flight: ${text(flight.number) || "To be confirmed"}`,

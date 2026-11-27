@@ -20,9 +20,9 @@ const example = () => ({
     hotelStays: [{ status: "Confirmed", hotelName: "Test Hotel", checkInDate: new Date("2027-03-01"), checkOutDate: new Date("2027-03-03"), rooms: 1,
         roomType: "Double", mealPlan: "Half Board", confirmationNumber: "HOTEL-123", notes: "PRIVATE HOTEL NOTE", supplierEmail: "private-supplier@example.test" },
         { status: "Requested", hotelName: "OMITTED HOTEL" }],
-    transportAssignments: [{ status: "Confirmed", route: "Airport to hotel", startDate: new Date("2027-03-01"), endDate: new Date("2027-03-01"),
+    transportAssignments: [{ _id: "507f1f77bcf86cd799439064", status: "Confirmed", route: "Airport to hotel", startDate: new Date("2027-03-01"), endDate: new Date("2027-03-01"),
         pickupTime: "06:30", pickupLocation: "Arrivals hall", dropoffLocation: "Test Hotel", chauffeurName: "Test Chauffeur", chauffeurPhone: "+94771111111",
-        vehicleDescription: "Air-conditioned car", registration: "TEST-001", notes: "PRIVATE TRANSPORT NOTE" }],
+        vehicleDescription: "Air-conditioned car", registration: "TEST-001", registrationKey: "TEST001", notes: "PRIVATE TRANSPORT NOTE" }],
     excursions: [{ status: "Confirmed", title: "Morning safari", date: new Date("2027-03-02"), startTime: "05:30", participants: 2, supplierName: "Test Jeep Operator",
         meetingPoint: "Hotel lobby", confirmationReference: "SAF-123", guestInstructions: "Bring a hat", internalNotes: "PRIVATE ACTIVITY NOTE", supplierEmail: "private-operator@example.test" },
         { status: "Cancelled", title: "OMITTED ACTIVITY" }],
@@ -69,6 +69,29 @@ test("travel pack blocks closed and malformed trips; missing confirmations and d
     assert.equal(buildGuestTravelPack(booking).counts.activities, 1);
 });
 
+test("travel pack holds contested or unchecked driver and vehicle details and fingerprints the review", async () => {
+    const booking = example(), assignmentId = booking.transportAssignments[0]._id;
+    const ordinary = buildGuestTravelPack(booking, company);
+    for (const vehicleReview of [
+        { clashingAssignmentIds: [assignmentId] },
+        { uncheckableAssignmentIds: [assignmentId] },
+        { unavailable: true },
+    ]) {
+        const review = buildGuestTravelPack(booking, company, vehicleReview);
+        assert.equal(review.ready, true);
+        assert.notEqual(review.fingerprint, ordinary.fingerprint);
+        assert.ok(review.warnings.some((warning) => /overlap|overlaps/.test(warning)));
+        const details = review.pack.entries.find((entry) => entry.category === "Transport").details;
+        for (const label of ["Chauffeur", "Chauffeur phone", "Vehicle", "Registration"]) {
+            assert.ok(details.includes(`${label}: To be confirmed`));
+        }
+        assert.doesNotMatch(JSON.stringify(review.pack), /Test Chauffeur|TEST-001|\+94771111111/);
+        const pdf = await readPdf(await createGuestItineraryPdf(review.pack, company, { title: "YOUR TRAVEL PACK", introduction: review.pack.notice }));
+        assert.doesNotMatch(pdf.text, /Test Chauffeur|TEST-001|\+94771111111/);
+    }
+    assert.ok(ordinary.pack.entries.some((entry) => entry.details.includes("Registration: TEST-001")));
+});
+
 test("travel pack PDF paginates long details and preserves multilingual text without private data", async () => {
     const booking = example();
     booking.excursions[0].guestInstructions = "Bring comfortable clothing, drinking water and sun protection. ".repeat(8);
@@ -84,13 +107,23 @@ test("travel pack PDF paginates long details and preserves multilingual text wit
 
 test("travel pack API requires permissions, reviewed current content and logs only document metadata", async (t) => {
     const booking = example(), logs = [];
-    let readsUntilChange = 0;
+    let readsUntilChange = 0, readsUntilClash = 0;
+    let competing = null, conflictCheckUnavailable = false;
     const sales = "507f1f77bcf86cd799439062", viewer = "507f1f77bcf86cd799439063";
     t.mock.method(Admin, "findById", (id) => ({ select: async () => ({ _id: id, role: String(id) === viewer ? "Viewer" : "Sales", status: "Active", tokenVersion: 0 }) }));
     t.mock.method(Booking, "findById", async (id) => {
         if (readsUntilChange && --readsUntilChange === 0) booking.excursions[0].meetingPoint = "Changed during rendering";
+        if (readsUntilClash && --readsUntilClash === 0) competing = new Booking({
+            _id: "507f1f77bcf86cd799439065", bookingStatus: "Confirmed",
+            transportAssignments: [{ route: "Other trip", status: "Confirmed", registrationKey: "TEST001",
+                startDate: new Date("2027-03-01"), endDate: new Date("2027-03-01") }],
+        });
         return String(id) === booking._id ? booking : null;
     });
+    t.mock.method(Booking, "find", () => ({ select: () => ({ lean: async () => {
+        if (conflictCheckUnavailable) throw new Error("synthetic vehicle overlap outage");
+        return competing ? [competing.toObject()] : [];
+    } }) }));
     t.mock.method(CompanySetting, "findOne", async () => null);
     t.mock.method(ActivityLog, "create", async (entry) => { logs.push(entry); return entry; });
     const server = app.listen(0, "127.0.0.1"); await new Promise((resolve) => server.once("listening", resolve));
@@ -115,9 +148,36 @@ test("travel pack API requires permissions, reviewed current content and logs on
     assert.match((await readPdf(await downloaded.arrayBuffer())).text, /07:00/);
     assert.equal(logs.length, 1); assert.equal(logs[0].metadata.documentType, "Guest Travel Pack");
     assert.equal(JSON.stringify(logs).includes("PRIVATE"), false);
+    competing = new Booking({ _id: "507f1f77bcf86cd799439065", bookingCode: "PRIVATE-OTHER-BOOKING", bookingStatus: "Confirmed",
+        transportAssignments: [{ route: "Other trip", status: "Confirmed", registrationKey: "TEST001",
+            startDate: new Date("2027-03-01"), endDate: new Date("2027-03-01") }],
+    });
+    assert.equal((await request("", "POST", { reviewed: true, fingerprint: current.fingerprint })).status, 409);
+    const clashing = await (await request()).json();
+    assert.ok(clashing.warnings.some((warning) => /overlaps another confirmed service/.test(warning)));
+    assert.doesNotMatch(JSON.stringify(clashing), /PRIVATE-OTHER-BOOKING|Test Chauffeur|TEST-001|\+94771111111/);
+    const clashingPdf = await request("", "POST", { reviewed: true, fingerprint: clashing.fingerprint });
+    assert.equal(clashingPdf.status, 200);
+    assert.doesNotMatch((await readPdf(await clashingPdf.arrayBuffer())).text, /Test Chauffeur|TEST-001|\+94771111111/);
+    competing = null;
+    assert.equal((await request("", "POST", { reviewed: true, fingerprint: clashing.fingerprint })).status, 409);
+    booking.transportAssignments[0].registrationKey = "";
+    const legacy = await (await request()).json();
+    assert.ok(legacy.warnings.some((warning) => /older vehicle registration/.test(warning)));
+    assert.doesNotMatch(JSON.stringify(legacy.pack), /Test Chauffeur|TEST-001/);
+    booking.transportAssignments[0].registrationKey = "TEST001";
+    conflictCheckUnavailable = true;
+    const unavailable = await (await request()).json();
+    assert.ok(unavailable.warnings.some((warning) => /checks are unavailable/.test(warning)));
+    assert.doesNotMatch(JSON.stringify(unavailable.pack), /Test Chauffeur|TEST-001/);
+    conflictCheckUnavailable = false;
+    readsUntilClash = 2;
+    assert.equal((await request("", "POST", { reviewed: true, fingerprint: current.fingerprint })).status, 409);
+    assert.equal(logs.length, 2, "A vehicle clash detected after PDF rendering must not log a download");
+    competing = null;
     readsUntilChange = 2;
     assert.equal((await request("", "POST", { reviewed: true, fingerprint: current.fingerprint })).status, 409);
-    assert.equal(logs.length, 1);
+    assert.equal(logs.length, 2);
     booking.bookingStatus = "Cancelled";
     assert.equal((await request("", "POST", { reviewed: true, fingerprint: current.fingerprint })).status, 409);
 });

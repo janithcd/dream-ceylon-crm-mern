@@ -4,14 +4,24 @@ const { buildGuestTravelPack } = require("../utils/guestTravelPack");
 const { createGuestItineraryPdf } = require("./guestItineraryPdfController");
 const { createActivityLog } = require("../utils/createActivityLog");
 const { formatDocumentDate } = require("../utils/documentDate");
+const { getConflicts } = require("../utils/bookingTransportConflicts");
 
 const load = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     if (!/^[a-f\d]{24}$/i.test(req.params.id || "")) { res.status(400).json({ message: "Invalid booking ID." }); return null; }
     const booking = await Booking.findById(req.params.id);
     if (!booking) { res.status(404).json({ message: "Booking not found." }); return null; }
+    const vehicleReview = { uncheckableAssignmentIds: (booking.transportAssignments || [])
+        .filter((item) => item.status === "Confirmed" && item.registration && !item.registrationKey)
+        .map((item) => item._id) };
+    try {
+        vehicleReview.clashingAssignmentIds = (await getConflicts(booking)).map((item) => item.assignmentId);
+    } catch (error) {
+        console.error("Guest travel pack vehicle overlap check failed:", error.message);
+        vehicleReview.unavailable = true;
+    }
     const company = await getDocumentBrandConfig();
-    return { booking, company, review: buildGuestTravelPack(booking, company) };
+    return { booking, company, review: buildGuestTravelPack(booking, company, vehicleReview) };
 };
 const fail = (res, error) => { console.error("Guest travel pack failed:", error.message); return res.status(500).json({ message: "Could not prepare the guest travel pack." }); };
 const previewGuestTravelPack = async (req, res) => {

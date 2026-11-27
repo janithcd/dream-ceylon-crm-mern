@@ -16,6 +16,8 @@ In **Bookings**, select **Guest travel pack** beneath the booking reference. Rev
 
 Only explicitly selected guest-facing fields enter the document. Supplier email addresses, private notes, payment amounts, costs, margins, tasks, contact history and rooming allocations are excluded. A chauffeur's name and phone are deliberately shared so the guest can meet their driver.
 
+If a confirmed transport leg's registered vehicle overlaps another confirmed service, the preview warns staff and the PDF shows **To be confirmed** for chauffeur, phone, vehicle and registration. The same applies when overlap checks are unavailable or an older registration cannot be checked. Other booking details are never included in the guest pack. Correct the assignment in Transport, then reload the preview to share current details.
+
 The PDF states that daily plans describe the intended itinerary; they do not confirm reservations. Pending/requested/cancellation-requested and cancelled arrangements are omitted. Completed activities remain visible on an In Progress trip, with their Completed status. The pack is not a payment receipt or an individual hotel voucher; use the separate document actions for those.
 
 ## Review rules
@@ -27,6 +29,7 @@ The PDF states that daily plans describe the intended itinerary; they do not con
 - Missing details in a confirmed reservation print as **To be confirmed**. They are never silently invented.
 - The preview offers shortcuts to review the itinerary, hotels, transport and activities. After editing, reopen the travel pack to review fresh content.
 - Download requires a reviewed-content fingerprint. Changes to guest-facing data, status, warnings, recipient or company contact details invalidate the preview. The API checks again after rendering, so a changed booking does not produce a stale download.
+- Vehicle overlap results also affect the fingerprint. A newly detected clash or a resolved clash requires a fresh preview and acknowledgement, including if it changes while the PDF renders.
 - Internal notes and financial edits do not invalidate a preview because those fields are not part of this document.
 
 ## Sending to the guest
