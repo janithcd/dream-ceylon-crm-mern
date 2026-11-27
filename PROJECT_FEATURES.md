@@ -24,7 +24,7 @@ Use this page to find a module and its operating instructions. The detailed guid
 - Supplier confirmation queue and due alerts for hotels, transport and activities across all trip dates, with private contact history and next follow-up dates.
 - Activity confirmation, cancellation and missing-detail checks in departure readiness, plus activity dispatch details in the internal operations brief.
 - Activity-only cancelled trips remain in Cancellation Review until open reservations are resolved, with direct links to each activity.
-- Reviewed guest travel pack PDF combining the daily itinerary with confirmed hotels, transport and activities, with missing-detail and vehicle-clash warnings and stale-preview protection.
+- Reviewed guest travel pack PDF combining the daily itinerary with confirmed hotels, transport and activities, with missing-detail and vehicle-clash warnings and stale-preview protection. Staff can record manual delivery, see when guest-facing changes make an earlier send outdated, and correct a mistaken send with an audit reason.
 - Preparation tasks, My Tasks, Team Tasks, departure readiness with vehicle clash counts, and pre-arrival contact tracking.
 - Private handover journals, unread team worklists, operations PDFs and cancellation review.
 

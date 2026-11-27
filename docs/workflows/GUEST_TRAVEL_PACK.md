@@ -34,17 +34,20 @@ The PDF states that daily plans describe the intended itinerary; they do not con
 
 ## Sending to the guest
 
-After download, open the PDF and check it. The modal provides an email draft using the booking's saved email address. Copy it or open your email app, attach the PDF manually, verify the recipient and send. The CRM does not automatically send or attach the pack and does not mark it as delivered. Update a wrong guest email in the booking and generate a fresh pack.
+After download, open the PDF and check it. The modal provides an email draft using the booking's saved email address. Copy it or open your email app, attach the PDF manually, verify the recipient and send. Then choose the channel and select **Record pack sent**. This is a staff-entered record, not proof that the email app delivered it. Downloading or opening the draft alone never records a send. Update a wrong guest email in the booking and generate a fresh pack.
+
+The modal shows who marked the pack as sent, when (Sri Lanka time) and the channel. If guest-facing details, warnings, recipient or company contacts change, it labels the previous record as an **earlier pack**; review, download and send the new PDF before recording the new version. The last sent record remains visible until a new one is recorded. If a send was marked in error, enter a 10–300 character reason and select **Clear sent record**. Both actions leave activity history. Reload the preview after a conflicting edit by another staff member.
 
 ## Permissions and API
 
-Both preview and download require `booking.view` and `pdf.generate`. All responses disable caching. Generation records an activity log with document type, entry counts and warning count; private reservation notes are not logged.
+Preview and download require `booking.view` and `pdf.generate`. Recording or correcting delivery also requires `booking.update`. All responses disable caching. Generation records an activity log with document type, entry counts and warning count. Delivery changes log the channel or correction reason without guest email or document content.
 
 | Method | Endpoint | Body / result |
 | --- | --- | --- |
-| GET | `/api/booking-pdf/travel-pack/:id/preview` | Guest content, counts, blockers, warnings, draft email and fingerprint |
+| GET | `/api/booking-pdf/travel-pack/:id/preview` | Guest content, counts, blockers, warnings, draft email, fingerprint and delivery status/revision |
 | POST | `/api/booking-pdf/travel-pack/:id` | `{ "reviewed": true, "fingerprint": "<preview fingerprint>" }`; returns PDF |
+| PATCH | `/api/booking-pdf/travel-pack/:id/delivery` | Sent: `{ "action": "sent", "fingerprint": "<preview fingerprint>", "channel": "Email", "expectedRevision": 0 }`; correction: `{ "action": "clear", "reason": "Guest did not receive the PDF", "expectedRevision": 1 }` |
 
 Invalid IDs/review input return 400, missing bookings 404, unavailable or changed packs 409, and missing permissions 403. No schema migration or additional package installation is needed.
 
-Tests: `backend/test/guestTravelPack.test.js` covers privacy, validation, stale previews, changes during rendering, multilingual text and pagination. The MongoDB excursion smoke test exercises preview/download and stale rejection against persisted activity data.
+Tests: `backend/test/guestTravelPack.test.js` covers privacy, validation, stale previews and delivery, changes during rendering, multilingual text and pagination. The MongoDB pre-arrival smoke test exercises persisted delivery records, version changes and correction.

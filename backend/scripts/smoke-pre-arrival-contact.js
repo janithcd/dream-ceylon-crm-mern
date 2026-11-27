@@ -140,6 +140,19 @@ const main = async () => {
         });
         assert.equal(packDownload.status, 200, await packDownload.clone().text());
         assert.equal(Buffer.from(await packDownload.arrayBuffer()).subarray(0, 5).toString(), "%PDF-");
+        const packRequest = (admin, path, method = "GET", body) => fetch(`${packUrl}${path}`, {
+            method, headers: { Authorization: `Bearer ${jwt.sign({ id: admin._id, v: 0 }, process.env.JWT_SECRET)}`,
+                "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body),
+        });
+        const deliveryPath = "/delivery";
+        const packSent = { action: "sent", fingerprint: packClashing.fingerprint, channel: "Email", expectedRevision: 0 };
+        assert.equal(packClashing.delivery.current, false);
+        assert.equal((await packRequest(viewer, deliveryPath, "PATCH", packSent)).status, 403);
+        const markedSent = await packRequest(staff, deliveryPath, "PATCH", packSent);
+        assert.equal(markedSent.status, 200, await markedSent.clone().text());
+        assert.equal((await markedSent.json()).delivery.current, true);
+        assert.equal((await Booking.findById(booking._id)).travelPackDelivery.channel, "Email");
+        assert.equal((await packRequest(staff, deliveryPath, "PATCH", packSent)).status, 409);
         await Booking.updateOne({ _id: otherBooking._id }, { $set: {
             "transportAssignments.0.registration": "OTHER-999",
             "transportAssignments.0.registrationKey": "OTHER999",
@@ -161,7 +174,26 @@ const main = async () => {
             headers: { Authorization: `Bearer ${jwt.sign({ id: staff._id, v: 0 }, process.env.JWT_SECRET)}` },
         });
         assert.equal(packResolvedResponse.status, 200, await packResolvedResponse.clone().text());
-        assert.match(JSON.stringify((await packResolvedResponse.json()).pack), /CI Chauffeur|CI-ARR123/);
+        const packResolved = await packResolvedResponse.json();
+        assert.match(JSON.stringify(packResolved.pack), /CI Chauffeur|CI-ARR123/);
+        assert.equal(packResolved.delivery.current, false);
+        assert.equal(packResolved.delivery.revision, 1);
+        assert.equal((await packRequest(staff, deliveryPath, "PATCH", { ...packSent, expectedRevision: 1 })).status, 409);
+        const markedNewPack = await packRequest(staff, deliveryPath, "PATCH", {
+            ...packSent, expectedRevision: 1, fingerprint: packResolved.fingerprint,
+        });
+        assert.equal(markedNewPack.status, 200, await markedNewPack.clone().text());
+        assert.equal((await markedNewPack.json()).delivery.current, true);
+        const clearedPack = await packRequest(staff, deliveryPath, "PATCH", {
+            action: "clear", expectedRevision: 2, reason: "Guest did not receive the PDF",
+        });
+        assert.equal(clearedPack.status, 200, await clearedPack.clone().text());
+        assert.equal((await clearedPack.json()).delivery.revision, 3);
+        assert.equal((await Booking.findById(booking._id)).travelPackDelivery, null);
+        const packLogs = await ActivityLog.find({ relatedRecordId: booking._id, description: /Guest travel pack sent record/ }).sort({ createdAt: 1 });
+        assert.equal(packLogs.length, 3);
+        assert.equal(packLogs[2].metadata.reason, "Guest did not receive the PDF");
+        assert.equal(JSON.stringify(packLogs).includes("private-arrival@example.invalid"), false);
         console.log("Pre-arrival contact and vehicle conflict guest draft and travel pack checks passed.");
     } finally {
         if (otherBooking) await Booking.deleteOne({ _id: otherBooking._id });

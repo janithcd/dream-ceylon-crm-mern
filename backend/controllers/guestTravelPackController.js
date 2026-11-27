@@ -6,6 +6,14 @@ const { createActivityLog } = require("../utils/createActivityLog");
 const { formatDocumentDate } = require("../utils/documentDate");
 const { getConflicts } = require("../utils/bookingTransportConflicts");
 
+const deliverySummary = (booking, fingerprint) => ({
+    sentAt: booking.travelPackDelivery?.sentAt || null,
+    sentByName: booking.travelPackDelivery?.sentByName || "",
+    channel: booking.travelPackDelivery?.channel || null,
+    current: Boolean(booking.travelPackDelivery?.sentAt && booking.travelPackDelivery.fingerprint === fingerprint),
+    revision: booking.travelPackDeliveryRevision ?? 0,
+});
+
 const load = async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     if (!/^[a-f\d]{24}$/i.test(req.params.id || "")) { res.status(400).json({ message: "Invalid booking ID." }); return null; }
@@ -25,7 +33,8 @@ const load = async (req, res) => {
 };
 const fail = (res, error) => { console.error("Guest travel pack failed:", error.message); return res.status(500).json({ message: "Could not prepare the guest travel pack." }); };
 const previewGuestTravelPack = async (req, res) => {
-    try { const snapshot = await load(req, res); if (snapshot) return res.json(snapshot.review); }
+    try { const snapshot = await load(req, res); if (snapshot) return res.json({ ...snapshot.review,
+        delivery: deliverySummary(snapshot.booking, snapshot.review.fingerprint) }); }
     catch (error) { return fail(res, error); }
 };
 const generateGuestTravelPack = async (req, res) => {
@@ -55,4 +64,48 @@ const generateGuestTravelPack = async (req, res) => {
         return res.send(Buffer.from(bytes));
     } catch (error) { return fail(res, error); }
 };
-module.exports = { previewGuestTravelPack, generateGuestTravelPack };
+
+const recordGuestTravelPackDelivery = async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const { action, expectedRevision, fingerprint, channel, reason } = req.body || {};
+    if (!["sent", "clear"].includes(action) || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) {
+        return res.status(400).json({ message: "Choose an action and refresh the travel pack delivery record." });
+    }
+    if (action === "sent" && (!/^[a-f0-9]{64}$/.test(fingerprint || "") || !["Email", "WhatsApp", "Other"].includes(channel))) {
+        return res.status(400).json({ message: "Review the current pack and choose how it was sent." });
+    }
+    if (action === "clear" && (typeof reason !== "string" || reason.trim().length < 10 || reason.trim().length > 300)) {
+        return res.status(400).json({ message: "Explain the correction in 10 to 300 characters." });
+    }
+    try {
+        const snapshot = await load(req, res);
+        if (!snapshot) return;
+        const { booking, review } = snapshot;
+        if ((booking.travelPackDeliveryRevision ?? 0) !== expectedRevision ||
+            (action === "sent" && (booking.travelPackDelivery?.fingerprint === fingerprint || !review.ready || review.fingerprint !== fingerprint)) ||
+            (action === "clear" && !booking.travelPackDelivery?.sentAt)) {
+            return res.status(409).json({ message: "The pack or delivery record changed. Reload the preview and try again." });
+        }
+        const delivery = action === "sent" ? { sentAt: new Date(), sentBy: req.admin._id,
+            sentByName: (req.admin.name || "").slice(0, 120), channel, fingerprint } : null;
+        const updated = await Booking.findOneAndUpdate({
+            _id: booking._id,
+            travelPackDeliveryRevision: expectedRevision === 0 ? { $in: [null, 0] } : expectedRevision,
+            ...(action === "sent" ? { "travelPackDelivery.fingerprint": { $ne: fingerprint },
+                bookingStatus: { $in: ["Confirmed", "In Progress"] } }
+                : { "travelPackDelivery.sentAt": booking.travelPackDelivery.sentAt }),
+        }, { $set: { travelPackDelivery: delivery }, $inc: { travelPackDeliveryRevision: 1 } },
+        { returnDocument: "after", runValidators: true });
+        if (!updated) return res.status(409).json({ message: "The delivery record changed. Reload the preview and try again." });
+        await createActivityLog({ req, action: "UPDATE", module: "Booking",
+            description: action === "sent" ? `Guest travel pack sent record updated for booking ${updated.bookingCode}`
+                : `Guest travel pack sent record corrected for booking ${updated.bookingCode}`,
+            relatedRecordId: updated._id, relatedModel: "Booking", referenceNo: updated.bookingCode,
+            customerName: updated.customer?.fullName,
+            metadata: action === "sent" ? { channel } : { reason: reason.trim() },
+        });
+        return res.json({ delivery: deliverySummary(updated, fingerprint) });
+    } catch (error) { return fail(res, error); }
+};
+
+module.exports = { previewGuestTravelPack, generateGuestTravelPack, recordGuestTravelPackDelivery };

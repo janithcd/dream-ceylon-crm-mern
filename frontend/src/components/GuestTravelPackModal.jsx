@@ -13,6 +13,8 @@ export default function GuestTravelPackModal({ booking, onClose, onOpenItinerary
     const [notice, setNotice] = useState("");
     const [stale, setStale] = useState(false);
     const [downloaded, setDownloaded] = useState(false);
+    const [channel, setChannel] = useState("Email");
+    const [correctionReason, setCorrectionReason] = useState("");
     useEffect(() => {
         let active = true;
         api.get(`/booking-pdf/travel-pack/${booking._id}/preview`).then(({ data }) => {
@@ -39,6 +41,21 @@ export default function GuestTravelPackModal({ booking, onClose, onOpenItinerary
     const copyMessage = async () => {
         try { await navigator.clipboard.writeText(`Subject: ${review.message.subject}\n\n${review.message.body}`); setNotice("Email draft copied. Attach the downloaded PDF before sending."); }
         catch { setError("Clipboard unavailable. Select and copy the email text below."); }
+    };
+    const updateDelivery = async (action) => {
+        setBusy(true); setError(""); setNotice("");
+        try {
+            const body = action === "sent"
+                ? { action, expectedRevision: review.delivery.revision, fingerprint: review.fingerprint, channel }
+                : { action, expectedRevision: review.delivery.revision, reason: correctionReason.trim() };
+            const { data } = await api.patch(`/booking-pdf/travel-pack/${booking._id}/delivery`, body);
+            setReview((previous) => ({ ...previous, delivery: data.delivery }));
+            setCorrectionReason("");
+            setNotice(action === "sent" ? "Pack marked as sent. The CRM will flag it if guest-facing details change." : "Incorrect sent record cleared. The correction was logged.");
+        } catch (err) {
+            setError(err.response?.data?.message || "Could not update the delivery record.");
+            if (err.response?.status === 409) setStale(true);
+        } finally { setBusy(false); }
     };
     return <>
         <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="travel-pack-title">
@@ -75,6 +92,23 @@ export default function GuestTravelPackModal({ booking, onClose, onOpenItinerary
                             <label className="form-label d-block">Message<textarea className="form-control" rows={9} value={review.message.body} readOnly /></label>
                             <div className="d-flex gap-2"><button className="btn btn-sm btn-outline-primary" onClick={copyMessage}>Copy email draft</button>{buildSupplierMailtoUrl(review.message) && <a className="btn btn-sm btn-outline-primary" href={buildSupplierMailtoUrl(review.message)}>Open email app</a>}</div>
                         </section>}
+                        <section className="border rounded p-3 mt-3" aria-label="Travel pack delivery">
+                            <h6>Guest travel pack delivery</h6>
+                            {review.delivery?.sentAt ? <p role="status">{review.delivery.current ? "Current pack marked as sent" : "Earlier pack marked as sent — guest-facing details changed. Review and share the new PDF."}<br />
+                                <span className="small text-muted">{review.delivery.channel} · {review.delivery.sentByName || "Staff"} · {new Date(review.delivery.sentAt).toLocaleString("en-GB", { timeZone: "Asia/Colombo" })} (Sri Lanka time)</span></p>
+                                : <p role="status">No travel pack has been marked as sent.</p>}
+                            {!review.delivery?.current && <div className="d-flex flex-wrap align-items-end gap-2">
+                                <label className="form-label mb-0">How was it sent?<select className="form-select" value={channel} disabled={busy} onChange={(e) => setChannel(e.target.value)}><option>Email</option><option>WhatsApp</option><option>Other</option></select></label>
+                                <button className="btn btn-sm btn-primary" disabled={busy || stale || !review.ready || !downloaded} onClick={() => updateDelivery("sent")}>Record pack sent</button>
+                            </div>}
+                            {!review.delivery?.current && <p className="small text-muted mt-2 mb-0">Download and check the current PDF first. Record delivery only after you have sent the PDF to the guest using your email or messaging app.</p>}
+                            {review.delivery?.sentAt && <div className="border-top mt-3 pt-3">
+                                <label className="form-label d-block">Correct an incorrect sent record
+                                    <textarea className="form-control" rows={2} maxLength={300} value={correctionReason} disabled={busy} onChange={(e) => setCorrectionReason(e.target.value)} placeholder="Reason for correction (10–300 characters)" />
+                                </label>
+                                <button className="btn btn-sm btn-outline-danger" disabled={busy || stale || correctionReason.trim().length < 10} onClick={() => updateDelivery("clear")}>Clear sent record</button>
+                            </div>}
+                        </section>
                     </>}
                 </div>
                 <div className="modal-footer"><button className="btn btn-outline-secondary" disabled={busy} onClick={onClose}>Close</button><button className="btn btn-primary" onClick={download} disabled={loading || busy || stale || !review?.ready || !acknowledged}>{busy ? "Preparing PDF…" : "Download travel pack PDF"}</button></div>

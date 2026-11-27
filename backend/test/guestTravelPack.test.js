@@ -181,3 +181,64 @@ test("travel pack API requires permissions, reviewed current content and logs on
     booking.bookingStatus = "Cancelled";
     assert.equal((await request("", "POST", { reviewed: true, fingerprint: current.fingerprint })).status, 409);
 });
+
+test("travel pack delivery is explicit, versioned, correctable and permission controlled", async (t) => {
+    const booking = example(), logs = [];
+    const sales = "507f1f77bcf86cd799439062", viewer = "507f1f77bcf86cd799439063";
+    t.mock.method(Admin, "findById", (id) => ({ select: async () => ({ _id: id, name: "Test Staff",
+        role: String(id) === viewer ? "Viewer" : "Sales", status: "Active", tokenVersion: 0 }) }));
+    t.mock.method(Booking, "findById", async (id) => String(id) === booking._id ? booking : null);
+    t.mock.method(Booking, "find", () => ({ select: () => ({ lean: async () => [] }) }));
+    t.mock.method(CompanySetting, "findOne", async () => null);
+    t.mock.method(ActivityLog, "create", async (entry) => { logs.push(entry); return entry; });
+    t.mock.method(Booking, "findOneAndUpdate", async (filter, update) => {
+        const revision = booking.travelPackDeliveryRevision ?? 0;
+        if (String(filter._id) !== booking._id ||
+            (revision === 0 ? !filter.travelPackDeliveryRevision.$in.includes(0) : filter.travelPackDeliveryRevision !== revision)) return null;
+        if (filter["travelPackDelivery.fingerprint"] && booking.travelPackDelivery?.fingerprint === filter["travelPackDelivery.fingerprint"].$ne) return null;
+        if (filter["travelPackDelivery.sentAt"] && filter["travelPackDelivery.sentAt"] !== booking.travelPackDelivery?.sentAt) return null;
+        booking.travelPackDelivery = update.$set.travelPackDelivery;
+        booking.travelPackDeliveryRevision = revision + update.$inc.travelPackDeliveryRevision;
+        return booking;
+    });
+    const server = app.listen(0, "127.0.0.1"); await new Promise((resolve) => server.once("listening", resolve));
+    t.after(() => new Promise((resolve) => server.close(resolve)));
+    const url = `http://127.0.0.1:${server.address().port}/api/booking-pdf/travel-pack/${booking._id}`;
+    const request = (path, method = "GET", body, user = sales) => fetch(`${url}${path}`, { method,
+        headers: { ...(user ? { Authorization: `Bearer ${jwt.sign({ id: user }, process.env.JWT_SECRET)}` } : {}),
+            "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const preview = await (await request("/preview")).json();
+    assert.deepEqual(preview.delivery, { sentAt: null, sentByName: "", channel: null, current: false, revision: 0 });
+    assert.equal(booking.travelPackDelivery, undefined, "Preview must not claim delivery");
+    const path = "/delivery", sent = { action: "sent", fingerprint: preview.fingerprint, channel: "Email", expectedRevision: 0 };
+    assert.equal((await request(path, "PATCH", sent, null)).status, 401);
+    assert.equal((await request(path, "PATCH", sent, viewer)).status, 403);
+    assert.equal((await request(path, "PATCH", { ...sent, channel: "Pigeon" })).status, 400);
+    assert.equal((await request(path, "PATCH", { ...sent, fingerprint: "bogus" })).status, 400);
+    assert.equal((await request(path, "PATCH", { action: "clear", expectedRevision: 0, reason: "It was not sent" })).status, 409);
+    assert.equal((await request(path, "PATCH", sent)).status, 200);
+    assert.equal(booking.travelPackDeliveryRevision, 1);
+    assert.equal(booking.travelPackDelivery.sentByName, "Test Staff");
+    assert.equal((await (await request("/preview")).json()).delivery.current, true);
+    assert.equal((await request(path, "PATCH", sent)).status, 409);
+    booking.itineraryDays[0].plan = "Changed guest itinerary";
+    const changed = await (await request("/preview")).json();
+    assert.equal(changed.delivery.current, false);
+    assert.equal(changed.delivery.revision, 1);
+    assert.equal((await request(path, "PATCH", { ...sent, expectedRevision: 1 })).status, 409);
+    assert.equal((await request(path, "PATCH", { ...sent, fingerprint: changed.fingerprint, expectedRevision: 0 })).status, 409);
+    const resend = await request(path, "PATCH", { ...sent, fingerprint: changed.fingerprint, expectedRevision: 1, channel: "WhatsApp" });
+    assert.equal(resend.status, 200);
+    assert.equal((await resend.json()).delivery.current, true);
+    assert.equal(booking.travelPackDelivery.channel, "WhatsApp");
+    assert.equal((await request(path, "PATCH", { action: "clear", expectedRevision: 2, reason: "Short" })).status, 400);
+    const cleared = await request(path, "PATCH", { action: "clear", expectedRevision: 2, reason: "Guest did not receive the PDF" });
+    assert.equal(cleared.status, 200);
+    assert.deepEqual(await cleared.json(), { delivery: { sentAt: null, sentByName: "", channel: null, current: false, revision: 3 } });
+    assert.equal((await (await request("/preview")).json()).delivery.current, false);
+    assert.equal(logs.length, 3);
+    assert.equal(logs[0].metadata.channel, "Email");
+    assert.equal(logs[1].metadata.channel, "WhatsApp");
+    assert.equal(logs[2].metadata.reason, "Guest did not receive the PDF");
+    assert.doesNotMatch(JSON.stringify(logs), /guest@example.test|PRIVATE|[a-f0-9]{64}/);
+});
